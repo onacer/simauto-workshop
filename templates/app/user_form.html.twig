@@ -1,0 +1,64 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ mode == 'new' ? 'مستخدم جديد' : 'تعديل مستخدم' }} - SIM Auto{% endblock %}
+
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+
+<main class="main-board">
+    <section class="page-head">
+        <h1>{{ mode == 'new' ? 'مستخدم جديد' : 'تعديل مستخدم' }}</h1>
+        <a class="btn btn-dark" href="{{ path('app_users') }}">رجوع</a>
+    </section>
+
+    {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <section class="panel">
+        <form class="form-grid" method="post">
+            <input type="hidden" name="_token" value="{{ token }}">
+
+            <label>
+                الاسم
+                <input name="name" value="{{ form.name|default('') }}" required>
+            </label>
+
+            <label>
+                البريد الإلكتروني
+                <input type="email" name="email" value="{{ form.email|default('') }}" required>
+            </label>
+
+            <label>
+                الدور
+                <select name="role" required>
+                    <option value="manager" {{ form.role|default('manager') == 'manager' ? 'selected' : '' }}>مسير</option>
+                    <option value="admin" {{ form.role|default('manager') == 'admin' ? 'selected' : '' }}>مدير</option>
+                </select>
+            </label>
+
+            <label>
+                الحالة
+                <select name="active">
+                    <option value="1" {{ form.active|default(1) ? 'selected' : '' }}>نشط</option>
+                    <option value="0" {{ not form.active|default(1) ? 'selected' : '' }}>غير نشط</option>
+                </select>
+            </label>
+
+            {% if mode == 'new' %}
+                <label>
+                    كلمة المرور
+                    <input type="password" name="password" minlength="8" required>
+                </label>
+
+                <label>
+                    تأكيد كلمة المرور
+                    <input type="password" name="password_confirm" minlength="8" required>
+                </label>
+            {% endif %}
+
+            <button class="btn btn-primary" type="submit">حفظ</button>
+        </form>
+    </section>
+</main>
+{% endblock %}

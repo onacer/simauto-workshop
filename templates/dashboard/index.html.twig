@@ -1,0 +1,137 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}الرئيسية - SIM Auto{% endblock %}
+
+{% block body %}
+<div class="app-shell">
+    <aside class="side-panel">
+        <div class="brand">
+            <img src="{{ asset('images/logo-light.png') }}" alt="SIM Auto">
+            <span>لوحة الورشة</span>
+        </div>
+        <nav class="side-nav" aria-label="القائمة الرئيسية">
+            <a href="#" class="active">الرئيسية</a>
+            <a href="#appointments">المواعيد</a>
+            <a href="#workflow">تتبع الورشة</a>
+            <a href="#services">الخدمات</a>
+            <a href="#request">طلب جديد</a>
+        </nav>
+        <div class="guarantee-card">
+            <span>SIM AUTO</span>
+            <strong>رضا العميل مضمون</strong>
+            <small>تشخيص دقيق. إصلاح سريع. تسليم واضح.</small>
+        </div>
+    </aside>
+
+    <main class="workspace">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Garage Agadir - mécanique de précision</p>
+                <h1>إدارة ورشة SIM Auto ببساطة ووضوح</h1>
+                <p>تابع المواعيد، السيارات داخل الورشة، الخدمات والفواتير في واجهة واحدة عربية وسريعة.</p>
+            </div>
+            <div class="hero-actions">
+                <button class="btn btn-primary">+ موعد جديد</button>
+                <button class="btn btn-ghost">عرض الجدول</button>
+            </div>
+        </header>
+
+        <section class="metrics" aria-label="مؤشرات اليوم">
+            {% for metric in metrics %}
+                <article class="metric-card tone-{{ metric.tone }}">
+                    <span>{{ metric.label }}</span>
+                    <strong>{{ metric.value }}</strong>
+                    <small>{{ metric.detail }}</small>
+                </article>
+            {% endfor %}
+        </section>
+
+        <section class="grid-two">
+            <article class="panel" id="appointments">
+                <div class="panel-head">
+                    <div>
+                        <span class="eyebrow">اليوم</span>
+                        <h2>المواعيد القادمة</h2>
+                    </div>
+                    <button class="icon-btn" title="تحديث">↻</button>
+                </div>
+                <div class="appointments">
+                    {% for appointment in appointments %}
+                        <div class="appointment">
+                            <time>{{ appointment.time }}</time>
+                            <div>
+                                <strong>{{ appointment.client }}</strong>
+                                <span>{{ appointment.car }} - {{ appointment.service }}</span>
+                            </div>
+                            <em>{{ appointment.status }}</em>
+                        </div>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="panel" id="workflow">
+                <div class="panel-head">
+                    <div>
+                        <span class="eyebrow">الورشة</span>
+                        <h2>حالة السيارات</h2>
+                    </div>
+                </div>
+                <div class="workflow">
+                    {% for item in workflow %}
+                        <div>
+                            <span>{{ item.step }}</span>
+                            <strong>{{ item.count }}</strong>
+                            <i style="--value: {{ item.count * 10 }}%"></i>
+                        </div>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+
+        <section class="grid-two">
+            <article class="panel service-panel" id="services">
+                <div class="panel-head">
+                    <div>
+                        <span class="eyebrow">الخدمات</span>
+                        <h2>اختيار سريع للخدمة</h2>
+                    </div>
+                </div>
+                <div class="service-list">
+                    {% for service in services %}
+                        <button>{{ service }}</button>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="panel request-panel" id="request">
+                <div class="panel-head">
+                    <div>
+                        <span class="eyebrow">طلب جديد</span>
+                        <h2>تسجيل سيارة بسرعة</h2>
+                    </div>
+                </div>
+                <form class="quick-form">
+                    <label>
+                        العميل
+                        <input type="text" placeholder="اسم العميل">
+                    </label>
+                    <label>
+                        السيارة
+                        <input type="text" placeholder="مثال: Dacia Duster 2021">
+                    </label>
+                    <label>
+                        الخدمة المطلوبة
+                        <select>
+                            <option>تشخيص إلكتروني</option>
+                            <option>ميكانيك عام</option>
+                            <option>تغيير الزيت</option>
+                            <option>فرامل وسلامة</option>
+                        </select>
+                    </label>
+                    <button type="button" class="btn btn-primary">حفظ الطلب</button>
+                </form>
+            </article>
+        </section>
+    </main>
+</div>
+{% endblock %}

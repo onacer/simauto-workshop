@@ -1,0 +1,32 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ product.name }} - SIM Auto{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head">
+        <h1>{{ product.name }}</h1>
+        <span class="row-actions">
+            <a href="{{ path('app_product_edit', {id: product.id}) }}">تعديل</a>
+            <a class="btn btn-dark" href="{{ path('app_products') }}">رجوع</a>
+        </span>
+    </section>
+    <section class="panel">
+        <div class="data-table">
+            <div><strong>SKU</strong><span>{{ product.sku }}</span><span>الصنف</span><span>{{ product.category_name }}</span></div>
+            <div><strong>المخزون</strong><span>{{ product.stock_qty }}</span><span>الحد الأدنى</span><span>{{ product.min_qty }}</span></div>
+            <div><strong>ثمن الشراء</strong><span>{{ product.purchase_price }} DH</span><span>ثمن البيع</span><span>{{ product.sale_price }} DH</span></div>
+        </div>
+    </section>
+    <section class="panel">
+        <h2>حركات المخزون</h2>
+        <div class="data-table">
+            <div class="table-head"><span>النوع</span><span>الكمية</span><span>المورد</span><span>التاريخ</span></div>
+            {% for movement in movements %}
+                <div><strong>{{ movement.movement_type }}</strong><span>{{ movement.quantity }}</span><span>{{ movement.supplier_name }}</span><span>{{ movement.created_at }}</span></div>
+            {% else %}
+                <p class="empty-state">لا توجد حركات.</p>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

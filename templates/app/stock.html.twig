@@ -1,0 +1,55 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}المخزون - SIM Auto{% endblock %}
+
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+
+<main class="main-board">
+    <section class="page-head">
+        <h1>المخزون</h1>
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a>
+    </section>
+
+    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+
+    <section class="panel">
+        <form action="{{ path('app_stock_in') }}" method="post" class="form-grid stock-form">
+            <label>المنتج
+                <select name="product_id" required>
+                    {% for product in products %}
+                        <option value="{{ product.id }}">{{ product.name }} - {{ product.stock_qty }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>المورد
+                <select name="supplier_id">
+                    <option value="">بدون</option>
+                    {% for supplier in suppliers %}
+                        <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>الكمية<input name="quantity" type="number" step="1" min="1" value="1" required></label>
+            <label>ثمن الشراء<input name="unit_cost" type="number" step="0.01" min="0"></label>
+            <label>ملاحظة<input name="note"></label>
+            <button class="btn btn-primary" type="submit">تحديث</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <div class="data-table">
+            <div class="table-head"><span>المنتج</span><span>الحالي</span><span>الحد الأدنى</span><span>الحالة</span></div>
+            {% for product in products %}
+                <div>
+                    <strong>{{ product.name }}</strong>
+                    <span>{{ product.stock_qty }}</span>
+                    <span>{{ product.min_qty }}</span>
+                    <span>{{ product.stock_qty <= 0 ? 'نفد' : (product.stock_qty <= product.min_qty ? 'منخفض' : 'متوفر') }}</span>
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

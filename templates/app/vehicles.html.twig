@@ -1,0 +1,36 @@
+{% extends 'base.html.twig' %}
+{% block title %}السيارات - SIM Auto{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head">
+        <h1>السيارات</h1>
+        <span class="row-actions">
+            {% if user.role == 'admin' %}<a href="{{ path('app_vehicle_settings') }}">الماركات والموديلات</a>{% endif %}
+            <a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a>
+        </span>
+    </section>
+    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+    <section class="panel">
+        <form method="post" class="form-grid">
+            <label>العميل<select name="client_id" required>{% for client in clients %}<option value="{{ client.id }}">{{ client.name }}</option>{% endfor %}</select></label>
+            <label>الترقيم<input name="plate" required></label>
+            <label>الماركة<select name="brand_id" required>{% for brand in brands %}<option value="{{ brand.id }}">{{ brand.name }}</option>{% endfor %}</select></label>
+            <label>الموديل<select name="model_id" required>{% for model in models %}<option value="{{ model.id }}">{{ model.brand_name }} - {{ model.name }}</option>{% endfor %}</select></label>
+            <label>السنة<input name="year" type="number" min="1900"></label>
+            <label>الكيلومترات<input name="mileage" type="number" min="0"></label>
+            <label>ملاحظات<input name="notes"></label>
+            <button class="btn btn-primary" type="submit">حفظ</button>
+        </form>
+    </section>
+    <section class="panel">
+        <div class="data-table">
+            <div class="table-head"><span>السيارة</span><span>العميل</span><span>الماركة</span><span>الكيلومترات</span></div>
+            {% for vehicle in vehicles %}
+                <div><strong>{{ vehicle.plate }}</strong><span>{{ vehicle.client_name }}</span><span>{{ vehicle.brand_name }} {{ vehicle.model_name }}</span><span>{{ vehicle.mileage }}</span></div>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

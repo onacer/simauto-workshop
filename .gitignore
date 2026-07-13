@@ -1,0 +1,28 @@
+# Dependencies
+/vendor/
+/node_modules/
+
+# Symfony
+/var/
+/.env.local
+/.env.local.php
+/.env.*.local
+/config/secrets/prod/prod.decrypt.private.php
+
+# Database (données réelles, jamais versionnées)
+/data/*.sqlite
+/data/*.sqlite-journal
+/data/*.db
+
+# PHPUnit
+/.phpunit.result.cache
+/phpunit.xml
+
+# IDE / OS
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

@@ -1,0 +1,78 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}المنتجات - SIM Auto{% endblock %}
+
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+
+<main class="main-board">
+    <section class="page-head">
+        <h1>المنتجات</h1>
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a>
+    </section>
+
+    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+
+    <section class="panel">
+        <form method="get" class="form-grid">
+            <label>بحث<input name="q" value="{{ filters.q|default('') }}" placeholder="SKU / الاسم"></label>
+            <label>الصنف
+                <select name="category_id">
+                    <option value="">الكل</option>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}" {{ filters.category_id|default('') == category.id ? 'selected' : '' }}>{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>حالة المخزون
+                <select name="stock_state">
+                    <option value="">الكل</option>
+                    <option value="low" {{ filters.stock_state|default('') == 'low' ? 'selected' : '' }}>تحت الحد</option>
+                    <option value="empty" {{ filters.stock_state|default('') == 'empty' ? 'selected' : '' }}>نفد</option>
+                </select>
+            </label>
+            <button class="btn btn-dark" type="submit">تصفية</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <h2>منتج جديد</h2>
+        <form action="{{ path('app_product_new') }}" method="post" class="form-grid">
+            <label>الكود<input name="sku" required></label>
+            <label>اسم المنتج<input name="name" required></label>
+            <label>الصنف
+                <select name="category_id" required>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}">{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>الكمية<input name="stock_qty" type="number" step="1" min="0" value="0" required></label>
+            <label>الحد الأدنى<input name="min_qty" type="number" step="1" min="0" value="1"></label>
+            <label>ثمن الشراء<input name="purchase_price" type="number" step="0.01" min="0" value="0"></label>
+            <label>ثمن البيع<input name="sale_price" type="number" step="0.01" min="0" value="0"></label>
+            <button class="btn btn-primary" type="submit">حفظ</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <div class="data-table">
+            <div class="table-head"><span>المنتج</span><span>الصنف</span><span>المخزون</span><span>إجراءات</span></div>
+            {% for product in products %}
+                <div>
+                    <strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong>
+                    <span>{{ product.category_name ?: product.category }}</span>
+                    <span>{{ product.stock_qty }}</span>
+                    <span class="row-actions">
+                        <a href="{{ path('app_product_show', {id: product.id}) }}">تفاصيل</a>
+                        <a href="{{ path('app_product_edit', {id: product.id}) }}">تعديل</a>
+                    </span>
+                </div>
+            {% else %}
+                <p class="empty-state">لا توجد منتجات.</p>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

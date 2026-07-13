@@ -1,0 +1,33 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}الفواتير - SIM Auto{% endblock %}
+
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+
+<main class="main-board">
+    <section class="page-head">
+        <h1>الفواتير والإيصالات</h1>
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a>
+    </section>
+
+    <section class="panel">
+        <div class="data-table">
+            <div class="table-head"><span>الفاتورة</span><span>العميل</span><span>المبلغ</span><span>إجراءات</span></div>
+            {% for operation in operations %}
+                <div>
+                    <strong>{{ operation.invoice_no }}</strong>
+                    <span>{{ operation.client_real_name ?: operation.client_name }}</span>
+                    <span>{{ operation.total|number_format(2, ',', ' ') }} DH</span>
+                    <span class="row-actions">
+                        <a href="{{ path('app_invoice', {id: operation.id}) }}">فاتورة</a>
+                        <a href="{{ path('app_receipt', {id: operation.id}) }}">Receipt</a>
+                    </span>
+                </div>
+            {% else %}
+                <p class="empty-state">لا توجد عمليات.</p>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}نتيجة الاستيراد - SIM Auto{% endblock %}
+
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+
+<main class="main-board">
+    <section class="page-head">
+        <h1>نتيجة الاستيراد</h1>
+        <a class="btn btn-dark" href="{{ path('app_import') }}">رجوع</a>
+    </section>
+
+    {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if report %}
+        <section class="home-grid import-summary">
+            <div class="home-card tone-yellow"><span>01</span><strong>{{ report.processed }}</strong><small>سطور معالجة</small></div>
+            <div class="home-card tone-gold"><span>02</span><strong>{{ report.created }}</strong><small>تم إنشاؤها</small></div>
+            <div class="home-card tone-black"><span>03</span><strong>{{ report.updated }}</strong><small>تم تحديثها</small></div>
+            <div class="home-card tone-red"><span>04</span><strong>{{ report.ignored }}</strong><small>متجاهلة / أخطاء</small></div>
+        </section>
+
+        <section class="panel">
+            <h2>الأخطاء</h2>
+            {% if report.errors %}
+                <div class="data-table">
+                    <div class="table-head"><span>السطر</span><span>العمود</span><span>الرسالة</span><span></span></div>
+                    {% for error in report.errors %}
+                        <div>
+                            <strong>{{ error.line }}</strong>
+                            <span>{{ error.column }}</span>
+                            <span>{{ error.message }}</span>
+                            <span></span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="empty-state">تم الاستيراد بدون أخطاء.</p>
+            {% endif %}
+        </section>
+    {% endif %}
+</main>
+{% endblock %}

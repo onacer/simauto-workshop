@@ -1,0 +1,59 @@
+{% set route = app.request.attributes.get('_route') %}
+
+<div class="topbar">
+    <div class="topbar-user">
+        <a class="topbar-link subtle-link" href="{{ path('app_profile_password') }}">كلمة المرور</a>
+        <span>{{ user.name }}</span>
+        <a class="topbar-link" href="{{ path('app_logout') }}">خروج</a>
+    </div>
+
+    <a class="topbar-logo" href="{{ path('app_dashboard') }}" aria-label="SIM Auto">
+        <img src="{{ asset('images/logo-light.png') }}" alt="SIM Auto">
+    </a>
+
+    <nav class="topbar-nav" aria-label="القائمة الرئيسية">
+        <a class="topbar-item {{ route == 'app_dashboard' ? 'is-active' : '' }}" href="{{ path('app_dashboard') }}">الرئيسية</a>
+
+        <div class="nav-dropdown {{ route in ['app_products', 'app_product_show', 'app_product_edit', 'app_stock', 'app_categories', 'app_category_edit', 'app_suppliers', 'app_supplier_edit'] ? 'is-current' : '' }}">
+            <button class="topbar-item dropdown-toggle" type="button" aria-expanded="false">المخزون</button>
+            <div class="dropdown-menu">
+                <a href="{{ path('app_products') }}">المنتجات</a>
+                <a href="{{ path('app_stock') }}">إدخال المخزون</a>
+                <a href="{{ path('app_categories') }}">الأصناف</a>
+                <a href="{{ path('app_suppliers') }}">الموردون</a>
+            </div>
+        </div>
+
+        <div class="nav-dropdown {{ route in ['app_vehicles', 'app_vehicle_settings'] ? 'is-current' : '' }}">
+            <button class="topbar-item dropdown-toggle" type="button" aria-expanded="false">السيارات</button>
+            <div class="dropdown-menu">
+                <a href="{{ path('app_vehicles') }}">السيارات</a>
+                <a href="{{ path('app_vehicle_settings') }}">الماركات والموديلات</a>
+            </div>
+        </div>
+
+        <a class="topbar-item {{ route in ['app_clients', 'app_client_edit'] ? 'is-active' : '' }}" href="{{ path('app_clients') }}">الزبناء</a>
+
+        <div class="nav-dropdown {{ route in ['app_operations', 'app_billing', 'app_invoice', 'app_receipt'] ? 'is-current' : '' }}">
+            <button class="topbar-item dropdown-toggle" type="button" aria-expanded="false">العمليات</button>
+            <div class="dropdown-menu">
+                <a href="{{ path('app_operations') }}">عملية جديدة</a>
+                <a href="{{ path('app_billing') }}">الفواتير والإيصالات</a>
+            </div>
+        </div>
+
+        {% if can('imports', user) or can('manage_users', user) %}
+            <div class="nav-dropdown {{ route starts with 'app_import' or route starts with 'app_user' or route == 'app_users' ? 'is-current' : '' }}">
+                <button class="topbar-item dropdown-toggle" type="button" aria-expanded="false">الإدارة</button>
+                <div class="dropdown-menu">
+                    {% if can('imports', user) %}
+                        <a href="{{ path('app_import') }}">الاستيراد</a>
+                    {% endif %}
+                    {% if can('manage_users', user) %}
+                        <a href="{{ path('app_users') }}">المستخدمون</a>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+    </nav>
+</div>

@@ -1,0 +1,38 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}الاستيراد - SIM Auto{% endblock %}
+
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+
+<main class="main-board">
+    <section class="page-head">
+        <h1>الاستيراد</h1>
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a>
+    </section>
+
+    {% for message in app.flashes('error') %}
+        <div class="alert alert-error">{{ message }}</div>
+    {% endfor %}
+
+    <section class="import-grid">
+        {% for key, entity in entities %}
+            <article class="panel import-card">
+                <h2>{{ entity.label }}</h2>
+                <p>حمّل النموذج، املأه في Excel، ثم ارفعه هنا.</p>
+                <div class="row-actions">
+                    <a href="{{ path('app_import_template', {entity: key}) }}">تحميل النموذج</a>
+                </div>
+                <form class="form-stack" method="post" action="{{ path('app_import_upload', {entity: key}) }}" enctype="multipart/form-data">
+                    <input type="hidden" name="_token" value="{{ tokens[key] }}">
+                    <label>
+                        ملف CSV
+                        <input type="file" name="file" accept=".csv,text/csv" required>
+                    </label>
+                    <button class="btn btn-primary" type="submit">استيراد</button>
+                </form>
+            </article>
+        {% endfor %}
+    </section>
+</main>
+{% endblock %}

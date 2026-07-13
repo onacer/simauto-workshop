@@ -1,0 +1,27 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}تسجيل الدخول - SIM Auto{% endblock %}
+
+{% block body %}
+<main class="login-screen">
+    <section class="login-card">
+        <img class="login-logo" src="{{ asset('images/logo-light.png') }}" alt="SIM Auto">
+
+        {% if error %}
+            <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" class="form-stack">
+            <label>
+                البريد الإلكتروني
+                <input type="email" name="email" autocomplete="username" required autofocus>
+            </label>
+            <label>
+                كلمة المرور
+                <input type="password" name="password" autocomplete="current-password" required>
+            </label>
+            <button class="btn btn-primary" type="submit">دخول</button>
+        </form>
+    </section>
+</main>
+{% endblock %}

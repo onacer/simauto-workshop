@@ -1,0 +1,79 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ operation.invoice_no }} - SIM Auto{% endblock %}
+
+{% block body %}
+<main class="document-page">
+    <div class="doc-actions">
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">الرئيسية</a>
+        <a class="btn btn-primary" href="{{ path('app_receipt', {id: operation.id}) }}">Receipt</a>
+        <button class="btn btn-primary" onclick="window.print()">طباعة</button>
+    </div>
+
+    <section class="invoice-sheet official-invoice" dir="ltr">
+        <div class="invoice-watermark"></div>
+
+        <header class="invoice-head">
+            <img src="{{ asset('images/logo-invoice.png') }}" alt="SIM Auto">
+            <div>
+                <span>{{ company.service_line_1 }}</span>
+                <span>{{ company.service_line_2 }}</span>
+            </div>
+        </header>
+
+        <section class="invoice-meta">
+            <div>
+                <h2>BON DE LIVRAISON</h2>
+                <p><b>CLIENT:</b> {{ operation.client_real_name ?: operation.client_name }}</p>
+                <p><b>Adresse:</b> {{ operation.client_real_address ?: operation.client_address }}</p>
+                <p><b>DATE:</b> {{ operation.created_at|date('d/m/Y') }}</p>
+            </div>
+            <div>
+                <p><b>IMMATRICULATION:</b> {{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</p>
+                <p><b>MARQUE</b> {{ operation.brand_name ?: operation.vehicle_brand }}</p>
+                <p><b>MODELE</b> {{ operation.model_name ?: operation.vehicle_model }}</p>
+                <p><b>MODE DE PAIEMENT:</b>{{ operation.payment_method }}</p>
+            </div>
+        </section>
+
+        <table class="invoice-table">
+            <thead>
+                <tr>
+                    <th>DESIGNATION</th>
+                    <th>QUANTITE</th>
+                    <th>PRIX UNITE</th>
+                    <th>MONTANT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in operation.items %}
+                    <tr>
+                        <td>{{ item.label }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>{{ item.unit_price > 0 ? item.unit_price|number_format(0, ',', ' ') : '' }}</td>
+                        <td>{{ item.total > 0 ? item.total|number_format(0, ',', ' ') : 'GRATUIT' }}</td>
+                    </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td colspan="3">TOTAL</td>
+                    <td>{{ operation.total|number_format(0, ',', ' ') }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="net-pay">
+            <span>NET A PAYER</span>
+            <strong>{{ operation.total|number_format(0, ',', ' ') }}DH</strong>
+        </div>
+
+        <p class="invoice-thanks">MERCI POUR VOTRE VISITE</p>
+
+        <footer class="invoice-footer">
+            <span>Contact: {{ company.contact }}</span>
+            <span>Adresse: {{ company.address }}</span>
+            <span>IF: {{ company.if }} - PT: {{ company.pt }} - ICE: {{ company.ice }} - RC: {{ company.rc }}</span>
+            <span>{{ company.email }}</span>
+        </footer>
+    </section>
+</main>
+{% endblock %}

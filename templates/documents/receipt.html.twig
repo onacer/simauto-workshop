@@ -1,0 +1,42 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ operation.receipt_no }} - Receipt{% endblock %}
+
+{% block body %}
+<main class="receipt-page">
+    <div class="doc-actions">
+        <a class="btn btn-dark" href="{{ path('app_invoice', {id: operation.id}) }}">فاتورة</a>
+        <button class="btn btn-primary" onclick="window.print()">طباعة</button>
+    </div>
+
+    <section class="receipt-ticket">
+        <img src="{{ asset('images/logo-invoice.png') }}" alt="SIM Auto">
+        <h1>SIM AUTO</h1>
+        <p>{{ company.service_line_1 }}</p>
+        <p>{{ company.address }}</p>
+        <hr>
+        <div class="receipt-row"><span>Receipt</span><b>{{ operation.receipt_no }}</b></div>
+        <div class="receipt-row"><span>Date</span><b>{{ operation.created_at|date('d/m/Y H:i') }}</b></div>
+        <div class="receipt-row"><span>Client</span><b>{{ operation.client_real_name ?: operation.client_name }}</b></div>
+        <div class="receipt-row"><span>Vehicule</span><b>{{ operation.brand_name ?: operation.vehicle_brand }} {{ operation.model_name ?: operation.vehicle_model }}</b></div>
+        <div class="receipt-row"><span>Matricule</span><b>{{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</b></div>
+        <hr>
+        {% for item in operation.items %}
+            <div class="ticket-line">
+                <span>{{ item.label }}</span>
+                <small>{{ item.quantity }} x {{ item.unit_price|number_format(0, ',', ' ') }}</small>
+                <b>{{ item.total|number_format(0, ',', ' ') }} DH</b>
+            </div>
+        {% endfor %}
+        <hr>
+        <div class="receipt-total">
+            <span>TOTAL</span>
+            <strong>{{ operation.total|number_format(0, ',', ' ') }} DH</strong>
+        </div>
+        <div class="receipt-row"><span>Paiement</span><b>{{ operation.payment_method }}</b></div>
+        <hr>
+        <p class="thanks">شكرا لزيارتكم</p>
+        <p>{{ company.contact }}</p>
+    </section>
+</main>
+{% endblock %}

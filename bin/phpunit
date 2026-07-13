@@ -1,0 +1,10 @@
+#!/usr/bin/env php
+<?php
+
+$command = [__DIR__ . '/../vendor/bin/simple-phpunit', '-c', __DIR__ . '/../phpunit.xml.dist'];
+foreach (array_slice($_SERVER['argv'], 1) as $argument) {
+    $command[] = escapeshellarg($argument);
+}
+
+passthru(implode(' ', $command), $exitCode);
+exit($exitCode);

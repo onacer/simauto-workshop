@@ -1,0 +1,27 @@
+{% extends 'base.html.twig' %}
+{% block title %}تعديل منتج - SIM Auto{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head"><h1>تعديل منتج</h1><a class="btn btn-dark" href="{{ path('app_product_show', {id: product.id}) }}">رجوع</a></section>
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+    <section class="panel">
+        <form method="post" class="form-grid">
+            <label>الكود<input name="sku" value="{{ product.sku }}" required></label>
+            <label>اسم المنتج<input name="name" value="{{ product.name }}" required></label>
+            <label>الصنف<select name="category_id" required>{% for category in categories %}<option value="{{ category.id }}" {{ product.category_id == category.id ? 'selected' : '' }}>{{ category.name }}</option>{% endfor %}</select></label>
+            <label>الحد الأدنى<input name="min_qty" type="number" min="0" value="{{ product.min_qty }}"></label>
+            <label>ثمن الشراء<input name="purchase_price" type="number" step="0.01" min="0" value="{{ product.purchase_price }}"></label>
+            <label>ثمن البيع<input name="sale_price" type="number" step="0.01" min="0" value="{{ product.sale_price }}"></label>
+            <button class="btn btn-primary" type="submit">تحديث</button>
+        </form>
+    </section>
+    <section class="panel">
+        {% if can('delete', user) %}
+            <form method="post" action="{{ path('app_product_deactivate', {id: product.id}) }}">
+                <button class="btn btn-dark" type="submit">تعطيل المنتج</button>
+            </form>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}
