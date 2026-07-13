@@ -14,6 +14,9 @@ use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
+use Twig\Environment;
+use Twig\Loader\ArrayLoader;
+use Twig\TwigFunction;
 
 final class AppDatabaseTest extends TestCase
 {
@@ -482,6 +485,28 @@ SQL);
         self::assertFalse($access->can('manage_users', $manager));
         self::assertTrue($access->can('delete', $admin));
         self::assertTrue($access->can('manage_users', $admin));
+    }
+
+    public function testTopbarDropdownsAreClosedByDefaultAndManagerHasNoUsersEntry(): void
+    {
+        $template = file_get_contents(__DIR__ . '/../templates/app/_topbar.html.twig');
+        $twig = new Environment(new ArrayLoader(['topbar' => $template]));
+        $access = new AccessControl();
+        $twig->addFunction(new TwigFunction('path', fn (string $route) => '/' . $route));
+        $twig->addFunction(new TwigFunction('asset', fn (string $path) => '/assets/' . $path));
+        $twig->addFunction(new TwigFunction('can', fn (string $permission, array $user) => $access->can($permission, $user)));
+
+        $request = Request::create('/');
+        $request->attributes->set('_route', 'app_dashboard');
+        $adminHtml = $twig->render('topbar', ['app' => ['request' => $request], 'user' => ['role' => 'admin', 'name' => 'Admin']]);
+        $managerHtml = $twig->render('topbar', ['app' => ['request' => $request], 'user' => ['role' => 'manager', 'name' => 'Manager']]);
+        $css = file_get_contents(__DIR__ . '/../public/styles/app.css');
+
+        self::assertStringContainsString('dropdown-menu', $adminHtml);
+        self::assertStringNotContainsString('is-open', $adminHtml);
+        self::assertStringContainsString('/app_users', $adminHtml);
+        self::assertStringNotContainsString('/app_users', $managerHtml);
+        self::assertMatchesRegularExpression('/\\.dropdown-menu\\s*\\{[^}]*display:\\s*none;/s', $css);
     }
 
     private function database(): AppDatabase

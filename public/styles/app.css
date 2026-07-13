@@ -30,7 +30,7 @@ body {
 body::before {
     content: "";
     position: fixed;
-    inset: 74px 0 0;
+    inset: 68px 0 0;
     z-index: 0;
     pointer-events: none;
     background: url("../images/filigrane.png") center 54% / min(1420px, 90vw) auto no-repeat;
@@ -150,48 +150,70 @@ select {
 }
 
 .topbar {
-    position: relative;
-    z-index: 10;
-    min-height: 86px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    height: 64px;
     display: grid;
-    grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+    grid-template-columns: minmax(190px, 260px) minmax(0, 1fr) minmax(100px, 220px);
     align-items: center;
-    gap: 22px;
-    padding: 0 26px;
+    gap: 14px;
+    padding: 0 18px;
     color: #fff;
     background: #050505;
-    border-bottom: 5px solid var(--red);
+    border-bottom: 4px solid var(--red);
+    direction: ltr;
 }
 
 .topbar-logo {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    justify-self: center;
+    height: 44px;
+    max-width: 170px;
     text-decoration: none;
+    overflow: hidden;
 }
 
 .topbar-logo img {
-    width: 158px;
-    max-height: 74px;
+    display: block;
+    height: 44px;
+    width: auto;
+    max-width: 170px;
     object-fit: contain;
 }
 
 .topbar-nav {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+    min-width: 0;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 7px;
-    order: 3;
+    justify-content: center;
+    gap: 6px;
+    direction: rtl;
 }
 
 .topbar-user {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    min-width: 0;
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    gap: 12px;
-    order: 1;
+    gap: 10px;
     font-weight: 900;
+    white-space: nowrap;
+    direction: rtl;
+}
+
+.topbar-username {
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .topbar-item,
@@ -206,19 +228,23 @@ select {
 .topbar-link {
     display: inline-flex;
     align-items: center;
-    min-height: 42px;
-    padding: 9px 12px;
+    justify-content: center;
+    min-height: 36px;
+    padding: 7px 10px;
     border: 0;
     border-radius: 8px;
     background: transparent;
     cursor: pointer;
+    line-height: 1;
 }
 
 .topbar-item:hover,
+.topbar-item:focus,
 .topbar-item.is-active,
 .nav-dropdown.is-current > .topbar-item {
     color: #080808;
     background: var(--yellow);
+    outline: none;
 }
 
 .topbar-link {
@@ -235,23 +261,27 @@ select {
 
 .dropdown-menu {
     position: absolute;
-    top: calc(100% + 12px);
+    top: calc(100% + 10px);
     right: 0;
-    min-width: 220px;
+    z-index: 80;
+    min-width: 180px;
     display: none;
-    padding: 10px;
-    border-radius: 12px;
+    padding: 8px;
+    border-radius: 10px;
     background: #080808;
     border: 1px solid rgba(241, 205, 53, .24);
     box-shadow: 0 22px 50px rgba(0, 0, 0, .28);
+    text-align: right;
+    direction: rtl;
 }
 
-.nav-dropdown.is-open .dropdown-menu {
+.nav-dropdown.is-open > .dropdown-menu {
     display: grid;
     gap: 4px;
 }
 
 .dropdown-menu a {
+    display: block;
     padding: 10px 12px;
     border-radius: 8px;
 }
@@ -263,6 +293,25 @@ select {
     outline: none;
 }
 
+.mobile-menu-toggle {
+    display: none;
+    width: 42px;
+    height: 42px;
+    padding: 8px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.mobile-menu-toggle span {
+    display: block;
+    height: 3px;
+    margin: 5px 0;
+    border-radius: 999px;
+    background: var(--yellow);
+}
+
 .main-board {
     position: relative;
     z-index: 1;
@@ -272,7 +321,7 @@ select {
 }
 
 .compact-board {
-    min-height: calc(100vh - 79px);
+    min-height: calc(100vh - 68px);
     display: grid;
     align-content: center;
     padding-top: 54px;
@@ -766,23 +815,6 @@ select {
 }
 
 @media (max-width: 1100px) {
-    .topbar {
-        grid-template-columns: 1fr;
-        padding: 16px;
-    }
-
-    .topbar-logo,
-    .topbar-nav,
-    .topbar-user {
-        order: initial;
-        justify-self: center;
-    }
-
-    .topbar-nav {
-        justify-content: flex-start;
-        flex-wrap: wrap;
-    }
-
     .home-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -790,6 +822,85 @@ select {
     .form-grid,
     .stock-form {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .topbar {
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        height: 64px;
+        padding: 0 12px;
+    }
+
+    .topbar-logo {
+        grid-column: 2;
+        justify-self: end;
+        height: 36px;
+        max-width: 130px;
+    }
+
+    .topbar-logo img {
+        height: 36px;
+        max-width: 130px;
+    }
+
+    .mobile-menu-toggle {
+        grid-column: 1;
+        grid-row: 1;
+        justify-self: start;
+        display: block;
+    }
+
+    .topbar-nav,
+    .topbar-user {
+        position: absolute;
+        left: 0;
+        right: 0;
+        display: none;
+        background: #050505;
+        border-bottom: 1px solid rgba(241, 205, 53, .18);
+    }
+
+    .topbar-nav {
+        top: 64px;
+        padding: 12px;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 6px;
+    }
+
+    .topbar-user {
+        top: calc(64px + var(--mobile-nav-height, 292px));
+        padding: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .topbar.is-mobile-open .topbar-nav,
+    .topbar.is-mobile-open .topbar-user {
+        display: flex;
+    }
+
+    .topbar-item,
+    .topbar-link {
+        width: 100%;
+        justify-content: flex-start;
+        min-height: 40px;
+    }
+
+    .nav-dropdown {
+        width: 100%;
+    }
+
+    .dropdown-menu {
+        position: static;
+        min-width: 0;
+        width: 100%;
+        margin-top: 4px;
+        border-radius: 9px;
+        box-shadow: none;
     }
 }
 
