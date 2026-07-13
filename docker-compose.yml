@@ -11,7 +11,13 @@ services:
       APP_ENV: prod
       APP_DEBUG: 0
       APP_SECRET: simauto_secret_dev_2026
-    command: sh -c "mkdir -p data var && chmod -R 777 data var && if [ ! -f vendor/autoload.php ]; then composer install --no-interaction --prefer-dist; fi && php-fpm"
+    command: >
+      sh -c "umask 0000 &&
+      mkdir -p data var/cache var/log &&
+      rm -rf var/cache/prod &&
+      chmod -R a+rwX data var &&
+      if [ ! -f vendor/autoload.php ]; then composer install --no-interaction --prefer-dist; fi &&
+      php-fpm"
     networks:
       - simauto_network
 
