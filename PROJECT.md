@@ -95,8 +95,10 @@ Cela evite les pages debug Symfony en usage normal.
 La commande de demarrage du service PHP:
 
 ```sh
-mkdir -p data var &&
-chmod -R 777 data var &&
+umask 0000 &&
+mkdir -p data var/cache var/log &&
+rm -rf var/cache/prod &&
+chmod -R a+rwX data var &&
 if [ ! -f vendor/autoload.php ]; then composer install --no-interaction --prefer-dist; fi &&
 php-fpm
 ```
@@ -222,9 +224,16 @@ Routes principales:
 
 - `GET /`: dashboard principal.
 - `GET /products`: page d'entree et liste des produits.
+- `GET /products/{id}`: fiche detail produit.
 - `GET /stock`: page de gestion du stock.
 - `GET /operations`: page de creation d'une operation garage.
 - `GET /billing`: page des factures et receipts.
+- `GET /clients/{id}`: fiche client avec vehicules et dernieres operations.
+- `GET /suppliers/{id}`: fiche fournisseur avec dernieres entrees stock.
+- `GET /vehicles/{id}`: fiche vehicule avec client proprietaire et historique operations.
+- `GET /categories/{id}`: fiche categorie avec produits lies.
+- `GET /vehicle-brands/{id}`: fiche marque avec modeles lies.
+- `GET /vehicle-models/{id}`: fiche modele.
 - `GET /users`: liste et actions utilisateurs, reservee admin.
 - `GET|POST /users/new`: creation utilisateur, reservee admin.
 - `GET|POST /users/{id}/edit`: modification nom/email/role/statut, reservee admin.
@@ -425,6 +434,7 @@ Champs:
 - `vehicle_brand`
 - `vehicle_model`
 - `payment_method`
+- `check_number`: numero de cheque optionnel quand `payment_method = CHQ`
 - `total`
 - `status`
 - `created_by`
@@ -503,7 +513,8 @@ L'utilisateur saisit:
 
 - client existant,
 - vehicule existant,
-- mode de paiement,
+- mode de paiement: `ESP` especes, `CHQ` cheque, `CB` carte/TPE, `VIR` virement,
+- numero de cheque optionnel si le mode est `CHQ`,
 - jusqu'a 3 pieces,
 - jusqu'a 2 services.
 
@@ -707,10 +718,12 @@ Facture imprimable inspiree du modele SIM Auto fourni:
 
 - logo officiel `public/images/logo-invoice.png`,
 - en-tete conforme au bon papier: logo a gauche, services a droite,
+- titre `FACTURE N° {invoice_no}`,
 - document en francais LTR,
 - bloc client a gauche,
 - bloc vehicule a droite,
-- mode de paiement,
+- mode de paiement en clair: `ESP`, `CHEQUE`, `CB` ou `VIR`,
+- mention `Cheque N°` quand un numero de cheque est renseigne,
 - tableau designation / quantite / prix / montant,
 - total,
 - net a payer,
@@ -731,6 +744,7 @@ Ticket receipt format petite imprimante:
 - lignes,
 - total,
 - mode de paiement.
+- numero de cheque quand renseigne.
 
 ## Assets Publics
 
@@ -786,6 +800,20 @@ Il gere aussi:
 - la fermeture au clic exterieur,
 - la fermeture clavier avec Escape,
 - l'affichage conditionnel des champs societe pour les clients.
+- l'affichage conditionnel du champ numero de cheque quand le paiement est `CHQ`.
+
+## Vues Detail
+
+Les principales entites ont une fiche lecture seule accessible aux roles connectes:
+
+- `/clients/{id}`: informations completes du client, voitures du client, bouton ajout voiture preselectionne via `/vehicles?client={id}`, dernieres operations avec liens facture.
+- `/suppliers/{id}`: informations fournisseur et dernieres entrees de stock liees.
+- `/vehicles/{id}`: plaque, marque, modele, annee, kilometrage, notes, client proprietaire et historique operations.
+- `/products/{id}`: informations produit et mouvements stock.
+- `/categories/{id}`: categorie et produits lies.
+- `/vehicle-brands/{id}` et `/vehicle-models/{id}`: fiches marques/modeles.
+
+Le partiel `templates/app/_show_info.html.twig` fournit la grille libelle/valeur commune.
 
 ## Import en Masse
 
@@ -915,6 +943,11 @@ Tests couverts:
 - creation client societe et vehicule,
 - operation garage avec sortie automatique de stock,
 - donnees facture/receipt enrichies avec client et vehicule normalises,
+- titre facture `FACTURE N°` avec numero de facture,
+- paiement cheque stocke et imprime avec numero de cheque,
+- fiche client avec vehicules lies et etat vide,
+- fiche vehicule avec proprietaire et operations liees,
+- migration idempotente de `operations.check_number`,
 - refus SKU duplique,
 - refus stock insuffisant,
 - rollback transactionnel si la creation operation echoue,
@@ -1018,6 +1051,10 @@ L'application est fonctionnelle avec:
 - gestion complete des utilisateurs,
 - navbar avec menus deroulants,
 - facture conforme au bon papier SIM Auto,
+- titre facture `FACTURE N°`,
+- paiement cheque avec numero optionnel,
+- vues detail clients, fournisseurs, vehicules, produits, categories, marques et modeles,
+- fiche client avec vehicules lies et dernieres operations,
 - import CSV en masse,
 - ACL central admin/manager,
 - changement de mot de passe admin et personnel,
