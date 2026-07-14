@@ -9,10 +9,11 @@
 /.env.*.local
 /config/secrets/prod/prod.decrypt.private.php
 
-# Database (données réelles, jamais versionnées)
+# Database (donnees reelles, jamais versionnees)
 /data/*.sqlite
 /data/*.sqlite-journal
 /data/*.db
+/backups/
 
 # PHPUnit
 /.phpunit.result.cache

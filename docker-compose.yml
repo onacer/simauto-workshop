@@ -4,13 +4,13 @@ services:
       context: .
       dockerfile: docker/php/Dockerfile
     container_name: simauto_php
+    restart: unless-stopped
     working_dir: /var/www/html
     volumes:
       - .:/var/www/html:cached
     environment:
       APP_ENV: prod
       APP_DEBUG: 0
-      APP_SECRET: simauto_secret_dev_2026
     command: >
       sh -c "umask 0000 &&
       mkdir -p data var/cache var/log &&
@@ -24,6 +24,7 @@ services:
   nginx:
     image: nginx:alpine
     container_name: simauto_nginx
+    restart: unless-stopped
     ports:
       - "8090:80"
     volumes:

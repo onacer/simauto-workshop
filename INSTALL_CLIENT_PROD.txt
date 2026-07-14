@@ -1,0 +1,351 @@
+SIM AUTO WORKSHOP - INSTALLATION PRODUCTION CHEZ CLIENT
+=======================================================
+
+Objectif
+--------
+Installer SIM Auto Workshop sur un ordinateur central du client.
+Cet ordinateur devient le serveur local de l'application.
+
+Les autres PC du meme reseau local accederont a l'application avec:
+
+    http://IP_DU_PC_HOTE:8090
+
+Important:
+    Sur les PC managers, ne pas utiliser http://localhost:8090.
+    "localhost" veut dire "ce PC-ci". Il fonctionne seulement sur le PC hote.
+
+
+1. Prerequis sur le PC hote central
+-----------------------------------
+
+Installer:
+
+1. Windows 10/11 Pro ou Windows Server.
+2. Docker Desktop avec WSL2 active.
+3. Git for Windows.
+4. PowerShell.
+
+Recommandations:
+
+1. Donner au PC hote une adresse IP fixe dans le reseau local.
+   Exemple: 192.168.1.50
+2. Brancher le PC hote par cable reseau si possible.
+3. Eviter que ce PC soit eteint pendant les horaires de travail.
+4. Prevoir une sauvegarde quotidienne du dossier:
+
+       C:\simauto-workshop\data
+
+
+2. Installer le projet sur le PC hote
+------------------------------------
+
+Ouvrir PowerShell en administrateur puis aller dans le dossier cible:
+
+    cd C:\
+
+Cloner le projet depuis Git:
+
+    git clone URL_DU_DEPOT_GIT simauto-workshop
+    cd C:\simauto-workshop
+
+Exemple si le depot est sur GitHub:
+
+    git clone https://github.com/TON-COMPTE/simauto-workshop.git simauto-workshop
+    cd C:\simauto-workshop
+
+
+3. Creer le fichier de configuration locale
+-------------------------------------------
+
+Creer le fichier:
+
+    C:\simauto-workshop\.env.local
+
+Contenu conseille:
+
+    APP_SECRET=REMPLACER_PAR_UNE_CHAINE_LONGUE_ALEATOIRE
+    DEFAULT_URI=http://IP_DU_PC_HOTE:8090
+
+Exemple:
+
+    APP_SECRET=simauto_client_2026_une_chaine_tres_longue_987654
+    DEFAULT_URI=http://192.168.1.50:8090
+
+Notes:
+
+1. .env.local ne doit jamais etre envoye dans Git.
+2. Ne pas utiliser le meme APP_SECRET chez plusieurs clients.
+3. Le fichier .env du projet reste un exemple versionne.
+
+
+4. Ouvrir le port Windows Firewall
+----------------------------------
+
+Sur le PC hote, lancer PowerShell en administrateur:
+
+    New-NetFirewallRule -DisplayName "SIM Auto Workshop 8090" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8090
+
+Verifier ensuite l'adresse IP du PC hote:
+
+    ipconfig
+
+Chercher l'adresse IPv4, par exemple:
+
+    192.168.1.50
+
+
+5. Demarrer l'application en production
+---------------------------------------
+
+Depuis:
+
+    C:\simauto-workshop
+
+Lancer:
+
+    docker-compose up -d --build --force-recreate
+
+Si la commande docker-compose n'existe pas, utiliser:
+
+    docker compose up -d --build --force-recreate
+
+Verifier les conteneurs:
+
+    docker-compose ps
+
+Resultat attendu:
+
+    simauto_php     Up
+    simauto_nginx   Up
+
+
+6. Tester depuis le PC hote
+---------------------------
+
+Sur le PC hote, ouvrir:
+
+    http://localhost:8090/login
+
+ou:
+
+    http://IP_DU_PC_HOTE:8090/login
+
+Exemple:
+
+    http://192.168.1.50:8090/login
+
+
+7. Tester depuis un PC manager
+------------------------------
+
+Depuis un autre PC du meme reseau local, ouvrir:
+
+    http://IP_DU_PC_HOTE:8090/login
+
+Exemple:
+
+    http://192.168.1.50:8090/login
+
+Si ca ne marche pas:
+
+1. Verifier que le PC hote est allume.
+2. Verifier que Docker Desktop est lance sur le PC hote.
+3. Verifier que les conteneurs sont Up:
+
+       docker-compose ps
+
+4. Verifier le firewall Windows.
+5. Verifier que les deux PC sont sur le meme reseau.
+6. Tester le ping:
+
+       ping 192.168.1.50
+
+
+8. Premiere connexion et securite
+---------------------------------
+
+Les comptes initiaux existent seulement pour demarrer:
+
+    admin@simauto.ma
+    manager@simauto.ma
+
+Action obligatoire chez le client:
+
+1. Se connecter en admin.
+2. Changer le mot de passe admin.
+3. Changer le mot de passe manager.
+4. Creer les vrais comptes utilisateurs.
+5. Desactiver les comptes qui ne doivent pas etre utilises.
+
+
+9. Sauvegarde des donnees
+-------------------------
+
+La base de donnees reelle est:
+
+    C:\simauto-workshop\data\simauto.sqlite
+
+Ce fichier contient:
+
+1. utilisateurs,
+2. clients,
+3. vehicules,
+4. produits,
+5. stock,
+6. operations,
+7. factures,
+8. receipts.
+
+Sauvegarde manuelle simple:
+
+    mkdir C:\simauto-backups
+    copy C:\simauto-workshop\data\simauto.sqlite C:\simauto-backups\simauto_%date%.sqlite
+
+Recommandation:
+
+Faire une sauvegarde automatique quotidienne du dossier:
+
+    C:\simauto-workshop\data
+
+Et garder aussi quelques sauvegardes sur disque externe ou NAS.
+
+
+10. Mise a jour apres modification du code
+------------------------------------------
+
+Quand tu fais des modifications dans Git et que tu veux mettre a jour le PC hote client:
+
+1. Ouvrir PowerShell sur le PC hote.
+2. Aller dans le projet:
+
+       cd C:\simauto-workshop
+
+3. Lancer:
+
+       powershell -ExecutionPolicy Bypass -File .\scripts\update-prod.ps1
+
+Le script fait automatiquement:
+
+1. verification que le dossier Git est propre,
+2. sauvegarde de data\simauto.sqlite dans backups\,
+3. git pull --ff-only,
+4. rebuild/recreate des conteneurs Docker,
+5. nettoyage du cache Symfony prod,
+6. correction des permissions data/var,
+7. appel de /login pour declencher le boot Symfony et les migrations SQLite,
+8. affichage du statut des conteneurs.
+
+Si tu veux lancer sans sauvegarde:
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\update-prod.ps1 -SkipBackup
+
+Mais en production, il vaut mieux garder la sauvegarde.
+
+
+11. Commandes utiles
+--------------------
+
+Voir les conteneurs:
+
+    docker-compose ps
+
+Voir les logs:
+
+    docker-compose logs -f
+
+Redemarrer:
+
+    docker-compose restart
+
+Arreter:
+
+    docker-compose down
+
+Relancer:
+
+    docker-compose up -d
+
+Rebuild complet:
+
+    docker-compose up -d --build --force-recreate
+
+Reparer le cache si erreur Symfony cache:
+
+    docker-compose exec -T php sh -lc "rm -rf var/cache/prod && chmod -R a+rwX var data"
+
+
+12. Notes importantes pour production locale
+--------------------------------------------
+
+1. Les postes managers utilisent l'adresse IP du PC hote, pas localhost.
+2. Le PC hote doit rester allume.
+3. Docker Desktop doit demarrer avec Windows.
+4. Les conteneurs ont restart: unless-stopped, donc ils redemarrent automatiquement avec Docker.
+5. Ne jamais versionner data\simauto.sqlite.
+6. Ne jamais versionner .env.local.
+7. Avant chaque mise a jour, faire une sauvegarde de la base.
+8. Apres une mise a jour, tester:
+
+       http://localhost:8090/login
+
+   puis depuis un autre PC:
+
+       http://IP_DU_PC_HOTE:8090/login
+
+
+13. Probleme frequent: localhost
+--------------------------------
+
+Sur le PC hote:
+
+    http://localhost:8090
+
+fonctionne.
+
+Sur les autres PC:
+
+    http://localhost:8090
+
+ne fonctionne pas, car localhost pointe vers le PC manager lui-meme.
+
+Sur les autres PC il faut utiliser:
+
+    http://IP_DU_PC_HOTE:8090
+
+Exemple:
+
+    http://192.168.1.50:8090
+
+
+14. Probleme frequent: Docker Hub inaccessible
+----------------------------------------------
+
+Si Docker affiche une erreur de type:
+
+    failed to fetch anonymous token
+    lookup auth.docker.io: no such host
+
+Alors le PC hote n'a pas acces correctement a Internet ou DNS.
+
+Solutions:
+
+1. Verifier Internet.
+2. Redemarrer Docker Desktop.
+3. Verifier DNS Windows.
+4. Reessayer:
+
+       docker-compose up -d --build
+
+
+15. Procedure courte pour mise a jour
+-------------------------------------
+
+En usage normal, pour mettre a jour le client apres un push Git:
+
+    cd C:\simauto-workshop
+    powershell -ExecutionPolicy Bypass -File .\scripts\update-prod.ps1
+
+Puis tester:
+
+    http://localhost:8090/login
+
