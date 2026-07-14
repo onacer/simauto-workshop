@@ -16,6 +16,7 @@ use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 use Twig\Environment;
 use Twig\Loader\ArrayLoader;
+use Twig\Loader\FilesystemLoader;
 use Twig\TwigFunction;
 
 final class AppDatabaseTest extends TestCase
@@ -250,6 +251,114 @@ SQL);
         self::assertGreaterThan(0, (int) $migrated->query('SELECT category_id FROM products WHERE sku = "OLD-001"')->fetchColumn());
         self::assertGreaterThan(0, (int) $migrated->query('SELECT client_id FROM operations WHERE invoice_no = "FAC-OLD"')->fetchColumn());
         self::assertGreaterThan(0, (int) $migrated->query('SELECT vehicle_id FROM operations WHERE invoice_no = "FAC-OLD"')->fetchColumn());
+        self::assertSame('check_number', $migrated->query("SELECT name FROM pragma_table_info('operations') WHERE name = 'check_number'")->fetchColumn());
+        self::assertSame('FAC-OLD', $migrated->query('SELECT invoice_no FROM operations WHERE invoice_no = "FAC-OLD"')->fetchColumn());
+    }
+
+    public function testInvoiceTitleUsesFactureNumberAndNoDeliveryNoteTitle(): void
+    {
+        $db = $this->database();
+        $operationId = $this->operationWithService($db, 'ESP');
+        $operation = $db->operation($operationId);
+
+        $html = $this->renderTemplate('documents/invoice.html.twig', [
+            'operation' => $operation,
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'company' => $this->company(),
+        ]);
+
+        self::assertStringContainsString('FACTURE N° ' . $operation['invoice_no'], $html);
+        self::assertStringNotContainsString('BON DE LIVRAISON', $html);
+    }
+
+    public function testChequePaymentIsStoredAndPrintedWhileCashHasNoChequeMention(): void
+    {
+        $db = $this->database();
+        $chequeId = $this->operationWithService($db, 'CHQ', 'CHQ-7788');
+        $cashId = $this->operationWithService($db, 'ESP');
+
+        $cheque = $db->operation($chequeId);
+        $cash = $db->operation($cashId);
+
+        self::assertSame('CHQ', $cheque['payment_method']);
+        self::assertSame('CHEQUE', $cheque['payment_label']);
+        self::assertSame('CHQ-7788', $cheque['check_number']);
+        self::assertSame('', (string) $cash['check_number']);
+
+        $chequeHtml = $this->renderTemplate('documents/invoice.html.twig', [
+            'operation' => $cheque,
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'company' => $this->company(),
+        ]);
+        $cashHtml = $this->renderTemplate('documents/invoice.html.twig', [
+            'operation' => $cash,
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'company' => $this->company(),
+        ]);
+
+        self::assertStringContainsString('MODE DE PAIEMENT:</b> CHEQUE', $chequeHtml);
+        self::assertStringContainsString('Chèque N°', $chequeHtml);
+        self::assertStringContainsString('CHQ-7788', $chequeHtml);
+        self::assertStringContainsString('MODE DE PAIEMENT:</b> ESP', $cashHtml);
+        self::assertStringNotContainsString('Chèque N°', $cashHtml);
+    }
+
+    public function testClientShowListsRelatedVehiclesAndEmptyState(): void
+    {
+        $db = $this->database();
+        [$clientId] = $this->clientAndVehicle($db, $db->pdo());
+        $brandId = $this->id($db->pdo(), 'SELECT id FROM vehicle_brands WHERE name = "VW"');
+        $modelId = $this->id($db->pdo(), 'SELECT id FROM vehicle_models WHERE brand_id = ' . $brandId . ' AND name = "Tiguan"');
+        $db->saveVehicle([
+            'client_id' => $clientId,
+            'plate' => '22222-B-10',
+            'brand_id' => $brandId,
+            'model_id' => $modelId,
+            'year' => 2022,
+            'mileage' => 10000,
+        ]);
+
+        $client = $db->client($clientId);
+        $html = $this->renderTemplate('app/client_show.html.twig', [
+            'app' => ['request' => Request::create('/clients/' . $clientId)],
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'client' => $client,
+            'vehicles' => $db->clientVehicles($clientId),
+            'operations' => [],
+        ]);
+
+        self::assertStringContainsString('15428-A-32', $html);
+        self::assertStringContainsString('22222-B-10', $html);
+
+        $db->saveClient(['type' => 'individual', 'name' => 'Client sans voiture']);
+        $emptyClientId = $this->id($db->pdo(), 'SELECT id FROM clients WHERE name = "Client sans voiture"');
+        $emptyHtml = $this->renderTemplate('app/client_show.html.twig', [
+            'app' => ['request' => Request::create('/clients/' . $emptyClientId)],
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'client' => $db->client($emptyClientId),
+            'vehicles' => $db->clientVehicles($emptyClientId),
+            'operations' => $db->clientOperations($emptyClientId),
+        ]);
+
+        self::assertStringContainsString('لا توجد سيارات لهذا العميل.', $emptyHtml);
+    }
+
+    public function testVehicleShowDisplaysOwnerAndLinkedOperations(): void
+    {
+        $db = $this->database();
+        $operationId = $this->operationWithService($db, 'ESP');
+        $operation = $db->operation($operationId);
+        $vehicleId = (int) $operation['vehicle_id'];
+
+        $html = $this->renderTemplate('app/vehicle_show.html.twig', [
+            'app' => ['request' => Request::create('/vehicles/' . $vehicleId)],
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'vehicle' => $db->vehicle($vehicleId),
+            'operations' => $db->vehicleOperations($vehicleId),
+        ]);
+
+        self::assertStringContainsString('Client SIM', $html);
+        self::assertStringContainsString($operation['invoice_no'], $html);
     }
 
     public function testUserCreationValidationAndLoginPasswordFlow(): void
@@ -507,6 +616,54 @@ SQL);
         self::assertStringContainsString('/app_users', $adminHtml);
         self::assertStringNotContainsString('/app_users', $managerHtml);
         self::assertMatchesRegularExpression('/\\.dropdown-menu\\s*\\{[^}]*display:\\s*none;/s', $css);
+    }
+
+    private function operationWithService(AppDatabase $db, string $paymentMethod, string $checkNumber = ''): int
+    {
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $db->pdo());
+
+        return $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => $paymentMethod,
+            'check_number' => $checkNumber,
+            'service_label_1' => 'Diagnostic',
+            'service_price_1' => 150,
+        ], 1);
+    }
+
+    private function renderTemplate(string $template, array $context): string
+    {
+        $twig = new Environment(new FilesystemLoader(__DIR__ . '/../templates'));
+        $access = new AccessControl();
+        $twig->addFunction(new TwigFunction('asset', fn (string $path) => '/assets/' . $path));
+        $twig->addFunction(new TwigFunction('can', fn (string $permission, array $user) => $access->can($permission, $user)));
+        $twig->addFunction(new TwigFunction('path', function (string $route, array $params = []): string {
+            $suffix = isset($params['id']) ? '/' . $params['id'] : '';
+            return '/' . $route . $suffix;
+        }));
+
+        $context += [
+            'app_name' => 'SIM Auto',
+            'app' => ['request' => Request::create('/')],
+        ];
+
+        return $twig->render($template, $context);
+    }
+
+    private function company(): array
+    {
+        return [
+            'service_line_1' => 'Entretien Automobile',
+            'service_line_2' => 'Mecanique Generale',
+            'contact' => '0628193654 / 0680216699',
+            'address' => 'Av. Omar Benjelloun N16 Riad Salam Agadir',
+            'if' => '53237142',
+            'pt' => '48107238',
+            'ice' => '003151412000082',
+            'rc' => '53425',
+            'email' => 'simauto33@gmail.com',
+        ];
     }
 
     private function database(): AppDatabase
