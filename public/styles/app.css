@@ -210,8 +210,16 @@ select {
     direction: rtl;
 }
 
+.profile-dropdown {
+    max-width: 190px;
+}
+
+.profile-toggle {
+    max-width: 190px;
+}
+
 .topbar-username {
-    max-width: 110px;
+    max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -291,6 +299,11 @@ select {
     color: #080808;
     background: var(--yellow);
     outline: none;
+}
+
+.profile-menu {
+    right: auto;
+    left: 0;
 }
 
 .mobile-menu-toggle {

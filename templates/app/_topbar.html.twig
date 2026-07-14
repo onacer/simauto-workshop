@@ -14,7 +14,7 @@
     <nav class="topbar-nav" aria-label="القائمة الرئيسية">
         <a class="topbar-item {{ route == 'app_dashboard' ? 'is-active' : '' }}" href="{{ path('app_dashboard') }}">الرئيسية</a>
 
-        <div class="nav-dropdown {{ route in ['app_products', 'app_product_show', 'app_product_edit', 'app_stock', 'app_categories', 'app_category_edit', 'app_suppliers', 'app_supplier_edit'] ? 'is-current' : '' }}">
+        <div class="nav-dropdown {{ route in ['app_products', 'app_product_show', 'app_product_edit', 'app_stock', 'app_categories', 'app_category_show', 'app_category_edit', 'app_suppliers', 'app_supplier_show', 'app_supplier_edit'] ? 'is-current' : '' }}">
             <a class="topbar-item dropdown-toggle" href="{{ path('app_products') }}" aria-expanded="false">المخزون</a>
             <div class="dropdown-menu">
                 <a href="{{ path('app_products') }}">المنتجات</a>
@@ -24,7 +24,7 @@
             </div>
         </div>
 
-        <div class="nav-dropdown {{ route in ['app_vehicles', 'app_vehicle_settings'] ? 'is-current' : '' }}">
+        <div class="nav-dropdown {{ route in ['app_vehicles', 'app_vehicle_show', 'app_vehicle_settings', 'app_vehicle_brand_show', 'app_vehicle_model_show'] ? 'is-current' : '' }}">
             <a class="topbar-item dropdown-toggle" href="{{ path('app_vehicles') }}" aria-expanded="false">السيارات</a>
             <div class="dropdown-menu">
                 <a href="{{ path('app_vehicles') }}">السيارات</a>
@@ -32,7 +32,7 @@
             </div>
         </div>
 
-        <a class="topbar-item {{ route in ['app_clients', 'app_client_edit'] ? 'is-active' : '' }}" href="{{ path('app_clients') }}">الزبناء</a>
+        <a class="topbar-item {{ route in ['app_clients', 'app_client_show', 'app_client_edit'] ? 'is-active' : '' }}" href="{{ path('app_clients') }}">الزبناء</a>
 
         <div class="nav-dropdown {{ route in ['app_operations', 'app_billing', 'app_invoice', 'app_receipt'] ? 'is-current' : '' }}">
             <a class="topbar-item dropdown-toggle" href="{{ path('app_operations') }}" aria-expanded="false">العمليات</a>
@@ -58,8 +58,14 @@
     </nav>
 
     <div class="topbar-user">
-        <span class="topbar-username">{{ user.name }}</span>
-        <a class="topbar-link subtle-link" href="{{ path('app_profile_password') }}">كلمة المرور</a>
-        <a class="topbar-link" href="{{ path('app_logout') }}">خروج</a>
+        <div class="nav-dropdown profile-dropdown {{ route == 'app_profile_password' ? 'is-current' : '' }}">
+            <a class="topbar-item dropdown-toggle profile-toggle" href="{{ path('app_profile_password') }}" aria-expanded="false">
+                <span class="topbar-username">{{ user.name }}</span>
+            </a>
+            <div class="dropdown-menu profile-menu">
+                <a href="{{ path('app_profile_password') }}">كلمة المرور</a>
+                <a href="{{ path('app_logout') }}">خروج</a>
+            </div>
+        </div>
     </div>
 </header>
