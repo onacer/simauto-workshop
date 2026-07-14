@@ -79,4 +79,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     syncCompanyFields();
+
+    const syncCheckFields = () => {
+        document.querySelectorAll(".payment-method").forEach((select) => {
+            const form = select.closest("form") || document;
+            const isCheck = select.value === "CHQ";
+            form.querySelectorAll(".check-field").forEach((field) => {
+                field.classList.toggle("is-hidden", !isCheck);
+            });
+        });
+    };
+
+    document.querySelectorAll(".payment-method").forEach((select) => {
+        select.addEventListener("change", syncCheckFields);
+    });
+
+    syncCheckFields();
 });

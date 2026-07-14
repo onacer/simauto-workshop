@@ -33,12 +33,14 @@
                     </select>
                 </label>
                 <label>الدفع
-                    <select name="payment_method">
-                        <option value="ESP">ESP</option>
-                        <option value="CARTE">CARTE</option>
-                        <option value="VIREMENT">VIREMENT</option>
+                    <select name="payment_method" class="payment-method">
+                        <option value="ESP">نقدا</option>
+                        <option value="CHQ">شيك</option>
+                        <option value="CB">بطاقة</option>
+                        <option value="VIR">تحويل</option>
                     </select>
                 </label>
+                <label class="check-field is-hidden">رقم الشيك<input name="check_number"></label>
             </div>
 
             <div class="lines-grid">

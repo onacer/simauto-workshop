@@ -33,7 +33,10 @@
             <span>TOTAL</span>
             <strong>{{ operation.total|number_format(0, ',', ' ') }} DH</strong>
         </div>
-        <div class="receipt-row"><span>Paiement</span><b>{{ operation.payment_method }}</b></div>
+        <div class="receipt-row"><span>Paiement</span><b>{{ operation.payment_label }}</b></div>
+        {% if operation.check_number %}
+            <div class="receipt-row"><span>Cheque</span><b>{{ operation.check_number }}</b></div>
+        {% endif %}
         <hr>
         <p class="thanks">شكرا لزيارتكم</p>
         <p>{{ company.contact }}</p>

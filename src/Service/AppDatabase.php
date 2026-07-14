@@ -489,6 +489,8 @@ class AppDatabase
 
         $lines = $this->buildOperationLines($data);
         $total = array_sum(array_column($lines, 'total'));
+        $paymentMethod = $this->normalizePaymentMethod((string) ($data['payment_method'] ?? 'ESP'));
+        $checkNumber = $paymentMethod === 'CHQ' ? trim((string) ($data['check_number'] ?? '')) : '';
 
         $this->pdo->beginTransaction();
         try {
@@ -503,15 +505,15 @@ class AppDatabase
 
             $count = (int) $this->pdo->query('SELECT COUNT(*) + 1 FROM operations')->fetchColumn();
             $invoiceNo = 'FAC-' . date('Ymd') . '-' . str_pad((string) $count, 4, '0', STR_PAD_LEFT);
-            $receiptNo = 'REC-' . date('Ymd-His');
+            $receiptNo = 'REC-' . date('Ymd-His') . '-' . str_pad((string) $count, 4, '0', STR_PAD_LEFT);
 
             $client = $this->client($clientId);
             $vehicle = $this->vehicle($vehicleId);
 
             $stmt = $this->pdo->prepare(
                 'INSERT INTO operations
-                (invoice_no, receipt_no, client_id, client_name, client_address, vehicle_id, vehicle_plate, vehicle_brand, vehicle_model, payment_method, total, status, created_by, created_at)
-                VALUES (:invoice_no, :receipt_no, :client_id, :client_name, :client_address, :vehicle_id, :vehicle_plate, :vehicle_brand, :vehicle_model, :payment_method, :total, :status, :created_by, datetime("now"))'
+                (invoice_no, receipt_no, client_id, client_name, client_address, vehicle_id, vehicle_plate, vehicle_brand, vehicle_model, payment_method, check_number, total, status, created_by, created_at)
+                VALUES (:invoice_no, :receipt_no, :client_id, :client_name, :client_address, :vehicle_id, :vehicle_plate, :vehicle_brand, :vehicle_model, :payment_method, :check_number, :total, :status, :created_by, datetime("now"))'
             );
             $stmt->execute([
                 'invoice_no' => $invoiceNo,
@@ -523,7 +525,8 @@ class AppDatabase
                 'vehicle_plate' => $vehicle['plate'] ?? '',
                 'vehicle_brand' => $vehicle['brand_name'] ?? '',
                 'vehicle_model' => $vehicle['model_name'] ?? '',
-                'payment_method' => $data['payment_method'] ?: 'ESP',
+                'payment_method' => $paymentMethod,
+                'check_number' => $checkNumber,
                 'total' => $total,
                 'status' => 'paid',
                 'created_by' => $userId,
@@ -566,7 +569,7 @@ class AppDatabase
 
     public function operations(): array
     {
-        return $this->pdo->query(
+        $operations = $this->pdo->query(
             'SELECT o.*, c.type AS client_type, c.name AS client_real_name, c.address AS client_real_address,
                     c.ice AS client_ice, c.vat AS client_vat, c.rc AS client_rc,
                     v.plate AS vehicle_real_plate, vb.name AS brand_name, vm.name AS model_name
@@ -577,6 +580,8 @@ class AppDatabase
              LEFT JOIN vehicle_models vm ON vm.id = v.model_id
              ORDER BY o.id DESC LIMIT 25'
         )->fetchAll();
+
+        return array_map(fn (array $operation): array => $this->decorateOperation($operation), $operations);
     }
 
     public function operation(int $id): ?array
@@ -596,11 +601,108 @@ class AppDatabase
             return null;
         }
 
+        $operation = $this->decorateOperation($operation);
         $items = $this->pdo->prepare('SELECT * FROM operation_items WHERE operation_id = :id ORDER BY id');
         $items->execute(['id' => $id]);
         $operation['items'] = $items->fetchAll();
 
         return $operation;
+    }
+
+    public function clientVehicles(int $clientId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT v.*, vb.name AS brand_name, vm.name AS model_name
+             FROM vehicles v
+             JOIN vehicle_brands vb ON vb.id = v.brand_id
+             JOIN vehicle_models vm ON vm.id = v.model_id
+             WHERE v.client_id = :client_id
+             ORDER BY v.id DESC'
+        );
+        $stmt->execute(['client_id' => $clientId]);
+        return $stmt->fetchAll();
+    }
+
+    public function clientOperations(int $clientId, int $limit = 10): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT o.*, v.plate AS vehicle_real_plate, vb.name AS brand_name, vm.name AS model_name
+             FROM operations o
+             LEFT JOIN vehicles v ON v.id = o.vehicle_id
+             LEFT JOIN vehicle_brands vb ON vb.id = v.brand_id
+             LEFT JOIN vehicle_models vm ON vm.id = v.model_id
+             WHERE o.client_id = :client_id
+             ORDER BY o.id DESC
+             LIMIT :limit'
+        );
+        $stmt->bindValue('client_id', $clientId, PDO::PARAM_INT);
+        $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return array_map(fn (array $operation): array => $this->decorateOperation($operation), $stmt->fetchAll());
+    }
+
+    public function vehicleOperations(int $vehicleId, int $limit = 10): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT o.*, c.name AS client_real_name
+             FROM operations o
+             LEFT JOIN clients c ON c.id = o.client_id
+             WHERE o.vehicle_id = :vehicle_id
+             ORDER BY o.id DESC
+             LIMIT :limit'
+        );
+        $stmt->bindValue('vehicle_id', $vehicleId, PDO::PARAM_INT);
+        $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return array_map(fn (array $operation): array => $this->decorateOperation($operation), $stmt->fetchAll());
+    }
+
+    public function supplierMovements(int $supplierId, int $limit = 10): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT sm.*, p.name AS product_name, p.sku
+             FROM stock_movements sm
+             JOIN products p ON p.id = sm.product_id
+             WHERE sm.supplier_id = :supplier_id
+             ORDER BY sm.id DESC
+             LIMIT :limit'
+        );
+        $stmt->bindValue('supplier_id', $supplierId, PDO::PARAM_INT);
+        $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function categoryProducts(int $categoryId, int $limit = 20): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT * FROM products WHERE category_id = :category_id ORDER BY name LIMIT :limit'
+        );
+        $stmt->bindValue('category_id', $categoryId, PDO::PARAM_INT);
+        $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function vehicleBrand(int $id): ?array
+    {
+        return $this->row('SELECT * FROM vehicle_brands WHERE id = :id', ['id' => $id]);
+    }
+
+    public function vehicleModel(int $id): ?array
+    {
+        return $this->row(
+            'SELECT vm.*, vb.name AS brand_name
+             FROM vehicle_models vm
+             JOIN vehicle_brands vb ON vb.id = vm.brand_id
+             WHERE vm.id = :id',
+            ['id' => $id]
+        );
+    }
+
+    public function brandModels(int $brandId): array
+    {
+        return $this->vehicleModels($brandId);
     }
 
     public function users(): array
@@ -816,16 +918,46 @@ class AppDatabase
         return $lines;
     }
 
-    private function vehicle(int $id): ?array
+    public function vehicle(int $id): ?array
     {
         return $this->row(
-            'SELECT v.*, vb.name AS brand_name, vm.name AS model_name
+            'SELECT v.*, c.name AS client_name, c.phone AS client_phone, c.email AS client_email,
+                    vb.name AS brand_name, vm.name AS model_name
              FROM vehicles v
+             JOIN clients c ON c.id = v.client_id
              JOIN vehicle_brands vb ON vb.id = v.brand_id
              JOIN vehicle_models vm ON vm.id = v.model_id
              WHERE v.id = :id',
             ['id' => $id]
         );
+    }
+
+    private function normalizePaymentMethod(string $method): string
+    {
+        $method = strtoupper(trim($method));
+        return match ($method) {
+            'CHQ', 'CHEQUE', 'CHÈQUE' => 'CHQ',
+            'CB', 'CARTE', 'TPE' => 'CB',
+            'VIR', 'VIREMENT' => 'VIR',
+            default => 'ESP',
+        };
+    }
+
+    private function paymentLabel(string $method): string
+    {
+        return match ($this->normalizePaymentMethod($method)) {
+            'CHQ' => 'CHEQUE',
+            'CB' => 'CB',
+            'VIR' => 'VIR',
+            default => 'ESP',
+        };
+    }
+
+    private function decorateOperation(array $operation): array
+    {
+        $operation['payment_method'] = $this->normalizePaymentMethod((string) ($operation['payment_method'] ?? 'ESP'));
+        $operation['payment_label'] = $this->paymentLabel($operation['payment_method']);
+        return $operation;
     }
 
     private function addMovement(int $productId, string $type, int $quantity, string $note, int $userId, ?int $supplierId = null, ?float $unitCost = null): void
@@ -949,6 +1081,7 @@ CREATE TABLE IF NOT EXISTS operations (
     vehicle_brand TEXT,
     vehicle_model TEXT,
     payment_method TEXT NOT NULL,
+    check_number TEXT,
     total REAL NOT NULL DEFAULT 0,
     status TEXT NOT NULL,
     created_by INTEGER NOT NULL,
@@ -979,6 +1112,7 @@ SQL);
         $this->addColumnIfMissing('stock_movements', 'unit_cost', 'REAL');
         $this->addColumnIfMissing('operations', 'client_id', 'INTEGER');
         $this->addColumnIfMissing('operations', 'vehicle_id', 'INTEGER');
+        $this->addColumnIfMissing('operations', 'check_number', 'TEXT');
 
         $this->migrateCategories();
         $this->migrateClientsAndVehicles();
