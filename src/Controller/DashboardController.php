@@ -50,7 +50,7 @@ class DashboardController extends AbstractController
 
         try {
             $db->saveProduct($request->request->all(), (int) $user['id']);
-            $this->addFlash('success', 'ØªÙ… Ø­ÙØ¸ Ø§Ù„Ù…Ù†ØªØ¬');
+            $this->addFlash('success', 'تم حفظ المنتج');
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
         }
@@ -94,7 +94,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveProduct($request->request->all(), (int) $user['id'], $id);
-                $this->addFlash('success', 'ØªÙ… ØªØ­Ø¯ÙŠØ« Ø§Ù„Ù…Ù†ØªØ¬');
+                $this->addFlash('success', 'تم تحديث المنتج');
                 return $this->redirectToRoute('app_product_show', ['id' => $id]);
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
@@ -120,7 +120,7 @@ class DashboardController extends AbstractController
             return $this->redirectToRoute('app_products');
         }
         $db->deactivateProduct($id);
-        $this->addFlash('success', 'ØªÙ… ØªØ¹Ø·ÙŠÙ„ Ø§Ù„Ù…Ù†ØªØ¬');
+        $this->addFlash('success', 'تم تعطيل المنتج');
         return $this->redirectToRoute('app_products');
     }
 
@@ -152,7 +152,7 @@ class DashboardController extends AbstractController
                 (int) $request->request->get('supplier_id') ?: null,
                 $request->request->get('unit_cost') !== '' ? (float) $request->request->get('unit_cost') : null
             );
-            $this->addFlash('success', 'ØªÙ… ØªØ­Ø¯ÙŠØ« Ø§Ù„Ù…Ø®Ø²ÙˆÙ†');
+            $this->addFlash('success', 'تم تحديث المخزون');
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
         }
@@ -210,7 +210,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveCategory($request->request->all());
-                $this->addFlash('success', 'ØªÙ… Ø­ÙØ¸ Ø§Ù„ØµÙ†Ù');
+                $this->addFlash('success', 'تم حفظ الصنف');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
             }
@@ -234,7 +234,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveCategory($request->request->all(), $id);
-                $this->addFlash('success', 'ØªÙ… ØªØ­Ø¯ÙŠØ« Ø§Ù„ØµÙ†Ù');
+                $this->addFlash('success', 'تم تحديث الصنف');
                 return $this->redirectToRoute('app_categories');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
@@ -286,7 +286,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveSupplier($request->request->all());
-                $this->addFlash('success', 'ØªÙ… Ø­ÙØ¸ Ø§Ù„Ù…ÙˆØ±Ø¯');
+                $this->addFlash('success', 'تم حفظ المورد');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
             }
@@ -360,7 +360,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveClient($request->request->all());
-                $this->addFlash('success', 'ØªÙ… Ø­ÙØ¸ Ø§Ù„Ø¹Ù…ÙŠÙ„');
+                $this->addFlash('success', 'تم حفظ العميل');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
             }
@@ -420,7 +420,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveVehicle($request->request->all());
-                $this->addFlash('success', 'ØªÙ… Ø­ÙØ¸ Ø§Ù„Ø³ÙŠØ§Ø±Ø©');
+                $this->addFlash('success', 'تم حفظ السيارة');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
             }
@@ -468,7 +468,7 @@ class DashboardController extends AbstractController
                 } else {
                     $db->saveVehicleModel((int) $request->request->get('brand_id'), (string) $request->request->get('name'));
                 }
-                $this->addFlash('success', 'ØªÙ… Ø§Ù„Ø­ÙØ¸');
+                $this->addFlash('success', 'تم الحفظ');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
             }
