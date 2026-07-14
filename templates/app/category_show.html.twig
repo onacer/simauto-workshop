@@ -1,0 +1,36 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ category.name }} - SIM Auto{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head">
+        <h1>{{ category.name }}</h1>
+        <span class="row-actions">
+            {% if can('edit', user) %}<a href="{{ path('app_category_edit', {id: category.id}) }}">تعديل</a>{% endif %}
+            <a class="btn btn-dark" href="{{ path('app_categories') }}">رجوع</a>
+        </span>
+    </section>
+
+    {% include 'app/_show_info.html.twig' with {rows: [
+        {label: 'الحالة', value: category.active ? 'نشط' : 'معطل'},
+        {label: 'تاريخ الإنشاء', value: category.created_at}
+    ]} %}
+
+    <section class="panel">
+        <h2>منتجات هذا الصنف</h2>
+        <div class="data-table">
+            <div class="table-head"><span>المنتج</span><span>SKU</span><span>المخزون</span><span>إجراءات</span></div>
+            {% for product in products %}
+                <div>
+                    <strong>{{ product.name }}</strong>
+                    <span>{{ product.sku }}</span>
+                    <span>{{ product.stock_qty }}</span>
+                    <span class="row-actions"><a href="{{ path('app_product_show', {id: product.id}) }}">عرض</a></span>
+                </div>
+            {% else %}
+                <p class="empty-state">لا توجد منتجات مرتبطة بهذا الصنف.</p>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

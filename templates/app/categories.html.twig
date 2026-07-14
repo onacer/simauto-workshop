@@ -21,7 +21,8 @@
                     <span>{{ category.active ? 'نشط' : 'معطل' }}</span>
                     <span>{{ category.created_at }}</span>
                     <span class="row-actions">
-                        <a href="{{ path('app_category_edit', {id: category.id}) }}">تعديل</a>
+                        <a href="{{ path('app_category_show', {id: category.id}) }}">عرض</a>
+                        {% if can('edit', user) %}<a href="{{ path('app_category_edit', {id: category.id}) }}">تعديل</a>{% endif %}
                         {% if can('delete', user) %}
                             <form method="post" action="{{ path('app_category_deactivate', {id: category.id}) }}"><button class="link-button">تعطيل</button></form>
                         {% endif %}

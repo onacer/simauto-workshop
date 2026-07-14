@@ -243,6 +243,24 @@ class DashboardController extends AbstractController
         return $this->render('app/category_edit.html.twig', ['user' => $user, 'category' => $category]);
     }
 
+    #[Route('/categories/{id}', name: 'app_category_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function categoryShow(int $id, Request $request, AppDatabase $db): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        $category = $db->category($id);
+        if (!$category) {
+            throw $this->createNotFoundException();
+        }
+        return $this->render('app/category_show.html.twig', [
+            'user' => $user,
+            'category' => $category,
+            'products' => $db->categoryProducts($id),
+        ]);
+    }
+
     #[Route('/categories/{id}/deactivate', name: 'app_category_deactivate', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function categoryDeactivate(int $id, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
     {
@@ -297,6 +315,24 @@ class DashboardController extends AbstractController
             }
         }
         return $this->render('app/supplier_edit.html.twig', ['user' => $user, 'supplier' => $supplier]);
+    }
+
+    #[Route('/suppliers/{id}', name: 'app_supplier_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function supplierShow(int $id, Request $request, AppDatabase $db): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        $supplier = $db->supplier($id);
+        if (!$supplier) {
+            throw $this->createNotFoundException();
+        }
+        return $this->render('app/supplier_show.html.twig', [
+            'user' => $user,
+            'supplier' => $supplier,
+            'movements' => $db->supplierMovements($id),
+        ]);
     }
 
     #[Route('/suppliers/{id}/deactivate', name: 'app_supplier_deactivate', methods: ['POST'], requirements: ['id' => '\d+'])]
@@ -355,6 +391,25 @@ class DashboardController extends AbstractController
         return $this->render('app/client_edit.html.twig', ['user' => $user, 'client' => $client]);
     }
 
+    #[Route('/clients/{id}', name: 'app_client_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function clientShow(int $id, Request $request, AppDatabase $db): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        $client = $db->client($id);
+        if (!$client) {
+            throw $this->createNotFoundException();
+        }
+        return $this->render('app/client_show.html.twig', [
+            'user' => $user,
+            'client' => $client,
+            'vehicles' => $db->clientVehicles($id),
+            'operations' => $db->clientOperations($id),
+        ]);
+    }
+
     #[Route('/vehicles', name: 'app_vehicles', methods: ['GET', 'POST'])]
     public function vehicles(Request $request, AppDatabase $db): Response
     {
@@ -377,6 +432,25 @@ class DashboardController extends AbstractController
             'brands' => $db->vehicleBrands(),
             'models' => $db->vehicleModels(),
             'vehicles' => $db->vehicles(),
+            'selected_client_id' => (int) $request->query->get('client', 0),
+        ]);
+    }
+
+    #[Route('/vehicles/{id}', name: 'app_vehicle_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function vehicleShow(int $id, Request $request, AppDatabase $db): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        $vehicle = $db->vehicle($id);
+        if (!$vehicle) {
+            throw $this->createNotFoundException();
+        }
+        return $this->render('app/vehicle_show.html.twig', [
+            'user' => $user,
+            'vehicle' => $vehicle,
+            'operations' => $db->vehicleOperations($id),
         ]);
     }
 
@@ -401,6 +475,41 @@ class DashboardController extends AbstractController
             return $this->redirectToRoute('app_vehicle_settings');
         }
         return $this->render('app/vehicle_settings.html.twig', ['user' => $user, 'brands' => $db->vehicleBrands(), 'models' => $db->vehicleModels()]);
+    }
+
+    #[Route('/vehicle-brands/{id}', name: 'app_vehicle_brand_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function vehicleBrandShow(int $id, Request $request, AppDatabase $db): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        $brand = $db->vehicleBrand($id);
+        if (!$brand) {
+            throw $this->createNotFoundException();
+        }
+        return $this->render('app/vehicle_brand_show.html.twig', [
+            'user' => $user,
+            'brand' => $brand,
+            'models' => $db->brandModels($id),
+        ]);
+    }
+
+    #[Route('/vehicle-models/{id}', name: 'app_vehicle_model_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function vehicleModelShow(int $id, Request $request, AppDatabase $db): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        $model = $db->vehicleModel($id);
+        if (!$model) {
+            throw $this->createNotFoundException();
+        }
+        return $this->render('app/vehicle_model_show.html.twig', [
+            'user' => $user,
+            'model' => $model,
+        ]);
     }
 
     #[Route('/invoice/{id}', name: 'app_invoice')]

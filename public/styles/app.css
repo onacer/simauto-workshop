@@ -514,6 +514,33 @@ select {
     font-weight: 900;
 }
 
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.info-grid div {
+    min-height: 78px;
+    padding: 14px;
+    display: grid;
+    align-content: center;
+    gap: 6px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .72);
+    border: 1px solid rgba(222, 222, 215, .9);
+}
+
+.info-grid span {
+    color: var(--muted);
+    font-weight: 800;
+}
+
+.info-grid strong {
+    font-size: 18px;
+    font-weight: 900;
+}
+
 .user-table > div {
     grid-template-columns: 1.2fr 1.4fr .7fr .7fr .8fr 1.6fr;
 }
@@ -587,7 +614,8 @@ select {
     cursor: pointer;
 }
 
-.company-field.is-hidden {
+.company-field.is-hidden,
+.check-field.is-hidden {
     display: none;
 }
 
@@ -914,6 +942,7 @@ select {
     .home-grid,
     .work-grid,
     .import-grid,
+    .info-grid,
     .form-grid,
     .stock-form,
     .lines-grid,

@@ -27,7 +27,10 @@
                     <strong>{{ client.name }}</strong>
                     <span>{{ client.type == 'company' ? 'شركة' : 'فرد' }}</span>
                     <span>{{ client.phone }}</span>
-                    <span class="row-actions"><a href="{{ path('app_client_edit', {id: client.id}) }}">تعديل</a></span>
+                    <span class="row-actions">
+                        <a href="{{ path('app_client_show', {id: client.id}) }}">عرض</a>
+                        {% if can('edit', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">تعديل</a>{% endif %}
+                    </span>
                 </div>
             {% endfor %}
         </div>

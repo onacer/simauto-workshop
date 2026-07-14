@@ -1,0 +1,60 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ client.name }} - SIM Auto{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head">
+        <h1>{{ client.name }}</h1>
+        <span class="row-actions">
+            {% if can('edit', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">تعديل</a>{% endif %}
+            <a class="btn btn-primary" href="{{ path('app_vehicles', {client: client.id}) }}">إضافة سيارة</a>
+            <a class="btn btn-dark" href="{{ path('app_clients') }}">رجوع</a>
+        </span>
+    </section>
+
+    {% include 'app/_show_info.html.twig' with {rows: [
+        {label: 'النوع', value: client.type == 'company' ? 'شركة' : 'فرد'},
+        {label: 'الهاتف', value: client.phone},
+        {label: 'البريد', value: client.email},
+        {label: 'العنوان', value: client.address},
+        {label: 'ICE', value: client.ice},
+        {label: 'IF', value: client.vat},
+        {label: 'RC', value: client.rc},
+        {label: 'تاريخ الإنشاء', value: client.created_at}
+    ]} %}
+
+    <section class="panel">
+        <h2>سيارات العميل</h2>
+        <div class="data-table">
+            <div class="table-head"><span>الترقيم</span><span>الماركة</span><span>السنة / الكيلومترات</span><span>إجراءات</span></div>
+            {% for vehicle in vehicles %}
+                <div>
+                    <strong>{{ vehicle.plate }}</strong>
+                    <span>{{ vehicle.brand_name }} {{ vehicle.model_name }}</span>
+                    <span>{{ vehicle.year ?: '—' }} / {{ vehicle.mileage ?: '—' }}</span>
+                    <span class="row-actions"><a href="{{ path('app_vehicle_show', {id: vehicle.id}) }}">عرض</a></span>
+                </div>
+            {% else %}
+                <p class="empty-state">لا توجد سيارات لهذا العميل.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>آخر العمليات</h2>
+        <div class="data-table">
+            <div class="table-head"><span>التاريخ</span><span>الفاتورة</span><span>السيارة</span><span>المبلغ</span></div>
+            {% for operation in operations %}
+                <div>
+                    <strong>{{ operation.created_at|date('d/m/Y') }}</strong>
+                    <span><a href="{{ path('app_invoice', {id: operation.id}) }}">{{ operation.invoice_no }}</a></span>
+                    <span>{{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</span>
+                    <span>{{ operation.total|number_format(2, ',', ' ') }} DH</span>
+                </div>
+            {% else %}
+                <p class="empty-state">لا توجد عمليات لهذا العميل.</p>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

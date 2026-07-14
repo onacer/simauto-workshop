@@ -1,0 +1,16 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ model.name }} - SIM Auto{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head">
+        <h1>{{ model.name }}</h1>
+        <a class="btn btn-dark" href="{{ path('app_vehicle_settings') }}">رجوع</a>
+    </section>
+
+    {% include 'app/_show_info.html.twig' with {rows: [
+        {label: 'الماركة', value: model.brand_name},
+        {label: 'الموديل', value: model.name}
+    ]} %}
+</main>
+{% endblock %}

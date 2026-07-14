@@ -65,8 +65,8 @@
                     <span>{{ product.category_name ?: product.category }}</span>
                     <span>{{ product.stock_qty }}</span>
                     <span class="row-actions">
-                        <a href="{{ path('app_product_show', {id: product.id}) }}">تفاصيل</a>
-                        <a href="{{ path('app_product_edit', {id: product.id}) }}">تعديل</a>
+                        <a href="{{ path('app_product_show', {id: product.id}) }}">عرض</a>
+                        {% if can('edit', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">تعديل</a>{% endif %}
                     </span>
                 </div>
             {% else %}

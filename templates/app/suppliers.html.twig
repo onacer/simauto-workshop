@@ -25,7 +25,8 @@
                     <span>{{ supplier.phone }}</span>
                     <span>{{ supplier.ice }}</span>
                     <span class="row-actions">
-                        <a href="{{ path('app_supplier_edit', {id: supplier.id}) }}">تعديل</a>
+                        <a href="{{ path('app_supplier_show', {id: supplier.id}) }}">عرض</a>
+                        {% if can('edit', user) %}<a href="{{ path('app_supplier_edit', {id: supplier.id}) }}">تعديل</a>{% endif %}
                         {% if can('delete', user) %}
                             <form method="post" action="{{ path('app_supplier_deactivate', {id: supplier.id}) }}"><button class="link-button">تعطيل</button></form>
                         {% endif %}

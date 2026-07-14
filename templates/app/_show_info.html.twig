@@ -1,0 +1,10 @@
+<section class="panel">
+    <div class="info-grid">
+        {% for row in rows %}
+            <div>
+                <span>{{ row.label }}</span>
+                <strong>{{ row.value is same as(null) or row.value is same as('') ? '—' : row.value }}</strong>
+            </div>
+        {% endfor %}
+    </div>
+</section>
