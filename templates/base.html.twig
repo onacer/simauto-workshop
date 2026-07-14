@@ -1,5 +1,6 @@
+{% set current_locale = app.request.locale|default('ar') in ['ar', 'fr'] ? app.request.locale|default('ar') : 'ar' %}
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="{{ current_locale }}" dir="{{ current_locale == 'fr' ? 'ltr' : 'rtl' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">

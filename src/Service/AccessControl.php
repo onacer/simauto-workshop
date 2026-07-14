@@ -30,6 +30,7 @@ class AccessControl
             'imports',
             'edit',
             'create',
+            'delete',
         ], true);
     }
 }

@@ -17,6 +17,7 @@ use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 use Twig\Environment;
 use Twig\Loader\ArrayLoader;
 use Twig\Loader\FilesystemLoader;
+use Twig\TwigFilter;
 use Twig\TwigFunction;
 
 final class AppDatabaseTest extends TestCase
@@ -55,7 +56,7 @@ final class AppDatabaseTest extends TestCase
 
         [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
 
-        $operationId = $db->createOperation([
+        $quoteId = $db->createOperation([
             'client_id' => $clientId,
             'vehicle_id' => $vehicleId,
             'payment_method' => 'ESP',
@@ -64,16 +65,24 @@ final class AppDatabaseTest extends TestCase
             'service_label_1' => 'Diagnostic et entretien',
             'service_price_1' => 150,
         ], 1);
+        self::assertSame(15, (int) $db->product($productId)['stock_qty']);
+
+        $orderId = $db->confirmQuote($quoteId, 1);
+        self::assertSame(15, (int) $db->product($productId)['stock_qty']);
+
+        $operationId = $db->invoiceDocument($orderId, 1);
 
         $product = $db->product($productId);
         $operation = $db->operation($operationId);
 
         self::assertSame(12, (int) $product['stock_qty']);
+        self::assertSame('invoice', $operation['doc_type']);
+        self::assertStringStartsWith('FAC-', $operation['invoice_no']);
         self::assertSame('003151412000082', $operation['client_ice']);
         self::assertSame('15428-A-32', $operation['vehicle_real_plate']);
         self::assertSame('VW', $operation['brand_name']);
         self::assertSame('Tiguan', $operation['model_name']);
-        self::assertSame(360.0, (float) $operation['total']);
+        self::assertSame(432.0, (float) $operation['total_ttc']);
         self::assertCount(2, $operation['items']);
         self::assertSame(3, (int) $pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId)->fetchColumn());
     }
@@ -136,17 +145,18 @@ final class AppDatabaseTest extends TestCase
         [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
 
         try {
-            $db->createOperation([
+            $quoteId = $db->createOperation([
                 'client_id' => $clientId,
                 'vehicle_id' => $vehicleId,
                 'payment_method' => 'ESP',
                 'product_1' => $productId,
                 'product_qty_1' => 2,
             ], 1);
+            $db->invoiceDocument($quoteId, 1);
             self::fail('Expected insufficient stock exception.');
         } catch (InvalidArgumentException) {
             self::assertSame(1, (int) $db->product($productId)['stock_qty']);
-            self::assertSame(0, (int) $pdo->query('SELECT COUNT(*) FROM operations')->fetchColumn());
+            self::assertSame(1, (int) $pdo->query('SELECT COUNT(*) FROM operations')->fetchColumn());
         }
     }
 
@@ -255,7 +265,7 @@ SQL);
         self::assertSame('FAC-OLD', $migrated->query('SELECT invoice_no FROM operations WHERE invoice_no = "FAC-OLD"')->fetchColumn());
     }
 
-    public function testInvoiceTitleUsesFactureNumberAndNoDeliveryNoteTitle(): void
+    public function testInvoiceTitleUsesDocumentNumberAndNoDeliveryNoteTitle(): void
     {
         $db = $this->database();
         $operationId = $this->operationWithService($db, 'ESP');
@@ -265,9 +275,10 @@ SQL);
             'operation' => $operation,
             'user' => ['role' => 'manager', 'name' => 'Manager'],
             'company' => $this->company(),
+            'amount_words' => 'cent quatre-vingts dirhams TTC',
         ]);
 
-        self::assertStringContainsString('FACTURE N° ' . $operation['invoice_no'], $html);
+        self::assertStringContainsString('DEVIS N° ' . $operation['document_no'], $html);
         self::assertStringNotContainsString('BON DE LIVRAISON', $html);
     }
 
@@ -289,20 +300,21 @@ SQL);
             'operation' => $cheque,
             'user' => ['role' => 'manager', 'name' => 'Manager'],
             'company' => $this->company(),
+            'amount_words' => 'cent quatre-vingts dirhams TTC',
         ]);
         $cashHtml = $this->renderTemplate('documents/invoice.html.twig', [
             'operation' => $cash,
             'user' => ['role' => 'manager', 'name' => 'Manager'],
             'company' => $this->company(),
+            'amount_words' => 'cent quatre-vingts dirhams TTC',
         ]);
 
-        self::assertStringContainsString('MODE DE PAIEMENT:</b> CHEQUE', $chequeHtml);
-        self::assertStringContainsString('Chèque N°', $chequeHtml);
+        self::assertStringContainsString('MODE DE PAIEMENT :</b> CHEQUE', $chequeHtml);
+        self::assertStringContainsString('Cheque N°', $chequeHtml);
         self::assertStringContainsString('CHQ-7788', $chequeHtml);
-        self::assertStringContainsString('MODE DE PAIEMENT:</b> ESP', $cashHtml);
-        self::assertStringNotContainsString('Chèque N°', $cashHtml);
+        self::assertStringContainsString('MODE DE PAIEMENT :</b> ESP', $cashHtml);
+        self::assertStringNotContainsString('Cheque N°', $cashHtml);
     }
-
     public function testClientShowListsRelatedVehiclesAndEmptyState(): void
     {
         $db = $this->database();
@@ -590,7 +602,7 @@ SQL);
 
         self::assertTrue($access->can('imports', $manager));
         self::assertTrue($access->can('clients', $manager));
-        self::assertFalse($access->can('delete', $manager));
+        self::assertTrue($access->can('delete', $manager));
         self::assertFalse($access->can('manage_users', $manager));
         self::assertTrue($access->can('delete', $admin));
         self::assertTrue($access->can('manage_users', $admin));
@@ -601,9 +613,10 @@ SQL);
         $template = file_get_contents(__DIR__ . '/../templates/app/_topbar.html.twig');
         $twig = new Environment(new ArrayLoader(['topbar' => $template]));
         $access = new AccessControl();
-        $twig->addFunction(new TwigFunction('path', fn (string $route) => '/' . $route));
+        $twig->addFunction(new TwigFunction('path', fn (string $route, array $params = []) => '/' . $route . (isset($params['locale']) ? '/' . $params['locale'] : '')));
         $twig->addFunction(new TwigFunction('asset', fn (string $path) => '/assets/' . $path));
         $twig->addFunction(new TwigFunction('can', fn (string $permission, array $user) => $access->can($permission, $user)));
+        $twig->addFilter(new TwigFilter('trans', fn (string $key): string => $key));
 
         $request = Request::create('/');
         $request->attributes->set('_route', 'app_dashboard');
@@ -638,8 +651,9 @@ SQL);
         $access = new AccessControl();
         $twig->addFunction(new TwigFunction('asset', fn (string $path) => '/assets/' . $path));
         $twig->addFunction(new TwigFunction('can', fn (string $permission, array $user) => $access->can($permission, $user)));
+        $twig->addFilter(new TwigFilter('trans', fn (string $key): string => $key));
         $twig->addFunction(new TwigFunction('path', function (string $route, array $params = []): string {
-            $suffix = isset($params['id']) ? '/' . $params['id'] : '';
+            $suffix = isset($params['id']) ? '/' . $params['id'] : (isset($params['locale']) ? '/' . $params['locale'] : '');
             return '/' . $route . $suffix;
         }));
 

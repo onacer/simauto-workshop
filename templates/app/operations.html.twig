@@ -1,20 +1,20 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}العمليات - SIM Auto{% endblock %}
+{% block title %}عملية جديدة - SIM Auto{% endblock %}
 
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board">
     <section class="page-head">
-        <h1>عملية جديدة</h1>
+        <h1>Devis جديد</h1>
         <a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a>
     </section>
 
     {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
 
     <section class="panel">
-        <form action="{{ path('app_operation_new') }}" method="post" class="operation-form">
+        <form action="{{ path('app_operation_new') }}" method="post" class="operation-form dynamic-operation-form">
             <div class="form-grid">
                 <label>العميل
                     <select name="client_id" required>
@@ -41,27 +41,44 @@
                     </select>
                 </label>
                 <label class="check-field is-hidden">رقم الشيك<input name="check_number"></label>
+                <label>TVA
+                    <input name="vat_rate" class="operation-vat-rate" type="number" step="0.01" min="0" value="20">
+                </label>
             </div>
 
-            <div class="lines-grid">
-                {% for i in 1..3 %}
-                    <label>قطعة {{ i }}
-                        <select name="product_{{ i }}">
-                            <option value="0">بدون</option>
-                            {% for product in products %}
-                                <option value="{{ product.id }}">{{ product.name }} - stock {{ product.stock_qty }} - {{ product.sale_price }} DH</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                    <label>الكمية<input name="product_qty_{{ i }}" type="number" step="1" min="0" value="0"></label>
-                {% endfor %}
-                <label>خدمة 1<input name="service_label_1"></label>
-                <label>الثمن<input name="service_price_1" type="number" step="0.01" min="0" value="0"></label>
-                <label>خدمة 2<input name="service_label_2"></label>
-                <label>الثمن<input name="service_price_2" type="number" step="0.01" min="0" value="0"></label>
+            <div class="operation-lines" data-operation-lines>
+                <div class="operation-line operation-line-head">
+                    <span>المنتج / الخدمة</span>
+                    <span>التسمية</span>
+                    <span>الكمية</span>
+                    <span>ثمن HT</span>
+                    <span>خصم %</span>
+                    <span>المجموع HT</span>
+                </div>
+                <div class="operation-line" data-line>
+                    <select name="line_product_id[]" class="line-product">
+                        <option value="" data-price="0" data-name="">سطر حر</option>
+                        {% for product in products %}
+                            <option value="{{ product.id }}" data-price="{{ product.sale_price }}" data-name="{{ product.name }}">{{ product.name }} - {{ product.sale_price }} DH</option>
+                        {% endfor %}
+                    </select>
+                    <input name="line_label[]" class="line-label" placeholder="التسمية">
+                    <input name="line_quantity[]" class="line-qty" type="number" step="0.01" min="0" value="1">
+                    <input name="line_unit_price[]" class="line-price" type="number" step="0.01" min="0" value="0">
+                    <input name="line_discount[]" class="line-discount" type="number" step="0.01" min="0" max="100" value="0">
+                    <strong class="line-total">0.00 DH</strong>
+                </div>
             </div>
 
-            <button class="btn btn-primary" type="submit">حفظ وطباعة الفاتورة</button>
+            <button class="btn btn-dark" type="button" data-add-line>+ إضافة سطر</button>
+
+            <div class="operation-preview">
+                <span>Total HT: <strong data-total-ht>0.00 DH</strong></span>
+                <span>TVA: <strong data-total-vat>0.00 DH</strong></span>
+                <span>TTC: <strong data-total-ttc>0.00 DH</strong></span>
+            </div>
+
+            <button class="btn btn-primary" type="submit">حفظ devis</button>
         </form>
     </section>
 </main>

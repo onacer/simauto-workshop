@@ -1,56 +1,57 @@
 {% set route = app.request.attributes.get('_route') %}
+{% set locale = app.request.locale|default('ar') %}
 
 <header class="topbar" data-topbar>
     <a class="topbar-logo" href="{{ path('app_dashboard') }}" aria-label="SIM Auto">
         <img src="{{ asset('images/logo-light.png') }}" alt="SIM Auto">
     </a>
 
-    <button class="mobile-menu-toggle" type="button" aria-label="القائمة" aria-expanded="false">
+    <button class="mobile-menu-toggle" type="button" aria-label="{{ 'nav.menu'|trans }}" aria-expanded="false">
         <span></span>
         <span></span>
         <span></span>
     </button>
 
-    <nav class="topbar-nav" aria-label="القائمة الرئيسية">
-        <a class="topbar-item {{ route == 'app_dashboard' ? 'is-active' : '' }}" href="{{ path('app_dashboard') }}">الرئيسية</a>
+    <nav class="topbar-nav" aria-label="{{ 'nav.main_menu'|trans }}">
+        <a class="topbar-item {{ route == 'app_dashboard' ? 'is-active' : '' }}" href="{{ path('app_dashboard') }}">{{ 'nav.dashboard'|trans }}</a>
 
         <div class="nav-dropdown {{ route in ['app_products', 'app_product_show', 'app_product_edit', 'app_stock', 'app_categories', 'app_category_show', 'app_category_edit', 'app_suppliers', 'app_supplier_show', 'app_supplier_edit'] ? 'is-current' : '' }}">
-            <a class="topbar-item dropdown-toggle" href="{{ path('app_products') }}" aria-expanded="false">المخزون</a>
+            <a class="topbar-item dropdown-toggle" href="{{ path('app_products') }}" aria-expanded="false">{{ 'nav.stock'|trans }}</a>
             <div class="dropdown-menu">
-                <a href="{{ path('app_products') }}">المنتجات</a>
-                <a href="{{ path('app_stock') }}">إدخال المخزون</a>
-                <a href="{{ path('app_categories') }}">الأصناف</a>
-                <a href="{{ path('app_suppliers') }}">الموردون</a>
+                <a href="{{ path('app_products') }}">{{ 'nav.products'|trans }}</a>
+                <a href="{{ path('app_stock') }}">{{ 'nav.stock_in'|trans }}</a>
+                <a href="{{ path('app_categories') }}">{{ 'nav.categories'|trans }}</a>
+                <a href="{{ path('app_suppliers') }}">{{ 'nav.suppliers'|trans }}</a>
             </div>
         </div>
 
         <div class="nav-dropdown {{ route in ['app_vehicles', 'app_vehicle_show', 'app_vehicle_settings', 'app_vehicle_brand_show', 'app_vehicle_model_show'] ? 'is-current' : '' }}">
-            <a class="topbar-item dropdown-toggle" href="{{ path('app_vehicles') }}" aria-expanded="false">السيارات</a>
+            <a class="topbar-item dropdown-toggle" href="{{ path('app_vehicles') }}" aria-expanded="false">{{ 'nav.vehicles'|trans }}</a>
             <div class="dropdown-menu">
-                <a href="{{ path('app_vehicles') }}">السيارات</a>
-                <a href="{{ path('app_vehicle_settings') }}">الماركات والموديلات</a>
+                <a href="{{ path('app_vehicles') }}">{{ 'nav.vehicles'|trans }}</a>
+                <a href="{{ path('app_vehicle_settings') }}">{{ 'nav.vehicle_settings'|trans }}</a>
             </div>
         </div>
 
-        <a class="topbar-item {{ route in ['app_clients', 'app_client_show', 'app_client_edit'] ? 'is-active' : '' }}" href="{{ path('app_clients') }}">الزبناء</a>
+        <a class="topbar-item {{ route in ['app_clients', 'app_client_show', 'app_client_edit'] ? 'is-active' : '' }}" href="{{ path('app_clients') }}">{{ 'nav.clients'|trans }}</a>
 
         <div class="nav-dropdown {{ route in ['app_operations', 'app_billing', 'app_invoice', 'app_receipt'] ? 'is-current' : '' }}">
-            <a class="topbar-item dropdown-toggle" href="{{ path('app_operations') }}" aria-expanded="false">العمليات</a>
+            <a class="topbar-item dropdown-toggle" href="{{ path('app_operations') }}" aria-expanded="false">{{ 'nav.operations'|trans }}</a>
             <div class="dropdown-menu">
-                <a href="{{ path('app_operations') }}">عملية جديدة</a>
-                <a href="{{ path('app_billing') }}">الفواتير والإيصالات</a>
+                <a href="{{ path('app_operations') }}">{{ 'nav.new_operation'|trans }}</a>
+                <a href="{{ path('app_billing') }}">{{ 'nav.billing'|trans }}</a>
             </div>
         </div>
 
         {% if can('imports', user) or can('manage_users', user) %}
             <div class="nav-dropdown {{ route starts with 'app_import' or route starts with 'app_user' or route == 'app_users' ? 'is-current' : '' }}">
-                <a class="topbar-item dropdown-toggle" href="{{ path('app_import') }}" aria-expanded="false">الإدارة</a>
+                <a class="topbar-item dropdown-toggle" href="{{ path('app_import') }}" aria-expanded="false">{{ 'nav.admin'|trans }}</a>
                 <div class="dropdown-menu">
                     {% if can('imports', user) %}
-                        <a href="{{ path('app_import') }}">الاستيراد</a>
+                        <a href="{{ path('app_import') }}">{{ 'nav.imports'|trans }}</a>
                     {% endif %}
                     {% if can('manage_users', user) %}
-                        <a href="{{ path('app_users') }}">المستخدمون</a>
+                        <a href="{{ path('app_users') }}">{{ 'nav.users'|trans }}</a>
                     {% endif %}
                 </div>
             </div>
@@ -63,8 +64,13 @@
                 <span class="topbar-username">{{ user.name }}</span>
             </a>
             <div class="dropdown-menu profile-menu">
-                <a href="{{ path('app_profile_password') }}">كلمة المرور</a>
-                <a href="{{ path('app_logout') }}">خروج</a>
+                <span class="locale-switch">
+                    <a href="{{ path('app_locale', {locale: 'ar'}) }}" class="{{ locale == 'ar' ? 'is-active' : '' }}">AR</a>
+                    <b>|</b>
+                    <a href="{{ path('app_locale', {locale: 'fr'}) }}" class="{{ locale == 'fr' ? 'is-active' : '' }}">FR</a>
+                </span>
+                <a href="{{ path('app_profile_password') }}">{{ 'nav.password'|trans }}</a>
+                <a href="{{ path('app_logout') }}">{{ 'nav.logout'|trans }}</a>
             </div>
         </div>
     </div>

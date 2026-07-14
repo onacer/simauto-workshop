@@ -8,7 +8,7 @@ Elle n'est pas concue comme un site vitrine. C'est une application metier simple
 1. Entree des produits dans le stock.
 2. Gestion et suivi du stock.
 3. Creation des operations de garage: reparations, services, pieces.
-4. Generation et impression des factures et des receipts.
+4. Cycle devis -> bon de commande -> facture, avec TVA et impression des receipts.
 
 L'application utilise une interface volontairement simple: login minimal, tableau de bord avec quatre grandes entrees, puis une page dediee par module.
 
@@ -46,7 +46,7 @@ Le service PHP cree automatiquement les dossiers `data` et `var`, ajuste les dro
 Deux roles existent:
 
 - `admin`: acces au dashboard, produits, stock, operations, factures, receipts, categories, parametres vehicules et gestion complete des utilisateurs.
-- `manager`: acces au dashboard, produits, stock, operations, factures et receipts.
+- `manager`: acces au dashboard, produits, stock, operations, factures et receipts. Le manager peut supprimer les enregistrements non references.
 
 Des comptes initiaux sont crees automatiquement si la table `users` est vide:
 
@@ -321,6 +321,8 @@ Champs:
 - `min_qty`
 - `purchase_price`
 - `sale_price`
+- `product_type`: `stockable` ou `service`
+- `margin_rate`
 - `active`
 - `created_at`
 
@@ -364,6 +366,7 @@ Champs:
 - `ice`
 - `vat`
 - `rc`
+- `active`
 - `created_at`
 
 #### `vehicle_brands`
@@ -374,6 +377,7 @@ Champs:
 
 - `id`
 - `name`
+- `active`
 
 #### `vehicle_models`
 
@@ -384,6 +388,7 @@ Champs:
 - `id`
 - `brand_id`
 - `name`
+- `active`
 
 #### `vehicles`
 
@@ -399,6 +404,7 @@ Champs:
 - `year`
 - `mileage`
 - `notes`
+- `active`
 - `created_at`
 
 #### `stock_movements`
@@ -436,6 +442,14 @@ Champs:
 - `payment_method`
 - `check_number`: numero de cheque optionnel quand `payment_method = CHQ`
 - `total`
+- `doc_type`: `quote`, `order` ou `invoice`
+- `quote_no`
+- `order_no`
+- `subtotal_ht`
+- `vat_rate`
+- `vat_amount`
+- `total_ttc`
+- `parent_id`
 - `status`
 - `created_by`
 - `created_at`
@@ -453,9 +467,22 @@ Champs:
 - `label`
 - `quantity`
 - `unit_price`
+- `discount_rate`
+- `total_ht`
 - `total`
 
 ## Flux Metier
+
+## Internationalisation
+
+L'interface utilise `symfony/translation`.
+
+- Fichiers: `translations/messages.ar.yaml` et `translations/messages.fr.yaml`.
+- Locale par defaut: `ar`.
+- Selecteur `AR | FR` dans le menu profil de la topbar.
+- Le choix est conserve en session et dans le cookie `simauto_locale`.
+- `templates/base.html.twig` adapte `lang` et `dir`.
+- Les documents imprimes restent en francais LTR.
 
 ### 1. Entree Produit
 
@@ -482,6 +509,13 @@ L'application:
 
 Le produit est rattache a une categorie obligatoire. Le SKU est unique et les prix/quantites negatives sont refuses.
 
+Un produit peut etre:
+
+- `stockable`: gere le stock et les mouvements.
+- `service`: sans stock, jamais bloque par les controles de quantite.
+
+Le formulaire propose une aide de prix par marge `135%`, `145%`, `155%` ou manuel. Le prix de vente HT reste editable.
+
 ### 2. Gestion Stock
 
 Page:
@@ -497,9 +531,7 @@ L'application:
 1. Augmente `products.stock_qty`.
 2. Cree un mouvement `in` dans `stock_movements`.
 
-Quand une operation garage utilise un produit, l'application diminue automatiquement le stock et cree un mouvement `out`.
-
-Chaque entree de stock peut etre liee a un fournisseur et a un prix d'achat reel. Les sorties de stock sont faites dans la meme transaction que l'operation garage.
+Chaque entree de stock peut etre liee a un fournisseur et a un prix d'achat reel. Les sorties de stock sont faites uniquement au moment de la facturation, dans la meme transaction que la facture.
 
 ### 3. Operation Garage
 
@@ -509,25 +541,29 @@ Page:
 /operations
 ```
 
-L'utilisateur saisit:
+L'utilisateur cree un devis avec:
 
 - client existant,
 - vehicule existant,
 - mode de paiement: `ESP` especes, `CHQ` cheque, `CB` carte/TPE, `VIR` virement,
 - numero de cheque optionnel si le mode est `CHQ`,
-- jusqu'a 3 pieces,
-- jusqu'a 2 services.
+- lignes dynamiques: produit stockable, produit service ou ligne libre,
+- quantite, prix unitaire HT, remise `%`.
 
-L'application:
+L'application calcule toujours cote serveur:
 
-1. Genere un numero de facture `FAC-YYYYMMDD-0001`.
-2. Genere un numero de receipt `REC-YYYYMMDD-HHMMSS`.
-3. Cree une ligne dans `operations`.
-4. Cree les lignes dans `operation_items`.
-5. Diminue le stock pour les produits utilises.
-6. Redirige vers la facture.
+- `subtotal_ht`,
+- `vat_rate`,
+- `vat_amount`,
+- `total_ttc`.
 
-Avant toute ecriture, l'application verifie que les quantites sont disponibles. Si une erreur arrive pendant la creation, toute la transaction est annulee: aucune operation partielle, aucune ligne orpheline et aucun stock modifie.
+Cycle:
+
+1. Devis `quote`: numero `DEV-YYYYMMDD-0001`, aucun mouvement de stock.
+2. Bon de commande `order`: numero `BC-YYYYMMDD-0001`, cree depuis le devis, aucun mouvement de stock.
+3. Facture `invoice`: numero `FAC-YYYYMMDD-0001`, verification du stock, sortie de stock et mouvements `out` dans la meme transaction.
+
+Un devis peut etre facture directement: l'application cree la commande intermediaire puis la facture. Si le stock est insuffisant au moment de facturer, rien n'est ecrit.
 
 ### 4. Factures et Receipts
 
@@ -537,10 +573,12 @@ Page:
 /billing
 ```
 
-Liste les dernieres operations et donne deux actions:
+Liste les derniers documents et donne deux actions:
 
-- ouvrir la facture,
+- ouvrir le document imprimable: devis, bon de commande ou facture,
 - ouvrir le receipt.
+
+La facture imprimee reste en francais LTR et affiche le bloc `TOTAL HT / TVA / MT TTC A PAYER`, plus le montant TTC en lettres.
 
 ## Templates
 

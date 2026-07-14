@@ -67,9 +67,9 @@ class AppDatabase
     {
         $products = $this->products($filters);
         $operations = $this->operations();
-        $todayTotal = (float) $this->pdo->query("SELECT COALESCE(SUM(total), 0) FROM operations WHERE date(created_at) = date('now')")->fetchColumn();
-        $lowStock = (int) $this->pdo->query('SELECT COUNT(*) FROM products WHERE active = 1 AND stock_qty <= min_qty')->fetchColumn();
-        $operationCount = (int) $this->pdo->query('SELECT COUNT(*) FROM operations')->fetchColumn();
+        $todayTotal = (float) $this->pdo->query("SELECT COALESCE(SUM(total_ttc), 0) FROM operations WHERE doc_type = 'invoice' AND date(created_at) = date('now')")->fetchColumn();
+        $lowStock = (int) $this->pdo->query("SELECT COUNT(*) FROM products WHERE active = 1 AND product_type = 'stockable' AND stock_qty <= min_qty")->fetchColumn();
+        $operationCount = (int) $this->pdo->query("SELECT COUNT(*) FROM operations WHERE doc_type IN ('quote', 'order', 'invoice')")->fetchColumn();
 
         return [
             'products' => $products,
@@ -195,9 +195,10 @@ class AppDatabase
         $stmt->execute(['id' => $id]);
     }
 
-    public function clients(): array
+    public function clients(string $state = 'active'): array
     {
-        return $this->pdo->query('SELECT * FROM clients ORDER BY name')->fetchAll();
+        $where = $this->stateWhere($state);
+        return $this->pdo->query('SELECT * FROM clients' . $where . ' ORDER BY name')->fetchAll();
     }
 
     public function client(int $id): ?array
@@ -244,9 +245,10 @@ class AppDatabase
         $stmt->execute($payload);
     }
 
-    public function vehicleBrands(): array
+    public function vehicleBrands(string $state = 'active'): array
     {
-        return $this->pdo->query('SELECT * FROM vehicle_brands ORDER BY name')->fetchAll();
+        $where = $this->stateWhere($state);
+        return $this->pdo->query('SELECT * FROM vehicle_brands' . $where . ' ORDER BY name')->fetchAll();
     }
 
     public function vehicleBrandByName(string $name): ?array
@@ -254,14 +256,15 @@ class AppDatabase
         return $this->row('SELECT * FROM vehicle_brands WHERE lower(trim(name)) = lower(trim(:name))', ['name' => $name]);
     }
 
-    public function vehicleModels(?int $brandId = null): array
+    public function vehicleModels(?int $brandId = null, string $state = 'active'): array
     {
+        $activeClause = $state === 'all' ? '' : ' AND vm.active = ' . ($state === 'inactive' ? '0' : '1');
         if ($brandId) {
-            $stmt = $this->pdo->prepare('SELECT * FROM vehicle_models WHERE brand_id = :brand_id ORDER BY name');
+            $stmt = $this->pdo->prepare('SELECT * FROM vehicle_models vm WHERE brand_id = :brand_id' . $activeClause . ' ORDER BY name');
             $stmt->execute(['brand_id' => $brandId]);
             return $stmt->fetchAll();
         }
-        return $this->pdo->query('SELECT vm.*, vb.name AS brand_name FROM vehicle_models vm JOIN vehicle_brands vb ON vb.id = vm.brand_id ORDER BY vb.name, vm.name')->fetchAll();
+        return $this->pdo->query('SELECT vm.*, vb.name AS brand_name FROM vehicle_models vm JOIN vehicle_brands vb ON vb.id = vm.brand_id WHERE 1=1' . $activeClause . ' ORDER BY vb.name, vm.name')->fetchAll();
     }
 
     public function saveVehicleBrand(string $name): void
@@ -320,14 +323,16 @@ class AppDatabase
         return (int) $this->vehicleModelByName($brandId, $name)['id'];
     }
 
-    public function vehicles(): array
+    public function vehicles(string $state = 'active'): array
     {
+        $where = $this->stateWhere($state, 'v');
         return $this->pdo->query(
             'SELECT v.*, c.name AS client_name, vb.name AS brand_name, vm.name AS model_name
              FROM vehicles v
              JOIN clients c ON c.id = v.client_id
              JOIN vehicle_brands vb ON vb.id = v.brand_id
              JOIN vehicle_models vm ON vm.id = v.model_id
+             ' . $where . '
              ORDER BY v.id DESC'
         )->fetchAll();
     }
@@ -363,7 +368,8 @@ class AppDatabase
 
     public function products(array $filters = []): array
     {
-        $where = ['p.active = 1'];
+        $state = (string) ($filters['state'] ?? 'active');
+        $where = [$state === 'inactive' ? 'p.active = 0' : ($state === 'all' ? '1 = 1' : 'p.active = 1')];
         $params = [];
 
         if (($filters['q'] ?? '') !== '') {
@@ -420,13 +426,13 @@ class AppDatabase
         if ($id) {
             $payload['id'] = $id;
             $stmt = $this->pdo->prepare(
-                'UPDATE products SET sku=:sku, name=:name, category_id=:category_id, category=:category, min_qty=:min_qty, purchase_price=:purchase_price, sale_price=:sale_price WHERE id=:id'
+                'UPDATE products SET sku=:sku, name=:name, category_id=:category_id, category=:category, min_qty=:min_qty, purchase_price=:purchase_price, sale_price=:sale_price, product_type=:product_type, margin_rate=:margin_rate WHERE id=:id'
             );
             $stmt->execute($payload);
             return;
         }
 
-        $payload['stock_qty'] = (int) ($data['stock_qty'] ?? 0);
+        $payload['stock_qty'] = $payload['product_type'] === 'service' ? 0 : (int) ($data['stock_qty'] ?? 0);
         if ($payload['stock_qty'] < 0) {
             throw new InvalidArgumentException('الكمية يجب أن تكون 0 أو أكثر');
         }
@@ -434,12 +440,12 @@ class AppDatabase
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                'INSERT INTO products (sku, name, category, category_id, stock_qty, min_qty, purchase_price, sale_price, active, created_at)
-                 VALUES (:sku, :name, :category, :category_id, :stock_qty, :min_qty, :purchase_price, :sale_price, 1, datetime("now"))'
+                'INSERT INTO products (sku, name, category, category_id, stock_qty, min_qty, purchase_price, sale_price, product_type, margin_rate, active, created_at)
+                 VALUES (:sku, :name, :category, :category_id, :stock_qty, :min_qty, :purchase_price, :sale_price, :product_type, :margin_rate, 1, datetime("now"))'
             );
             $stmt->execute($payload);
             $productId = (int) $this->pdo->lastInsertId();
-            if ($payload['stock_qty'] > 0) {
+            if ($payload['product_type'] === 'stockable' && $payload['stock_qty'] > 0) {
                 $this->addMovement($productId, 'in', $payload['stock_qty'], 'رصيد البداية', $userId, null, $payload['purchase_price']);
             }
             $this->pdo->commit();
@@ -455,6 +461,44 @@ class AppDatabase
         $stmt->execute(['id' => $id]);
     }
 
+    public function reactivate(string $entity, int $id): void
+    {
+        $table = $this->entityTable($entity);
+        $stmt = $this->pdo->prepare('UPDATE ' . $table . ' SET active = 1 WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+    }
+
+    public function deactivate(string $entity, int $id): void
+    {
+        $table = $this->entityTable($entity);
+        $stmt = $this->pdo->prepare('UPDATE ' . $table . ' SET active = 0 WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+    }
+
+    public function deleteRecord(string $entity, int $id): void
+    {
+        $table = $this->entityTable($entity);
+        $refs = $this->referenceCounts($entity, $id);
+        $blocking = array_filter($refs, fn (int $count): bool => $count > 0);
+        if ($blocking) {
+            $parts = [];
+            foreach ($blocking as $label => $count) {
+                $parts[] = $count . ' ' . $label;
+            }
+            throw new InvalidArgumentException('لا يمكن الحذف: ' . implode('، ', $parts));
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare('DELETE FROM ' . $table . ' WHERE id = :id');
+            $stmt->execute(['id' => $id]);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
     public function addStock(int $productId, int $quantity, string $note, int $userId, ?int $supplierId = null, ?float $unitCost = null): void
     {
         if ($productId <= 0 || $quantity <= 0) {
@@ -466,7 +510,7 @@ class AppDatabase
 
         $this->pdo->beginTransaction();
         try {
-            $stmt = $this->pdo->prepare('UPDATE products SET stock_qty = stock_qty + :qty WHERE id = :id AND active = 1');
+            $stmt = $this->pdo->prepare("UPDATE products SET stock_qty = stock_qty + :qty WHERE id = :id AND active = 1 AND product_type = 'stockable'");
             $stmt->execute(['qty' => $quantity, 'id' => $productId]);
             if ($stmt->rowCount() === 0) {
                 throw new RuntimeException('المنتج غير موجود');
@@ -488,13 +532,17 @@ class AppDatabase
         }
 
         $lines = $this->buildOperationLines($data);
-        $total = array_sum(array_column($lines, 'total'));
+        $subtotalHt = round(array_sum(array_column($lines, 'total')), 2);
+        $vatRate = (float) ($data['vat_rate'] ?? 20);
+        $vatRate = $vatRate >= 0 ? $vatRate : 20;
+        $vatAmount = round($subtotalHt * ($vatRate / 100), 2);
+        $totalTtc = round($subtotalHt + $vatAmount, 2);
         $paymentMethod = $this->normalizePaymentMethod((string) ($data['payment_method'] ?? 'ESP'));
         $checkNumber = $paymentMethod === 'CHQ' ? trim((string) ($data['check_number'] ?? '')) : '';
 
         $this->pdo->beginTransaction();
         try {
-            foreach ($lines as $line) {
+            foreach ([] as $line) {
                 if ($line['product_id']) {
                     $product = $this->product((int) $line['product_id']);
                     if (!$product || (int) $product['stock_qty'] < (int) $line['quantity']) {
@@ -504,7 +552,8 @@ class AppDatabase
             }
 
             $count = (int) $this->pdo->query('SELECT COUNT(*) + 1 FROM operations')->fetchColumn();
-            $invoiceNo = 'FAC-' . date('Ymd') . '-' . str_pad((string) $count, 4, '0', STR_PAD_LEFT);
+            $quoteNo = $this->nextDocumentNumber('quote');
+            $invoiceNo = $quoteNo;
             $receiptNo = 'REC-' . date('Ymd-His') . '-' . str_pad((string) $count, 4, '0', STR_PAD_LEFT);
 
             $client = $this->client($clientId);
@@ -512,12 +561,13 @@ class AppDatabase
 
             $stmt = $this->pdo->prepare(
                 'INSERT INTO operations
-                (invoice_no, receipt_no, client_id, client_name, client_address, vehicle_id, vehicle_plate, vehicle_brand, vehicle_model, payment_method, check_number, total, status, created_by, created_at)
-                VALUES (:invoice_no, :receipt_no, :client_id, :client_name, :client_address, :vehicle_id, :vehicle_plate, :vehicle_brand, :vehicle_model, :payment_method, :check_number, :total, :status, :created_by, datetime("now"))'
+                (invoice_no, receipt_no, doc_type, quote_no, order_no, parent_id, client_id, client_name, client_address, vehicle_id, vehicle_plate, vehicle_brand, vehicle_model, payment_method, check_number, subtotal_ht, vat_rate, vat_amount, total_ttc, total, status, created_by, created_at)
+                VALUES (:invoice_no, :receipt_no, "quote", :quote_no, NULL, NULL, :client_id, :client_name, :client_address, :vehicle_id, :vehicle_plate, :vehicle_brand, :vehicle_model, :payment_method, :check_number, :subtotal_ht, :vat_rate, :vat_amount, :total_ttc, :total, "draft", :created_by, datetime("now"))'
             );
             $stmt->execute([
                 'invoice_no' => $invoiceNo,
                 'receipt_no' => $receiptNo,
+                'quote_no' => $quoteNo,
                 'client_id' => $clientId,
                 'client_name' => $client['name'] ?? '',
                 'client_address' => $client['address'] ?? '',
@@ -527,16 +577,19 @@ class AppDatabase
                 'vehicle_model' => $vehicle['model_name'] ?? '',
                 'payment_method' => $paymentMethod,
                 'check_number' => $checkNumber,
-                'total' => $total,
-                'status' => 'paid',
+                'subtotal_ht' => $subtotalHt,
+                'vat_rate' => $vatRate,
+                'vat_amount' => $vatAmount,
+                'total_ttc' => $totalTtc,
+                'total' => $totalTtc,
                 'created_by' => $userId,
             ]);
 
             $operationId = (int) $this->pdo->lastInsertId();
             foreach ($lines as $line) {
                 $stmt = $this->pdo->prepare(
-                    'INSERT INTO operation_items (operation_id, product_id, line_type, label, quantity, unit_price, total)
-                     VALUES (:operation_id, :product_id, :line_type, :label, :quantity, :unit_price, :total)'
+                    'INSERT INTO operation_items (operation_id, product_id, line_type, label, quantity, unit_price, discount_rate, total_ht, total)
+                     VALUES (:operation_id, :product_id, :line_type, :label, :quantity, :unit_price, :discount_rate, :total_ht, :total)'
                 );
                 $stmt->execute([
                     'operation_id' => $operationId,
@@ -545,10 +598,12 @@ class AppDatabase
                     'label' => $line['label'],
                     'quantity' => $line['quantity'],
                     'unit_price' => $line['unit_price'],
+                    'discount_rate' => $line['discount_rate'],
+                    'total_ht' => $line['total'],
                     'total' => $line['total'],
                 ]);
 
-                if ($line['product_id']) {
+                if (false && $line['product_id']) {
                     $update = $this->pdo->prepare('UPDATE products SET stock_qty = stock_qty - :qty WHERE id = :id');
                     $update->execute(['qty' => $line['quantity'], 'id' => $line['product_id']]);
                     $this->addMovement((int) $line['product_id'], 'out', (int) $line['quantity'], 'عملية مرآب ' . $invoiceNo, $userId);
@@ -582,6 +637,150 @@ class AppDatabase
         )->fetchAll();
 
         return array_map(fn (array $operation): array => $this->decorateOperation($operation), $operations);
+    }
+
+    public function confirmQuote(int $id, int $userId): int
+    {
+        return $this->copyDocument($id, 'order', $userId, false);
+    }
+
+    public function invoiceDocument(int $id, int $userId): int
+    {
+        $source = $this->operation($id);
+        if (!$source) {
+            throw new InvalidArgumentException('Document introuvable');
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            if ($source['doc_type'] === 'quote') {
+                $orderId = $this->copyDocument($id, 'order', $userId, false, true);
+                $invoiceId = $this->copyDocument($orderId, 'invoice', $userId, true, true);
+            } else {
+                $invoiceId = $this->copyDocument($id, 'invoice', $userId, true, true);
+            }
+            $this->pdo->commit();
+            return $invoiceId;
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    private function copyDocument(int $sourceId, string $targetType, int $userId, bool $decrementStock, bool $insideTransaction = false): int
+    {
+        $source = $this->operation($sourceId);
+        if (!$source) {
+            throw new InvalidArgumentException('Document introuvable');
+        }
+        if (!in_array($targetType, ['order', 'invoice'], true)) {
+            throw new InvalidArgumentException('Type de document invalide');
+        }
+        if ($targetType === 'order' && $source['doc_type'] !== 'quote') {
+            throw new InvalidArgumentException('Seul un devis peut etre confirme en commande');
+        }
+        if ($targetType === 'invoice' && !in_array($source['doc_type'], ['quote', 'order'], true)) {
+            throw new InvalidArgumentException('Ce document ne peut pas etre facture');
+        }
+
+        if (!$insideTransaction) {
+            $this->pdo->beginTransaction();
+        }
+        try {
+            if ($decrementStock) {
+                foreach ($source['items'] as $line) {
+                    if ((int) ($line['product_id'] ?? 0) <= 0) {
+                        continue;
+                    }
+                    $product = $this->product((int) $line['product_id']);
+                    if (!$product || (string) ($product['product_type'] ?? 'stockable') === 'service') {
+                        continue;
+                    }
+                    if ((int) $product['stock_qty'] < (int) $line['quantity']) {
+                        throw new InvalidArgumentException('Stock insuffisant pour: ' . $line['label']);
+                    }
+                }
+            }
+
+            $documentNo = $this->nextDocumentNumber($targetType);
+            $receiptNo = 'REC-' . date('Ymd-His') . '-' . str_pad((string) ((int) $this->pdo->query('SELECT COUNT(*) + 1 FROM operations')->fetchColumn()), 4, '0', STR_PAD_LEFT);
+            $quoteNo = $targetType === 'order' ? (string) $source['quote_no'] : (string) ($source['quote_no'] ?: null);
+            $orderNo = $targetType === 'order' ? $documentNo : (string) ($source['order_no'] ?: null);
+            if ($targetType === 'invoice' && $source['doc_type'] === 'order') {
+                $orderNo = (string) $source['order_no'];
+            }
+
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO operations
+                (invoice_no, receipt_no, doc_type, quote_no, order_no, parent_id, client_id, client_name, client_address, vehicle_id, vehicle_plate, vehicle_brand, vehicle_model, payment_method, check_number, subtotal_ht, vat_rate, vat_amount, total_ttc, total, status, created_by, created_at)
+                VALUES (:invoice_no, :receipt_no, :doc_type, :quote_no, :order_no, :parent_id, :client_id, :client_name, :client_address, :vehicle_id, :vehicle_plate, :vehicle_brand, :vehicle_model, :payment_method, :check_number, :subtotal_ht, :vat_rate, :vat_amount, :total_ttc, :total, :status, :created_by, datetime("now"))'
+            );
+            $stmt->execute([
+                'invoice_no' => $documentNo,
+                'receipt_no' => $receiptNo,
+                'doc_type' => $targetType,
+                'quote_no' => $targetType === 'order' ? $source['invoice_no'] : $quoteNo,
+                'order_no' => $orderNo,
+                'parent_id' => $sourceId,
+                'client_id' => $source['client_id'],
+                'client_name' => $source['client_name'],
+                'client_address' => $source['client_address'],
+                'vehicle_id' => $source['vehicle_id'],
+                'vehicle_plate' => $source['vehicle_plate'],
+                'vehicle_brand' => $source['vehicle_brand'],
+                'vehicle_model' => $source['vehicle_model'],
+                'payment_method' => $source['payment_method'],
+                'check_number' => $source['check_number'],
+                'subtotal_ht' => $source['subtotal_ht'],
+                'vat_rate' => $source['vat_rate'],
+                'vat_amount' => $source['vat_amount'],
+                'total_ttc' => $source['total_ttc'],
+                'total' => $source['total_ttc'],
+                'status' => $targetType === 'invoice' ? 'issued' : 'draft',
+                'created_by' => $userId,
+            ]);
+
+            $newId = (int) $this->pdo->lastInsertId();
+            foreach ($source['items'] as $line) {
+                $insert = $this->pdo->prepare(
+                    'INSERT INTO operation_items (operation_id, product_id, line_type, label, quantity, unit_price, discount_rate, total_ht, total)
+                     VALUES (:operation_id, :product_id, :line_type, :label, :quantity, :unit_price, :discount_rate, :total_ht, :total)'
+                );
+                $insert->execute([
+                    'operation_id' => $newId,
+                    'product_id' => $line['product_id'],
+                    'line_type' => $line['line_type'],
+                    'label' => $line['label'],
+                    'quantity' => $line['quantity'],
+                    'unit_price' => $line['unit_price'],
+                    'discount_rate' => $line['discount_rate'] ?? 0,
+                    'total_ht' => $line['total_ht'] ?? $line['total'],
+                    'total' => $line['total_ht'] ?? $line['total'],
+                ]);
+
+                if ($decrementStock && (int) ($line['product_id'] ?? 0) > 0) {
+                    $product = $this->product((int) $line['product_id']);
+                    if ($product && (string) ($product['product_type'] ?? 'stockable') !== 'service') {
+                        $update = $this->pdo->prepare('UPDATE products SET stock_qty = stock_qty - :qty WHERE id = :id');
+                        $update->execute(['qty' => (int) $line['quantity'], 'id' => (int) $line['product_id']]);
+                        $this->addMovement((int) $line['product_id'], 'out', (int) $line['quantity'], 'Facture ' . $documentNo, $userId);
+                    }
+                }
+            }
+
+            $status = $targetType === 'order' ? 'confirmed' : 'invoiced';
+            $this->pdo->prepare('UPDATE operations SET status = :status WHERE id = :id')->execute(['status' => $status, 'id' => $sourceId]);
+
+            if (!$insideTransaction) {
+                $this->pdo->commit();
+            }
+            return $newId;
+        } catch (Throwable $e) {
+            if (!$insideTransaction) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 
     public function operation(int $id): ?array
@@ -841,6 +1040,16 @@ class AppDatabase
         $minQty = (int) ($data['min_qty'] ?? 0);
         $purchasePrice = (float) ($data['purchase_price'] ?? 0);
         $salePrice = (float) ($data['sale_price'] ?? 0);
+        $productType = (string) ($data['product_type'] ?? 'stockable');
+        $productType = in_array($productType, ['stockable', 'service'], true) ? $productType : 'stockable';
+        $marginMode = (string) ($data['margin_mode'] ?? 'manual');
+        $marginRate = in_array($marginMode, ['135', '145', '155'], true) ? (float) $marginMode : null;
+        if ($marginRate !== null) {
+            $expected = round($purchasePrice * ($marginRate / 100), 2);
+            if (abs($salePrice - $expected) <= 0.01 || $salePrice <= 0) {
+                $salePrice = $expected;
+            }
+        }
 
         if ($sku === '' || $name === '' || $categoryId <= 0) {
             throw new InvalidArgumentException('الكود والاسم والصنف إجبارية');
@@ -868,12 +1077,65 @@ class AppDatabase
             'min_qty' => $minQty,
             'purchase_price' => $purchasePrice,
             'sale_price' => $salePrice,
+            'product_type' => $productType,
+            'margin_rate' => $marginRate,
         ];
     }
 
     private function buildOperationLines(array $data): array
     {
         $lines = [];
+        $lineProducts = $data['line_product_id'] ?? [];
+        $lineLabels = $data['line_label'] ?? [];
+        $lineQuantities = $data['line_quantity'] ?? [];
+        $linePrices = $data['line_unit_price'] ?? [];
+        $lineDiscounts = $data['line_discount'] ?? [];
+
+        if (is_array($lineProducts) || is_array($lineLabels)) {
+            $count = max(
+                is_array($lineProducts) ? count($lineProducts) : 0,
+                is_array($lineLabels) ? count($lineLabels) : 0,
+                is_array($lineQuantities) ? count($lineQuantities) : 0
+            );
+            for ($i = 0; $i < $count; $i++) {
+                $productId = (int) ($lineProducts[$i] ?? 0);
+                $label = trim((string) ($lineLabels[$i] ?? ''));
+                $qty = (float) ($lineQuantities[$i] ?? 0);
+                $price = (float) ($linePrices[$i] ?? 0);
+                $discount = (float) ($lineDiscounts[$i] ?? 0);
+
+                if ($productId > 0) {
+                    $product = $this->product($productId);
+                    if (!$product || (int) ($product['active'] ?? 0) !== 1) {
+                        throw new InvalidArgumentException('Produit invalide');
+                    }
+                    $label = $label !== '' ? $label : (string) $product['name'];
+                    if ($price <= 0) {
+                        $price = (float) $product['sale_price'];
+                    }
+                }
+
+                if ($productId <= 0 && $label === '' && $qty <= 0 && $price <= 0) {
+                    continue;
+                }
+                if ($qty <= 0 || $price < 0 || $discount < 0 || $discount > 100 || $label === '') {
+                    throw new InvalidArgumentException('Ligne operation invalide');
+                }
+
+                $total = round($qty * $price * (1 - ($discount / 100)), 2);
+                $product = $productId > 0 ? $this->product($productId) : null;
+                $lines[] = [
+                    'product_id' => $productId > 0 ? $productId : null,
+                    'line_type' => $product && ($product['product_type'] ?? 'stockable') !== 'service' ? 'product' : 'service',
+                    'label' => $label,
+                    'quantity' => $qty,
+                    'unit_price' => $price,
+                    'discount_rate' => $discount,
+                    'total' => $total,
+                ];
+            }
+        }
+
         foreach ([1, 2, 3] as $i) {
             $productId = (int) ($data['product_' . $i] ?? 0);
             $qty = (int) ($data['product_qty_' . $i] ?? 0);
@@ -887,6 +1149,7 @@ class AppDatabase
                         'label' => $product['name'],
                         'quantity' => $qty,
                         'unit_price' => $price,
+                        'discount_rate' => 0,
                         'total' => $qty * $price,
                     ];
                 }
@@ -906,6 +1169,7 @@ class AppDatabase
                     'label' => $label,
                     'quantity' => 1,
                     'unit_price' => $price,
+                    'discount_rate' => 0,
                     'total' => $price,
                 ];
             }
@@ -957,6 +1221,16 @@ class AppDatabase
     {
         $operation['payment_method'] = $this->normalizePaymentMethod((string) ($operation['payment_method'] ?? 'ESP'));
         $operation['payment_label'] = $this->paymentLabel($operation['payment_method']);
+        $operation['doc_type'] = (string) ($operation['doc_type'] ?? 'invoice');
+        $operation['document_no'] = match ($operation['doc_type']) {
+            'quote' => $operation['quote_no'] ?: $operation['invoice_no'],
+            'order' => $operation['order_no'] ?: $operation['invoice_no'],
+            default => $operation['invoice_no'],
+        };
+        $operation['subtotal_ht'] = (float) ($operation['subtotal_ht'] ?? ((float) ($operation['total'] ?? 0) / 1.2));
+        $operation['vat_rate'] = (float) ($operation['vat_rate'] ?? 20);
+        $operation['vat_amount'] = (float) ($operation['vat_amount'] ?? ((float) ($operation['total'] ?? 0) - $operation['subtotal_ht']));
+        $operation['total_ttc'] = (float) ($operation['total_ttc'] ?? ($operation['total'] ?? 0));
         return $operation;
     }
 
@@ -1108,11 +1382,32 @@ SQL);
         $this->pdo->exec("UPDATE users SET created_at = datetime('now') WHERE created_at IS NULL OR created_at = ''");
         $this->addColumnIfMissing('products', 'category_id', 'INTEGER');
         $this->addColumnIfMissing('products', 'active', 'INTEGER NOT NULL DEFAULT 1');
+        $this->addColumnIfMissing('products', 'product_type', "TEXT NOT NULL DEFAULT 'stockable'");
+        $this->addColumnIfMissing('products', 'margin_rate', 'REAL');
+        $this->addColumnIfMissing('clients', 'active', 'INTEGER NOT NULL DEFAULT 1');
+        $this->addColumnIfMissing('vehicles', 'active', 'INTEGER NOT NULL DEFAULT 1');
+        $this->addColumnIfMissing('vehicle_brands', 'active', 'INTEGER NOT NULL DEFAULT 1');
+        $this->addColumnIfMissing('vehicle_models', 'active', 'INTEGER NOT NULL DEFAULT 1');
         $this->addColumnIfMissing('stock_movements', 'supplier_id', 'INTEGER');
         $this->addColumnIfMissing('stock_movements', 'unit_cost', 'REAL');
         $this->addColumnIfMissing('operations', 'client_id', 'INTEGER');
         $this->addColumnIfMissing('operations', 'vehicle_id', 'INTEGER');
         $this->addColumnIfMissing('operations', 'check_number', 'TEXT');
+        $this->addColumnIfMissing('operations', 'doc_type', "TEXT NOT NULL DEFAULT 'invoice'");
+        $this->addColumnIfMissing('operations', 'quote_no', 'TEXT');
+        $this->addColumnIfMissing('operations', 'order_no', 'TEXT');
+        $this->addColumnIfMissing('operations', 'subtotal_ht', 'REAL');
+        $this->addColumnIfMissing('operations', 'vat_rate', 'REAL NOT NULL DEFAULT 20');
+        $this->addColumnIfMissing('operations', 'vat_amount', 'REAL');
+        $this->addColumnIfMissing('operations', 'total_ttc', 'REAL');
+        $this->addColumnIfMissing('operations', 'parent_id', 'INTEGER');
+        $this->addColumnIfMissing('operation_items', 'discount_rate', 'REAL NOT NULL DEFAULT 0');
+        $this->addColumnIfMissing('operation_items', 'total_ht', 'REAL');
+        $this->pdo->exec("UPDATE operations SET doc_type = 'invoice' WHERE doc_type IS NULL OR doc_type = ''");
+        $this->pdo->exec("UPDATE operations SET total_ttc = total WHERE total_ttc IS NULL");
+        $this->pdo->exec("UPDATE operations SET subtotal_ht = ROUND(COALESCE(total_ttc, total) / 1.2, 2) WHERE subtotal_ht IS NULL");
+        $this->pdo->exec("UPDATE operations SET vat_amount = ROUND(COALESCE(total_ttc, total) - subtotal_ht, 2) WHERE vat_amount IS NULL");
+        $this->pdo->exec("UPDATE operation_items SET total_ht = total WHERE total_ht IS NULL");
 
         $this->migrateCategories();
         $this->migrateClientsAndVehicles();
@@ -1229,6 +1524,82 @@ SQL);
             }
         }
         $this->pdo->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . ' ' . $definition);
+    }
+
+    private function stateWhere(string $state, string $alias = ''): string
+    {
+        $prefix = $alias !== '' ? $alias . '.' : '';
+        return match ($state) {
+            'inactive' => ' WHERE ' . $prefix . 'active = 0',
+            'all' => '',
+            default => ' WHERE ' . $prefix . 'active = 1',
+        };
+    }
+
+    private function nextDocumentNumber(string $type): string
+    {
+        $prefix = match ($type) {
+            'order' => 'BC',
+            'invoice' => 'FAC',
+            default => 'DEV',
+        };
+        $column = match ($type) {
+            'order' => 'order_no',
+            'invoice' => 'invoice_no',
+            default => 'quote_no',
+        };
+        $date = date('Ymd');
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) + 1 FROM operations WHERE doc_type = :doc_type AND date(created_at) = date('now')");
+        $stmt->execute(['doc_type' => $type]);
+        $next = (int) $stmt->fetchColumn();
+        do {
+            $number = $prefix . '-' . $date . '-' . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+            $exists = $this->row("SELECT id FROM operations WHERE invoice_no = :number OR $column = :number", ['number' => $number]);
+            $next++;
+        } while ($exists);
+
+        return $number;
+    }
+
+    private function entityTable(string $entity): string
+    {
+        return match ($entity) {
+            'product' => 'products',
+            'category' => 'categories',
+            'supplier' => 'suppliers',
+            'client' => 'clients',
+            'vehicle' => 'vehicles',
+            'brand' => 'vehicle_brands',
+            'model' => 'vehicle_models',
+            default => throw new InvalidArgumentException('Entite invalide'),
+        };
+    }
+
+    private function referenceCounts(string $entity, int $id): array
+    {
+        return match ($entity) {
+            'product' => [
+                'mouvements de stock' => $this->countWhere('stock_movements', 'product_id', $id),
+                'lignes operation' => $this->countWhere('operation_items', 'product_id', $id),
+            ],
+            'category' => ['produits' => $this->countWhere('products', 'category_id', $id)],
+            'supplier' => ['mouvements de stock' => $this->countWhere('stock_movements', 'supplier_id', $id)],
+            'client' => [
+                'vehicules' => $this->countWhere('vehicles', 'client_id', $id),
+                'operations' => $this->countWhere('operations', 'client_id', $id),
+            ],
+            'vehicle' => ['operations' => $this->countWhere('operations', 'vehicle_id', $id)],
+            'brand' => ['modeles' => $this->countWhere('vehicle_models', 'brand_id', $id)],
+            'model' => ['vehicules' => $this->countWhere('vehicles', 'model_id', $id)],
+            default => [],
+        };
+    }
+
+    private function countWhere(string $table, string $column, int $id): int
+    {
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM ' . $table . ' WHERE ' . $column . ' = :id');
+        $stmt->execute(['id' => $id]);
+        return (int) $stmt->fetchColumn();
     }
 
     private function row(string $sql, array $params = []): ?array

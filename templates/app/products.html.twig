@@ -25,6 +25,13 @@
                     {% endfor %}
                 </select>
             </label>
+            <label>حالة السجل
+                <select name="state">
+                    <option value="active" {{ filters.state|default('active') == 'active' ? 'selected' : '' }}>نشط</option>
+                    <option value="inactive" {{ filters.state|default('active') == 'inactive' ? 'selected' : '' }}>غير نشط</option>
+                    <option value="all" {{ filters.state|default('active') == 'all' ? 'selected' : '' }}>الكل</option>
+                </select>
+            </label>
             <label>حالة المخزون
                 <select name="stock_state">
                     <option value="">الكل</option>
@@ -38,9 +45,15 @@
 
     <section class="panel">
         <h2>منتج جديد</h2>
-        <form action="{{ path('app_product_new') }}" method="post" class="form-grid">
+        <form action="{{ path('app_product_new') }}" method="post" class="form-grid product-pricing-form">
             <label>الكود<input name="sku" required></label>
             <label>اسم المنتج<input name="name" required></label>
+            <label>النوع
+                <select name="product_type" class="product-type">
+                    <option value="stockable">قطعة مخزون</option>
+                    <option value="service">خدمة</option>
+                </select>
+            </label>
             <label>الصنف
                 <select name="category_id" required>
                     {% for category in categories %}
@@ -48,10 +61,18 @@
                     {% endfor %}
                 </select>
             </label>
-            <label>الكمية<input name="stock_qty" type="number" step="1" min="0" value="0" required></label>
+            <label class="stock-field">الكمية<input name="stock_qty" type="number" step="1" min="0" value="0" required></label>
             <label>الحد الأدنى<input name="min_qty" type="number" step="1" min="0" value="1"></label>
-            <label>ثمن الشراء<input name="purchase_price" type="number" step="0.01" min="0" value="0"></label>
-            <label>ثمن البيع<input name="sale_price" type="number" step="0.01" min="0" value="0"></label>
+            <label>ثمن الشراء HT<input name="purchase_price" class="purchase-price" type="number" step="0.01" min="0" value="0"></label>
+            <label>هامش الربح
+                <select name="margin_mode" class="margin-mode">
+                    <option value="manual">يدوي</option>
+                    <option value="135">135%</option>
+                    <option value="145">145%</option>
+                    <option value="155">155%</option>
+                </select>
+            </label>
+            <label>ثمن البيع HT<input name="sale_price" class="sale-price" type="number" step="0.01" min="0" value="0"></label>
             <button class="btn btn-primary" type="submit">حفظ</button>
         </form>
     </section>
@@ -63,10 +84,27 @@
                 <div>
                     <strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong>
                     <span>{{ product.category_name ?: product.category }}</span>
-                    <span>{{ product.stock_qty }}</span>
+                    <span>{{ product.product_type|default('stockable') == 'service' ? 'خدمة' : product.stock_qty }}</span>
                     <span class="row-actions">
                         <a href="{{ path('app_product_show', {id: product.id}) }}">عرض</a>
                         {% if can('edit', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">تعديل</a>{% endif %}
+                        {% if can('delete', user) %}
+                            {% if product.active|default(1) == 1 %}
+                                <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'deactivate'}) }}">
+                                    <input type="hidden" name="_token" value="{{ record_token }}">
+                                    <button type="submit">تعطيل</button>
+                                </form>
+                            {% else %}
+                                <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'reactivate'}) }}">
+                                    <input type="hidden" name="_token" value="{{ record_token }}">
+                                    <button type="submit">تفعيل</button>
+                                </form>
+                            {% endif %}
+                            <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'delete'}) }}" onsubmit="return confirm('تأكيد الحذف؟')">
+                                <input type="hidden" name="_token" value="{{ record_token }}">
+                                <button type="submit">حذف</button>
+                            </form>
+                        {% endif %}
                     </span>
                 </div>
             {% else %}

@@ -637,6 +637,59 @@ select {
     color: var(--muted);
 }
 
+.inline-form {
+    display: inline-flex;
+}
+
+.row-actions .inline-form {
+    display: inline;
+}
+
+.row-actions button {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.operation-lines {
+    display: grid;
+    gap: 10px;
+    margin: 18px 0;
+}
+
+.operation-line {
+    display: grid;
+    grid-template-columns: 1.4fr 1.2fr .55fr .7fr .55fr .8fr;
+    gap: 10px;
+    align-items: center;
+}
+
+.operation-line-head {
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: #0b0b0b;
+    color: #fff;
+    font-weight: 900;
+}
+
+.operation-line input,
+.operation-line select {
+    min-width: 0;
+}
+
+.operation-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    justify-content: flex-end;
+    margin: 18px 0;
+    font-weight: 900;
+}
+
 .document-page,
 .receipt-page {
     min-height: 100vh;
@@ -710,6 +763,15 @@ select {
     margin: 0 0 16px;
 }
 
+.document-title {
+    position: relative;
+    z-index: 1;
+    margin: -22mm 0 14mm;
+    text-align: center;
+    font-size: 16px;
+    letter-spacing: .3px;
+}
+
 .invoice-meta p {
     margin: 0 0 14px;
 }
@@ -741,16 +803,57 @@ select {
     font-weight: 900;
 }
 
-.net-pay {
+.net-pay,
+.invoice-totals {
     position: relative;
     z-index: 1;
     width: 320px;
     margin: 24mm 0 0 auto;
+    direction: ltr;
+    text-align: center;
+}
+
+.net-pay {
     display: grid;
     grid-template-columns: 1fr 1fr;
     border: 1px solid #222;
+}
+
+.invoice-totals {
+    display: grid;
+    margin-top: 8mm;
+    border: 1px solid #222;
+    background: rgba(255, 255, 255, .38);
+}
+
+.invoice-totals div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid #222;
+}
+
+.invoice-totals div:last-child {
+    border-bottom: 0;
+    font-weight: 900;
+}
+
+.invoice-totals span,
+.invoice-totals strong {
+    padding: 5px 8px;
+}
+
+.invoice-totals strong {
+    border-left: 1px solid #222;
+}
+
+.legal-amount {
+    position: relative;
+    z-index: 1;
+    max-width: 150mm;
+    margin: 16mm 0 0;
     direction: ltr;
-    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .net-pay span,
@@ -983,9 +1086,22 @@ select {
     }
 
     .invoice-sheet {
-        width: 210mm;
-        min-height: 297mm;
+        width: 100%;
+        max-width: 186mm;
+        min-height: auto;
+        padding: 0;
+        overflow: visible;
         box-shadow: none;
+    }
+
+    .invoice-table {
+        table-layout: fixed;
+    }
+
+    .invoice-totals,
+    .invoice-footer,
+    .legal-amount {
+        page-break-inside: avoid;
     }
 
     .receipt-ticket {
@@ -994,6 +1110,7 @@ select {
     }
 
     @page {
-        margin: 8mm;
+        size: A4 portrait;
+        margin: 12mm;
     }
 }

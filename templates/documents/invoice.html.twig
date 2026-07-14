@@ -1,13 +1,22 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ operation.invoice_no }} - SIM Auto{% endblock %}
+{% set doc_no = operation.document_no|default(operation.invoice_no) %}
+{% set doc_title = operation.doc_type == 'quote' ? 'DEVIS N°' : (operation.doc_type == 'order' ? 'BON DE COMMANDE N°' : 'FACTURE N°') %}
+
+{% block title %}{{ doc_no }} - SIM Auto{% endblock %}
 
 {% block body %}
 <main class="document-page">
     <div class="doc-actions">
-        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">الرئيسية</a>
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">Accueil</a>
         <a class="btn btn-primary" href="{{ path('app_receipt', {id: operation.id}) }}">Receipt</a>
-        <button class="btn btn-primary" onclick="window.print()">طباعة</button>
+        {% if operation.doc_type == 'quote' and operation.status == 'draft' %}
+            <form method="post" action="{{ path('app_document_confirm', {id: operation.id}) }}" class="inline-form"><button class="btn btn-primary" type="submit">Confirmer</button></form>
+            <form method="post" action="{{ path('app_document_invoice', {id: operation.id}) }}" class="inline-form"><button class="btn btn-primary" type="submit">Facturer</button></form>
+        {% elseif operation.doc_type == 'order' and operation.status == 'draft' %}
+            <form method="post" action="{{ path('app_document_invoice', {id: operation.id}) }}" class="inline-form"><button class="btn btn-primary" type="submit">Facturer</button></form>
+        {% endif %}
+        <button class="btn btn-primary" onclick="window.print()">Imprimer</button>
     </div>
 
     <section class="invoice-sheet official-invoice" dir="ltr">
@@ -21,20 +30,24 @@
             </div>
         </header>
 
+        <h2 class="document-title">{{ doc_title }} {{ doc_no }}</h2>
+
         <section class="invoice-meta">
             <div>
-                <h2>FACTURE N° {{ operation.invoice_no }}</h2>
-                <p><b>CLIENT:</b> {{ operation.client_real_name ?: operation.client_name }}</p>
-                <p><b>Adresse:</b> {{ operation.client_real_address ?: operation.client_address }}</p>
-                <p><b>DATE:</b> {{ operation.created_at|date('d/m/Y') }}</p>
+                <p><b>CLIENT :</b> {{ operation.client_real_name ?: operation.client_name }}</p>
+                {% if operation.client_ice %}<p><b>ICE :</b> {{ operation.client_ice }}</p>{% endif %}
+                <p><b>DATE :</b> {{ operation.created_at|date('d/m/Y') }}</p>
+                {% if operation.client_real_address ?: operation.client_address %}
+                    <p><b>Adresse :</b> {{ operation.client_real_address ?: operation.client_address }}</p>
+                {% endif %}
             </div>
             <div>
-                <p><b>IMMATRICULATION:</b> {{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</p>
-                <p><b>MARQUE</b> {{ operation.brand_name ?: operation.vehicle_brand }}</p>
-                <p><b>MODELE</b> {{ operation.model_name ?: operation.vehicle_model }}</p>
-                <p><b>MODE DE PAIEMENT:</b> {{ operation.payment_label }}</p>
+                <p><b>IMMATRICULATION :</b> {{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</p>
+                <p><b>MARQUE :</b> {{ operation.brand_name ?: operation.vehicle_brand }}</p>
+                <p><b>MODELE :</b> {{ operation.model_name ?: operation.vehicle_model }}</p>
+                <p><b>MODE DE PAIEMENT :</b> {{ operation.payment_label }}</p>
                 {% if operation.check_number %}
-                    <p><b>Chèque N°</b> {{ operation.check_number }}</p>
+                    <p><b>Cheque N° :</b> {{ operation.check_number }}</p>
                 {% endif %}
             </div>
         </section>
@@ -53,28 +66,34 @@
                     <tr>
                         <td>{{ item.label }}</td>
                         <td>{{ item.quantity }}</td>
-                        <td>{{ item.unit_price > 0 ? item.unit_price|number_format(0, ',', ' ') : '' }}</td>
-                        <td>{{ item.total > 0 ? item.total|number_format(0, ',', ' ') : 'GRATUIT' }}</td>
+                        <td>{{ item.unit_price > 0 ? item.unit_price|number_format(2, ',', ' ') ~ ' DH' : '' }}</td>
+                        <td>{{ item.total_ht|default(item.total) > 0 ? item.total_ht|default(item.total)|number_format(2, ',', ' ') ~ ' DH' : 'GRATUIT' }}</td>
                     </tr>
                 {% endfor %}
                 <tr class="total-row">
                     <td colspan="3">TOTAL</td>
-                    <td>{{ operation.total|number_format(0, ',', ' ') }}</td>
+                    <td>{{ operation.subtotal_ht|number_format(2, ',', ' ') }} DH</td>
                 </tr>
             </tbody>
         </table>
 
-        <div class="net-pay">
-            <span>NET A PAYER</span>
-            <strong>{{ operation.total|number_format(0, ',', ' ') }}DH</strong>
+        <div class="invoice-totals">
+            <div><span>MT HT</span><strong>{{ operation.subtotal_ht|number_format(2, ',', ' ') }} DH</strong></div>
+            <div><span>TVA {{ operation.vat_rate|number_format(0) }}%</span><strong>{{ operation.vat_amount|number_format(2, ',', ' ') }} DH</strong></div>
+            <div><span>MT TTC A PAYER</span><strong>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</strong></div>
         </div>
 
-        <p class="invoice-thanks">MERCI POUR VOTRE VISITE</p>
+        <p class="legal-amount">
+            {{ operation.doc_type == 'quote' ? 'Arrete le present devis a la somme de :' : 'Arretee la presente facture a la somme de :' }}
+            {{ amount_words|default('') }}.
+        </p>
+
+        <p class="invoice-thanks">Cachet et Signature</p>
 
         <footer class="invoice-footer">
-            <span>Contact: {{ company.contact }}</span>
-            <span>Adresse: {{ company.address }}</span>
-            <span>IF: {{ company.if }} - PT: {{ company.pt }} - ICE: {{ company.ice }} - RC: {{ company.rc }}</span>
+            <span>Contact : {{ company.contact }}</span>
+            <span>Adresse : {{ company.address }}</span>
+            <span>IF : {{ company.if }} - PT : {{ company.pt }} - ICE : {{ company.ice }} - RC : {{ company.rc }}</span>
             <span>{{ company.email }}</span>
         </footer>
     </section>

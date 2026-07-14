@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Service\AppDatabase;
 use App\Service\AccessControl;
 use App\Service\CompanyProfile;
+use App\Service\FrenchNumberFormatter;
 use InvalidArgumentException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -37,6 +38,7 @@ class DashboardController extends AbstractController
         return $this->render('app/products.html.twig', $db->dashboardData($request->query->all()) + [
             'user' => $user,
             'filters' => $request->query->all(),
+            'record_token' => $this->csrfToken($request, 'record_state'),
         ]);
     }
 
@@ -197,6 +199,69 @@ class DashboardController extends AbstractController
         }
 
         return $this->render('app/billing.html.twig', $db->dashboardData() + ['user' => $user]);
+    }
+
+    #[Route('/records/{entity}/{id}/{action}', name: 'app_record_state', methods: ['POST'], requirements: ['id' => '\d+', 'action' => 'delete|deactivate|reactivate'])]
+    public function recordState(string $entity, int $id, string $action, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if (!$access->can('delete', $user)) {
+            $this->addFlash('error', 'ليست لديك صلاحية الحذف');
+            return $this->redirectToRoute('app_dashboard');
+        }
+
+        try {
+            $this->verifyCsrf($request, 'record_state');
+            if ($action === 'delete') {
+                $db->deleteRecord($entity, $id);
+            } elseif ($action === 'reactivate') {
+                $db->reactivate($entity, $id);
+            } else {
+                $db->deactivate($entity, $id);
+            }
+            $this->addFlash('success', 'تم تنفيذ العملية');
+        } catch (Throwable $e) {
+            $this->addFlash('error', $this->safeMessage($e));
+        }
+
+        return $this->redirect($request->headers->get('referer') ?: $this->generateUrl('app_dashboard'));
+    }
+
+    #[Route('/documents/{id}/confirm', name: 'app_document_confirm', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function confirmDocument(int $id, Request $request, AppDatabase $db): RedirectResponse
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        try {
+            $orderId = $db->confirmQuote($id, (int) $user['id']);
+            $this->addFlash('success', 'تم إنشاء bon de commande');
+            return $this->redirectToRoute('app_invoice', ['id' => $orderId]);
+        } catch (Throwable $e) {
+            $this->addFlash('error', $this->safeMessage($e));
+            return $this->redirectToRoute('app_invoice', ['id' => $id]);
+        }
+    }
+
+    #[Route('/documents/{id}/invoice', name: 'app_document_invoice', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function invoiceDocument(int $id, Request $request, AppDatabase $db): RedirectResponse
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        try {
+            $invoiceId = $db->invoiceDocument($id, (int) $user['id']);
+            $this->addFlash('success', 'تم إنشاء الفاتورة');
+            return $this->redirectToRoute('app_invoice', ['id' => $invoiceId]);
+        } catch (Throwable $e) {
+            $this->addFlash('error', $this->safeMessage($e));
+            return $this->redirectToRoute('app_invoice', ['id' => $id]);
+        }
     }
 
     #[Route('/categories', name: 'app_categories', methods: ['GET', 'POST'])]
@@ -513,7 +578,7 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/invoice/{id}', name: 'app_invoice')]
-    public function invoice(int $id, Request $request, AppDatabase $db, CompanyProfile $company): Response
+    public function invoice(int $id, Request $request, AppDatabase $db, CompanyProfile $company, FrenchNumberFormatter $formatter): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
@@ -523,7 +588,12 @@ class DashboardController extends AbstractController
         if (!$operation) {
             throw $this->createNotFoundException();
         }
-        return $this->render('documents/invoice.html.twig', ['operation' => $operation, 'user' => $user, 'company' => $company->data()]);
+        return $this->render('documents/invoice.html.twig', [
+            'operation' => $operation,
+            'user' => $user,
+            'company' => $company->data(),
+            'amount_words' => $formatter->money((float) $operation['total_ttc']),
+        ]);
     }
 
     #[Route('/receipt/{id}', name: 'app_receipt')]
