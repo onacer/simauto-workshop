@@ -23,7 +23,7 @@
 
         <section class="invoice-meta">
             <div>
-                <h2>BON DE LIVRAISON</h2>
+                <h2>FACTURE N° {{ operation.invoice_no }}</h2>
                 <p><b>CLIENT:</b> {{ operation.client_real_name ?: operation.client_name }}</p>
                 <p><b>Adresse:</b> {{ operation.client_real_address ?: operation.client_address }}</p>
                 <p><b>DATE:</b> {{ operation.created_at|date('d/m/Y') }}</p>
@@ -32,7 +32,10 @@
                 <p><b>IMMATRICULATION:</b> {{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</p>
                 <p><b>MARQUE</b> {{ operation.brand_name ?: operation.vehicle_brand }}</p>
                 <p><b>MODELE</b> {{ operation.model_name ?: operation.vehicle_model }}</p>
-                <p><b>MODE DE PAIEMENT:</b>{{ operation.payment_method }}</p>
+                <p><b>MODE DE PAIEMENT:</b> {{ operation.payment_label }}</p>
+                {% if operation.check_number %}
+                    <p><b>Chèque N°</b> {{ operation.check_number }}</p>
+                {% endif %}
             </div>
         </section>
 
