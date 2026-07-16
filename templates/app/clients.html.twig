@@ -1,35 +1,35 @@
 {% extends 'base.html.twig' %}
-{% block title %}العملاء - SIM Auto{% endblock %}
+{% block title %}{{ 'clients.title'|trans }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 <main class="main-board">
-    <section class="page-head"><h1>العملاء</h1><a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a></section>
-    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
-    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+    <section class="page-head"><h1>{{ 'clients.title'|trans }}</h1><a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a></section>
+    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message|trans }}</div>{% endfor %}
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
     <section class="panel">
         <form method="post" class="form-grid">
-            <label>النوع<select name="type" class="client-type"><option value="individual">فرد</option><option value="company">شركة</option></select></label>
-            <label>الاسم<input name="name" required></label>
-            <label>الهاتف<input name="phone"></label>
-            <label>البريد<input name="email" type="email"></label>
-            <label>العنوان<input name="address"></label>
+            <label>{{ 'clients.type'|trans }}<select name="type" class="client-type"><option value="individual">{{ 'clients.individual'|trans }}</option><option value="company">{{ 'clients.company'|trans }}</option></select></label>
+            <label>{{ 'ui.name'|trans }}<input name="name" required></label>
+            <label>{{ 'ui.phone'|trans }}<input name="phone"></label>
+            <label>{{ 'ui.email'|trans }}<input name="email" type="email"></label>
+            <label>{{ 'ui.address'|trans }}<input name="address"></label>
             <label class="company-field">ICE<input name="ice"></label>
             <label class="company-field">IF<input name="vat"></label>
             <label class="company-field">RC<input name="rc"></label>
-            <button class="btn btn-primary" type="submit">حفظ</button>
+            <button class="btn btn-primary" type="submit">{{ 'ui.save'|trans }}</button>
         </form>
     </section>
     <section class="panel">
         <div class="data-table">
-            <div class="table-head"><span>العميل</span><span>النوع</span><span>الهاتف</span><span>إجراءات</span></div>
+            <div class="table-head"><span>{{ 'clients.client'|trans }}</span><span>{{ 'clients.type'|trans }}</span><span>{{ 'ui.phone'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for client in clients %}
                 <div>
                     <strong>{{ client.name }}</strong>
-                    <span>{{ client.type == 'company' ? 'شركة' : 'فرد' }}</span>
+                    <span>{{ client.type == 'company' ? 'clients.company'|trans : 'clients.individual'|trans }}</span>
                     <span>{{ client.phone }}</span>
                     <span class="row-actions">
-                        <a href="{{ path('app_client_show', {id: client.id}) }}">عرض</a>
-                        {% if can('edit', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">تعديل</a>{% endif %}
+                        <a href="{{ path('app_client_show', {id: client.id}) }}">{{ 'ui.show'|trans }}</a>
+                        {% if can('edit', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
                     </span>
                 </div>
             {% endfor %}

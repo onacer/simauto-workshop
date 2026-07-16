@@ -12,7 +12,7 @@ class ImportService
 
     private const DEFINITIONS = [
         'clients' => [
-            'label' => 'الزبناء',
+            'label' => 'import.entities.clients',
             'headers' => ['type', 'name', 'surname', 'phone', 'email', 'address', 'ice', 'vat', 'rc'],
             'examples' => [
                 ['individual', 'Ahmed', 'Alami', '0611111111', 'ahmed@example.com', 'Agadir', '', '', ''],
@@ -20,7 +20,7 @@ class ImportService
             ],
         ],
         'suppliers' => [
-            'label' => 'الموردون',
+            'label' => 'import.entities.suppliers',
             'headers' => ['name', 'phone', 'email', 'address', 'ice'],
             'examples' => [
                 ['Pieces Auto Sud', '0633333333', 'supplier@example.com', 'Agadir', '003151412000002'],
@@ -28,17 +28,17 @@ class ImportService
             ],
         ],
         'brands' => [
-            'label' => 'الماركات',
+            'label' => 'import.entities.brands',
             'headers' => ['name'],
             'examples' => [['Dacia'], ['Volkswagen']],
         ],
         'models' => [
-            'label' => 'الموديلات',
+            'label' => 'import.entities.models',
             'headers' => ['brand_name', 'name'],
             'examples' => [['Dacia', 'Logan'], ['Volkswagen', 'Tiguan']],
         ],
         'vehicles' => [
-            'label' => 'السيارات',
+            'label' => 'import.entities.vehicles',
             'headers' => ['client_phone_ou_email', 'plate', 'brand_name', 'model_name', 'year', 'mileage', 'notes'],
             'examples' => [
                 ['0611111111', '15428-A-32', 'VW', 'Tiguan', '2021', '84000', ''],
@@ -46,7 +46,7 @@ class ImportService
             ],
         ],
         'products' => [
-            'label' => 'المنتجات',
+            'label' => 'import.entities.products',
             'headers' => ['sku', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
             'examples' => [
                 ['FILT-AIR-001', 'FILTRE A AIR', 'Filtres', '10', '2', '35', '60'],

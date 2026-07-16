@@ -1,18 +1,18 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ mode == 'new' ? 'مستخدم جديد' : 'تعديل مستخدم' }} - SIM Auto{% endblock %}
+{% block title %}{{ (mode == 'new' ? 'users.new' : 'users.edit')|trans }} - SIM Auto{% endblock %}
 
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board">
     <section class="page-head">
-        <h1>{{ mode == 'new' ? 'مستخدم جديد' : 'تعديل مستخدم' }}</h1>
-        <a class="btn btn-dark" href="{{ path('app_users') }}">رجوع</a>
+        <h1>{{ (mode == 'new' ? 'users.new' : 'users.edit')|trans }}</h1>
+        <a class="btn btn-dark" href="{{ path('app_users') }}">{{ 'ui.back'|trans }}</a>
     </section>
 
     {% if error %}
-        <div class="alert alert-error">{{ error }}</div>
+        <div class="alert alert-error">{{ error|trans }}</div>
     {% endif %}
 
     <section class="panel">
@@ -20,44 +20,44 @@
             <input type="hidden" name="_token" value="{{ token }}">
 
             <label>
-                الاسم
+                {{ 'ui.name'|trans }}
                 <input name="name" value="{{ form.name|default('') }}" required>
             </label>
 
             <label>
-                البريد الإلكتروني
+                {{ 'ui.email'|trans }}
                 <input type="email" name="email" value="{{ form.email|default('') }}" required>
             </label>
 
             <label>
-                الدور
+                {{ 'users.role'|trans }}
                 <select name="role" required>
-                    <option value="manager" {{ form.role|default('manager') == 'manager' ? 'selected' : '' }}>مسير</option>
-                    <option value="admin" {{ form.role|default('manager') == 'admin' ? 'selected' : '' }}>مدير</option>
+                    <option value="manager" {{ form.role|default('manager') == 'manager' ? 'selected' : '' }}>{{ 'users.manager'|trans }}</option>
+                    <option value="admin" {{ form.role|default('manager') == 'admin' ? 'selected' : '' }}>{{ 'users.admin'|trans }}</option>
                 </select>
             </label>
 
             <label>
-                الحالة
+                {{ 'ui.status'|trans }}
                 <select name="active">
-                    <option value="1" {{ form.active|default(1) ? 'selected' : '' }}>نشط</option>
-                    <option value="0" {{ not form.active|default(1) ? 'selected' : '' }}>غير نشط</option>
+                    <option value="1" {{ form.active|default(1) ? 'selected' : '' }}>{{ 'state.active'|trans }}</option>
+                    <option value="0" {{ not form.active|default(1) ? 'selected' : '' }}>{{ 'state.inactive'|trans }}</option>
                 </select>
             </label>
 
             {% if mode == 'new' %}
                 <label>
-                    كلمة المرور
+                    {{ 'auth.password'|trans }}
                     <input type="password" name="password" minlength="8" required>
                 </label>
 
                 <label>
-                    تأكيد كلمة المرور
+                    {{ 'users.confirm_password'|trans }}
                     <input type="password" name="password_confirm" minlength="8" required>
                 </label>
             {% endif %}
 
-            <button class="btn btn-primary" type="submit">حفظ</button>
+            <button class="btn btn-primary" type="submit">{{ 'ui.save'|trans }}</button>
         </form>
     </section>
 </main>

@@ -1,14 +1,14 @@
 {% extends 'base.html.twig' %}
-{% block title %}تعديل صنف - SIM Auto{% endblock %}
+{% block title %}{{ 'categories.edit'|trans }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 <main class="main-board">
-    <section class="page-head"><h1>تعديل صنف</h1><a class="btn btn-dark" href="{{ path('app_categories') }}">رجوع</a></section>
-    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+    <section class="page-head"><h1>{{ 'categories.edit'|trans }}</h1><a class="btn btn-dark" href="{{ path('app_categories') }}">{{ 'ui.back'|trans }}</a></section>
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
     <section class="panel">
         <form method="post" class="form-grid">
-            <label>اسم الصنف<input name="name" value="{{ category.name }}" required></label>
-            <button class="btn btn-primary" type="submit">تحديث</button>
+            <label>{{ 'categories.name'|trans }}<input name="name" value="{{ category.name }}" required></label>
+            <button class="btn btn-primary" type="submit">{{ 'ui.update'|trans }}</button>
         </form>
     </section>
 </main>

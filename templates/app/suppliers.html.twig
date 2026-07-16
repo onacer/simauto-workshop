@@ -1,34 +1,34 @@
 {% extends 'base.html.twig' %}
-{% block title %}الموردون - SIM Auto{% endblock %}
+{% block title %}{{ 'suppliers.title'|trans }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 <main class="main-board">
-    <section class="page-head"><h1>الموردون</h1><a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a></section>
-    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
-    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+    <section class="page-head"><h1>{{ 'suppliers.title'|trans }}</h1><a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a></section>
+    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message|trans }}</div>{% endfor %}
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
     <section class="panel">
         <form method="post" class="form-grid">
-            <label>الاسم<input name="name" required></label>
-            <label>الهاتف<input name="phone"></label>
-            <label>البريد<input name="email" type="email"></label>
+            <label>{{ 'ui.name'|trans }}<input name="name" required></label>
+            <label>{{ 'ui.phone'|trans }}<input name="phone"></label>
+            <label>{{ 'ui.email'|trans }}<input name="email" type="email"></label>
             <label>ICE<input name="ice"></label>
-            <label>العنوان<input name="address"></label>
-            <button class="btn btn-primary" type="submit">حفظ</button>
+            <label>{{ 'ui.address'|trans }}<input name="address"></label>
+            <button class="btn btn-primary" type="submit">{{ 'ui.save'|trans }}</button>
         </form>
     </section>
     <section class="panel">
         <div class="data-table">
-            <div class="table-head"><span>المورد</span><span>الهاتف</span><span>ICE</span><span>إجراءات</span></div>
+            <div class="table-head"><span>{{ 'suppliers.supplier'|trans }}</span><span>{{ 'ui.phone'|trans }}</span><span>ICE</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for supplier in suppliers %}
                 <div>
                     <strong>{{ supplier.name }}</strong>
                     <span>{{ supplier.phone }}</span>
                     <span>{{ supplier.ice }}</span>
                     <span class="row-actions">
-                        <a href="{{ path('app_supplier_show', {id: supplier.id}) }}">عرض</a>
-                        {% if can('edit', user) %}<a href="{{ path('app_supplier_edit', {id: supplier.id}) }}">تعديل</a>{% endif %}
+                        <a href="{{ path('app_supplier_show', {id: supplier.id}) }}">{{ 'ui.show'|trans }}</a>
+                        {% if can('edit', user) %}<a href="{{ path('app_supplier_edit', {id: supplier.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
                         {% if can('delete', user) %}
-                            <form method="post" action="{{ path('app_supplier_deactivate', {id: supplier.id}) }}"><button class="link-button">تعطيل</button></form>
+                            <form method="post" action="{{ path('app_supplier_deactivate', {id: supplier.id}) }}"><button class="link-button">{{ 'ui.deactivate'|trans }}</button></form>
                         {% endif %}
                     </span>
                 </div>

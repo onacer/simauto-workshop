@@ -1,46 +1,46 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}عملية جديدة - SIM Auto{% endblock %}
+{% block title %}{{ 'operations.title'|trans }} - SIM Auto{% endblock %}
 
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board">
     <section class="page-head">
-        <h1>Devis جديد</h1>
-        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a>
+        <h1>{{ 'operations.quote_title'|trans }}</h1>
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a>
     </section>
 
-    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
 
     <section class="panel">
         <form action="{{ path('app_operation_new') }}" method="post" class="operation-form dynamic-operation-form">
             <div class="form-grid">
-                <label>العميل
+                <label>{{ 'ui.client'|trans }}
                     <select name="client_id" required>
-                        <option value="">اختر العميل</option>
+                        <option value="">{{ 'operations.choose_client'|trans }}</option>
                         {% for client in clients %}
                             <option value="{{ client.id }}">{{ client.name }}</option>
                         {% endfor %}
                     </select>
                 </label>
-                <label>السيارة
+                <label>{{ 'operations.vehicle'|trans }}
                     <select name="vehicle_id" required>
-                        <option value="">اختر السيارة</option>
+                        <option value="">{{ 'operations.choose_vehicle'|trans }}</option>
                         {% for vehicle in vehicles %}
                             <option value="{{ vehicle.id }}">{{ vehicle.client_name }} - {{ vehicle.plate }} - {{ vehicle.brand_name }} {{ vehicle.model_name }}</option>
                         {% endfor %}
                     </select>
                 </label>
-                <label>الدفع
+                <label>{{ 'operations.payment'|trans }}
                     <select name="payment_method" class="payment-method">
-                        <option value="ESP">نقدا</option>
-                        <option value="CHQ">شيك</option>
-                        <option value="CB">بطاقة</option>
-                        <option value="VIR">تحويل</option>
+                        <option value="ESP">{{ 'payment.cash'|trans }}</option>
+                        <option value="CHQ">{{ 'payment.cheque'|trans }}</option>
+                        <option value="CB">{{ 'payment.card'|trans }}</option>
+                        <option value="VIR">{{ 'payment.transfer'|trans }}</option>
                     </select>
                 </label>
-                <label class="check-field is-hidden">رقم الشيك<input name="check_number"></label>
+                <label class="check-field is-hidden">{{ 'operations.check_number'|trans }}<input name="check_number"></label>
                 <label>TVA
                     <input name="vat_rate" class="operation-vat-rate" type="number" step="0.01" min="0" value="20">
                 </label>
@@ -48,21 +48,21 @@
 
             <div class="operation-lines" data-operation-lines>
                 <div class="operation-line operation-line-head">
-                    <span>المنتج / الخدمة</span>
-                    <span>التسمية</span>
-                    <span>الكمية</span>
-                    <span>ثمن HT</span>
-                    <span>خصم %</span>
-                    <span>المجموع HT</span>
+                    <span>{{ 'operations.product_service'|trans }}</span>
+                    <span>{{ 'operations.label'|trans }}</span>
+                    <span>{{ 'operations.quantity'|trans }}</span>
+                    <span>{{ 'operations.price_ht'|trans }}</span>
+                    <span>{{ 'operations.discount'|trans }}</span>
+                    <span>{{ 'operations.total_ht'|trans }}</span>
                 </div>
                 <div class="operation-line" data-line>
                     <select name="line_product_id[]" class="line-product">
-                        <option value="" data-price="0" data-name="">سطر حر</option>
+                        <option value="" data-price="0" data-name="">{{ 'operations.free_line'|trans }}</option>
                         {% for product in products %}
                             <option value="{{ product.id }}" data-price="{{ product.sale_price }}" data-name="{{ product.name }}">[{{ product.sku }}] {{ product.name }} - {{ product.sale_price }} DH</option>
                         {% endfor %}
                     </select>
-                    <input name="line_label[]" class="line-label" placeholder="التسمية">
+                    <input name="line_label[]" class="line-label" placeholder="{{ 'operations.label'|trans }}">
                     <input name="line_quantity[]" class="line-qty" type="number" step="0.01" min="0" value="1">
                     <input name="line_unit_price[]" class="line-price" type="number" step="0.01" min="0" value="0">
                     <input name="line_discount[]" class="line-discount" type="number" step="0.01" min="0" max="100" value="0">
@@ -70,7 +70,7 @@
                 </div>
             </div>
 
-            <button class="btn btn-dark" type="button" data-add-line>+ إضافة سطر</button>
+            <button class="btn btn-dark" type="button" data-add-line>+ {{ 'operations.add_line'|trans }}</button>
 
             <div class="operation-preview">
                 <span>Total HT: <strong data-total-ht>0.00 DH</strong></span>
@@ -78,7 +78,7 @@
                 <span>TTC: <strong data-total-ttc>0.00 DH</strong></span>
             </div>
 
-            <button class="btn btn-primary" type="submit">حفظ devis</button>
+            <button class="btn btn-primary" type="submit">{{ 'operations.save_quote'|trans }}</button>
         </form>
     </section>
 </main>

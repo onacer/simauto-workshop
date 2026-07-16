@@ -1,52 +1,52 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}المخزون - SIM Auto{% endblock %}
+{% block title %}{{ 'stock.title'|trans }} - SIM Auto{% endblock %}
 
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board">
     <section class="page-head">
-        <h1>المخزون</h1>
-        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a>
+        <h1>{{ 'stock.title'|trans }}</h1>
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a>
     </section>
 
-    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
-    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message|trans }}</div>{% endfor %}
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
 
     <section class="panel">
         <form action="{{ path('app_stock_in') }}" method="post" class="form-grid stock-form">
-            <label>المنتج
+            <label>{{ 'products.product'|trans }}
                 <select name="product_id" required>
                     {% for product in products %}
                         <option value="{{ product.id }}">[{{ product.sku }}] {{ product.name }} - {{ product.stock_qty }}</option>
                     {% endfor %}
                 </select>
             </label>
-            <label>المورد
+            <label>{{ 'stock.supplier'|trans }}
                 <select name="supplier_id">
-                    <option value="">بدون</option>
+                    <option value="">{{ 'ui.none'|trans }}</option>
                     {% for supplier in suppliers %}
                         <option value="{{ supplier.id }}">{{ supplier.name }}</option>
                     {% endfor %}
                 </select>
             </label>
-            <label>الكمية<input name="quantity" type="number" step="1" min="1" value="1" required></label>
-            <label>ثمن الشراء<input name="unit_cost" type="number" step="0.01" min="0"></label>
-            <label>ملاحظة<input name="note"></label>
-            <button class="btn btn-primary" type="submit">تحديث</button>
+            <label>{{ 'stock.quantity'|trans }}<input name="quantity" type="number" step="1" min="1" value="1" required></label>
+            <label>{{ 'stock.unit_cost'|trans }}<input name="unit_cost" type="number" step="0.01" min="0"></label>
+            <label>{{ 'stock.note'|trans }}<input name="note"></label>
+            <button class="btn btn-primary" type="submit">{{ 'ui.update'|trans }}</button>
         </form>
     </section>
 
     <section class="panel">
         <div class="data-table">
-            <div class="table-head"><span>المنتج</span><span>الحالي</span><span>الحد الأدنى</span><span>الحالة</span></div>
+            <div class="table-head"><span>{{ 'products.product'|trans }}</span><span>{{ 'stock.current'|trans }}</span><span>{{ 'stock.minimum'|trans }}</span><span>{{ 'ui.status'|trans }}</span></div>
             {% for product in products %}
                 <div>
                     <strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong>
                     <span>{{ product.stock_qty }}</span>
                     <span>{{ product.min_qty }}</span>
-                    <span>{{ product.stock_qty <= 0 ? 'نفد' : (product.stock_qty <= product.min_qty ? 'منخفض' : 'متوفر') }}</span>
+                    <span>{{ product.stock_qty <= 0 ? 'stock.empty'|trans : (product.stock_qty <= product.min_qty ? 'stock.low'|trans : 'stock.available'|trans) }}</span>
                 </div>
             {% endfor %}
         </div>

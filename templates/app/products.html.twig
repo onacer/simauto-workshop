@@ -1,114 +1,114 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}المنتجات - SIM Auto{% endblock %}
+{% block title %}{{ 'products.title'|trans }} - SIM Auto{% endblock %}
 
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board">
     <section class="page-head">
-        <h1>المنتجات</h1>
-        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a>
+        <h1>{{ 'products.title'|trans }}</h1>
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a>
     </section>
 
-    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
-    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message|trans }}</div>{% endfor %}
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
 
     <section class="panel">
         <form method="get" class="form-grid">
-            <label>بحث<input name="q" value="{{ filters.q|default('') }}" placeholder="SKU / الاسم"></label>
-            <label>الصنف
+            <label>{{ 'ui.search'|trans }}<input name="q" value="{{ filters.q|default('') }}" placeholder="{{ 'products.sku'|trans }}"></label>
+            <label>{{ 'products.category'|trans }}
                 <select name="category_id">
-                    <option value="">الكل</option>
+                    <option value="">{{ 'ui.all'|trans }}</option>
                     {% for category in categories %}
                         <option value="{{ category.id }}" {{ filters.category_id|default('') == category.id ? 'selected' : '' }}>{{ category.name }}</option>
                     {% endfor %}
                 </select>
             </label>
-            <label>حالة السجل
+            <label>{{ 'ui.active_record'|trans }}
                 <select name="state">
-                    <option value="active" {{ filters.state|default('active') == 'active' ? 'selected' : '' }}>نشط</option>
-                    <option value="inactive" {{ filters.state|default('active') == 'inactive' ? 'selected' : '' }}>غير نشط</option>
-                    <option value="all" {{ filters.state|default('active') == 'all' ? 'selected' : '' }}>الكل</option>
+                    <option value="active" {{ filters.state|default('active') == 'active' ? 'selected' : '' }}>{{ 'state.active'|trans }}</option>
+                    <option value="inactive" {{ filters.state|default('active') == 'inactive' ? 'selected' : '' }}>{{ 'state.inactive'|trans }}</option>
+                    <option value="all" {{ filters.state|default('active') == 'all' ? 'selected' : '' }}>{{ 'ui.all'|trans }}</option>
                 </select>
             </label>
-            <label>حالة المخزون
+            <label>{{ 'products.stock_state'|trans }}
                 <select name="stock_state">
-                    <option value="">الكل</option>
-                    <option value="low" {{ filters.stock_state|default('') == 'low' ? 'selected' : '' }}>تحت الحد</option>
-                    <option value="empty" {{ filters.stock_state|default('') == 'empty' ? 'selected' : '' }}>نفد</option>
+                    <option value="">{{ 'ui.all'|trans }}</option>
+                    <option value="low" {{ filters.stock_state|default('') == 'low' ? 'selected' : '' }}>{{ 'products.low'|trans }}</option>
+                    <option value="empty" {{ filters.stock_state|default('') == 'empty' ? 'selected' : '' }}>{{ 'products.empty_stock'|trans }}</option>
                 </select>
             </label>
-            <button class="btn btn-dark" type="submit">تصفية</button>
+            <button class="btn btn-dark" type="submit">{{ 'ui.filter'|trans }}</button>
         </form>
     </section>
 
     <section class="panel">
-        <h2>منتج جديد</h2>
+        <h2>{{ 'products.new'|trans }}</h2>
         <form action="{{ path('app_product_new') }}" method="post" class="form-grid product-pricing-form">
-            <label>الكود<input name="sku" required></label>
-            <label>اسم المنتج<input name="name" required></label>
-            <label>النوع
+            <label>{{ 'ui.code'|trans }}<input name="sku" required></label>
+            <label>{{ 'products.name'|trans }}<input name="name" required></label>
+            <label>{{ 'products.type'|trans }}
                 <select name="product_type" class="product-type">
-                    <option value="stockable">قطعة مخزون</option>
-                    <option value="service">خدمة</option>
+                    <option value="stockable">{{ 'products.stockable'|trans }}</option>
+                    <option value="service">{{ 'products.service'|trans }}</option>
                 </select>
             </label>
-            <label>الصنف
+            <label>{{ 'products.category'|trans }}
                 <select name="category_id" required>
                     {% for category in categories %}
                         <option value="{{ category.id }}">{{ category.name }}</option>
                     {% endfor %}
                 </select>
             </label>
-            <label class="stock-field">الكمية<input name="stock_qty" type="number" step="1" min="0" value="0" required></label>
-            <label>الحد الأدنى<input name="min_qty" type="number" step="1" min="0" value="1"></label>
-            <label>ثمن الشراء HT<input name="purchase_price" class="purchase-price" type="number" step="0.01" min="0" value="0"></label>
-            <label>هامش الربح
+            <label class="stock-field">{{ 'products.quantity'|trans }}<input name="stock_qty" type="number" step="1" min="0" value="0" required></label>
+            <label>{{ 'products.min_qty'|trans }}<input name="min_qty" type="number" step="1" min="0" value="1"></label>
+            <label>{{ 'products.purchase_price_ht'|trans }}<input name="purchase_price" class="purchase-price" type="number" step="0.01" min="0" value="0"></label>
+            <label>{{ 'products.margin'|trans }}
                 <select name="margin_mode" class="margin-mode">
-                    <option value="manual">يدوي</option>
+                    <option value="manual">{{ 'products.manual'|trans }}</option>
                     <option value="135">135%</option>
                     <option value="145">145%</option>
                     <option value="155">155%</option>
                 </select>
             </label>
-            <label>ثمن البيع HT<input name="sale_price" class="sale-price" type="number" step="0.01" min="0" value="0"></label>
-            <button class="btn btn-primary" type="submit">حفظ</button>
+            <label>{{ 'products.sale_price_ht'|trans }}<input name="sale_price" class="sale-price" type="number" step="0.01" min="0" value="0"></label>
+            <button class="btn btn-primary" type="submit">{{ 'ui.save'|trans }}</button>
         </form>
     </section>
 
     <section class="panel">
         <div class="data-table">
-            <div class="table-head"><span>المنتج</span><span>الصنف</span><span>المخزون</span><span>إجراءات</span></div>
+            <div class="table-head"><span>{{ 'products.product'|trans }}</span><span>{{ 'products.category'|trans }}</span><span>{{ 'products.stock'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for product in products %}
                 <div>
                     <strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong>
                     <span>{{ product.category_name ?: product.category }}</span>
-                    <span>{{ product.product_type|default('stockable') == 'service' ? 'خدمة' : product.stock_qty }}</span>
+                    <span>{{ product.product_type|default('stockable') == 'service' ? 'products.service'|trans : product.stock_qty }}</span>
                     <span class="row-actions">
-                        <a href="{{ path('app_product_show', {id: product.id}) }}">عرض</a>
-                        {% if can('edit', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">تعديل</a>{% endif %}
+                        <a href="{{ path('app_product_show', {id: product.id}) }}">{{ 'ui.show'|trans }}</a>
+                        {% if can('edit', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
                         {% if can('delete', user) %}
                             {% if product.active|default(1) == 1 %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'deactivate'}) }}">
                                     <input type="hidden" name="_token" value="{{ record_token }}">
-                                    <button type="submit">تعطيل</button>
+                                    <button type="submit">{{ 'ui.deactivate'|trans }}</button>
                                 </form>
                             {% else %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'reactivate'}) }}">
                                     <input type="hidden" name="_token" value="{{ record_token }}">
-                                    <button type="submit">تفعيل</button>
+                                    <button type="submit">{{ 'ui.activate'|trans }}</button>
                                 </form>
                             {% endif %}
-                            <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'delete'}) }}" onsubmit="return confirm('تأكيد الحذف؟')">
+                            <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'delete'}) }}" onsubmit="return confirm('{{ 'ui.confirm_delete'|trans|e('js') }}')">
                                 <input type="hidden" name="_token" value="{{ record_token }}">
-                                <button type="submit">حذف</button>
+                                <button type="submit">{{ 'ui.delete'|trans }}</button>
                             </form>
                         {% endif %}
                     </span>
                 </div>
             {% else %}
-                <p class="empty-state">لا توجد منتجات.</p>
+                <p class="empty-state">{{ 'products.no_products'|trans }}</p>
             {% endfor %}
         </div>
     </section>

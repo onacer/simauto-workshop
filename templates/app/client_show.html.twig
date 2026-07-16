@@ -6,44 +6,44 @@
     <section class="page-head">
         <h1>{{ client.name }}</h1>
         <span class="row-actions">
-            {% if can('edit', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">تعديل</a>{% endif %}
-            <a class="btn btn-primary" href="{{ path('app_vehicles', {client: client.id}) }}">إضافة سيارة</a>
-            <a class="btn btn-dark" href="{{ path('app_clients') }}">رجوع</a>
+            {% if can('edit', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+            <a class="btn btn-primary" href="{{ path('app_vehicles', {client: client.id}) }}">{{ 'clients.add_vehicle'|trans }}</a>
+            <a class="btn btn-dark" href="{{ path('app_clients') }}">{{ 'ui.back'|trans }}</a>
         </span>
     </section>
 
     {% include 'app/_show_info.html.twig' with {rows: [
-        {label: 'النوع', value: client.type == 'company' ? 'شركة' : 'فرد'},
-        {label: 'الهاتف', value: client.phone},
-        {label: 'البريد', value: client.email},
-        {label: 'العنوان', value: client.address},
+        {label: 'clients.type'|trans, value: client.type == 'company' ? 'clients.company'|trans : 'clients.individual'|trans},
+        {label: 'ui.phone'|trans, value: client.phone},
+        {label: 'ui.email'|trans, value: client.email},
+        {label: 'ui.address'|trans, value: client.address},
         {label: 'ICE', value: client.ice},
         {label: 'IF', value: client.vat},
         {label: 'RC', value: client.rc},
-        {label: 'تاريخ الإنشاء', value: client.created_at}
+        {label: 'ui.created_at'|trans, value: client.created_at}
     ]} %}
 
     <section class="panel">
-        <h2>سيارات العميل</h2>
+        <h2>{{ 'clients.vehicles'|trans }}</h2>
         <div class="data-table">
-            <div class="table-head"><span>الترقيم</span><span>الماركة</span><span>السنة / الكيلومترات</span><span>إجراءات</span></div>
+            <div class="table-head"><span>{{ 'vehicles.plate'|trans }}</span><span>{{ 'vehicles.brand'|trans }}</span><span>{{ 'vehicles.year'|trans }} / {{ 'vehicles.mileage'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for vehicle in vehicles %}
                 <div>
                     <strong>{{ vehicle.plate }}</strong>
                     <span>{{ vehicle.brand_name }} {{ vehicle.model_name }}</span>
                     <span>{{ vehicle.year ?: '—' }} / {{ vehicle.mileage ?: '—' }}</span>
-                    <span class="row-actions"><a href="{{ path('app_vehicle_show', {id: vehicle.id}) }}">عرض</a></span>
+                    <span class="row-actions"><a href="{{ path('app_vehicle_show', {id: vehicle.id}) }}">{{ 'ui.show'|trans }}</a></span>
                 </div>
             {% else %}
-                <p class="empty-state">لا توجد سيارات لهذا العميل.</p>
+                <p class="empty-state">{{ 'clients.no_vehicles'|trans }}</p>
             {% endfor %}
         </div>
     </section>
 
     <section class="panel">
-        <h2>آخر العمليات</h2>
+        <h2>{{ 'clients.last_operations'|trans }}</h2>
         <div class="data-table">
-            <div class="table-head"><span>التاريخ</span><span>الفاتورة</span><span>السيارة</span><span>المبلغ</span></div>
+            <div class="table-head"><span>{{ 'ui.date'|trans }}</span><span>{{ 'billing.invoice'|trans }}</span><span>{{ 'vehicles.vehicle'|trans }}</span><span>{{ 'ui.amount'|trans }}</span></div>
             {% for operation in operations %}
                 <div>
                     <strong>{{ operation.created_at|date('d/m/Y') }}</strong>
@@ -52,7 +52,7 @@
                     <span>{{ operation.total|number_format(2, ',', ' ') }} DH</span>
                 </div>
             {% else %}
-                <p class="empty-state">لا توجد عمليات لهذا العميل.</p>
+                <p class="empty-state">{{ 'clients.no_operations'|trans }}</p>
             {% endfor %}
         </div>
     </section>

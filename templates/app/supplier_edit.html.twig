@@ -1,18 +1,18 @@
 {% extends 'base.html.twig' %}
-{% block title %}تعديل مورد - SIM Auto{% endblock %}
+{% block title %}{{ 'suppliers.edit'|trans }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 <main class="main-board">
-    <section class="page-head"><h1>تعديل مورد</h1><a class="btn btn-dark" href="{{ path('app_suppliers') }}">رجوع</a></section>
-    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+    <section class="page-head"><h1>{{ 'suppliers.edit'|trans }}</h1><a class="btn btn-dark" href="{{ path('app_suppliers') }}">{{ 'ui.back'|trans }}</a></section>
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
     <section class="panel">
         <form method="post" class="form-grid">
-            <label>الاسم<input name="name" value="{{ supplier.name }}" required></label>
-            <label>الهاتف<input name="phone" value="{{ supplier.phone }}"></label>
-            <label>البريد<input name="email" type="email" value="{{ supplier.email }}"></label>
+            <label>{{ 'ui.name'|trans }}<input name="name" value="{{ supplier.name }}" required></label>
+            <label>{{ 'ui.phone'|trans }}<input name="phone" value="{{ supplier.phone }}"></label>
+            <label>{{ 'ui.email'|trans }}<input name="email" type="email" value="{{ supplier.email }}"></label>
             <label>ICE<input name="ice" value="{{ supplier.ice }}"></label>
-            <label>العنوان<input name="address" value="{{ supplier.address }}"></label>
-            <button class="btn btn-primary" type="submit">تحديث</button>
+            <label>{{ 'ui.address'|trans }}<input name="address" value="{{ supplier.address }}"></label>
+            <button class="btn btn-primary" type="submit">{{ 'ui.update'|trans }}</button>
         </form>
     </section>
 </main>

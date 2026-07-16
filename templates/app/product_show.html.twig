@@ -6,26 +6,26 @@
     <section class="page-head">
         <h1>{{ product.name }}</h1>
         <span class="row-actions">
-            {% if can('edit', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">تعديل</a>{% endif %}
-            <a class="btn btn-dark" href="{{ path('app_products') }}">رجوع</a>
+            {% if can('edit', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+            <a class="btn btn-dark" href="{{ path('app_products') }}">{{ 'ui.back'|trans }}</a>
         </span>
     </section>
 
     {% include 'app/_show_info.html.twig' with {rows: [
         {label: 'SKU', value: product.sku},
-        {label: 'الصنف', value: product.category_name ?: product.category},
-        {label: 'المخزون', value: product.stock_qty},
-        {label: 'الحد الأدنى', value: product.min_qty},
-        {label: 'ثمن الشراء', value: product.purchase_price ~ ' DH'},
-        {label: 'ثمن البيع', value: product.sale_price ~ ' DH'},
-        {label: 'الحالة', value: product.active ? 'نشط' : 'معطل'},
-        {label: 'تاريخ الإنشاء', value: product.created_at}
+        {label: 'products.category'|trans, value: product.category_name ?: product.category},
+        {label: 'products.stock'|trans, value: product.stock_qty},
+        {label: 'products.min_qty'|trans, value: product.min_qty},
+        {label: 'products.purchase_price'|trans, value: product.purchase_price ~ ' DH'},
+        {label: 'products.sale_price'|trans, value: product.sale_price ~ ' DH'},
+        {label: 'ui.status'|trans, value: product.active ? 'state.active'|trans : 'ui.disabled'|trans},
+        {label: 'ui.created_at'|trans, value: product.created_at}
     ]} %}
 
     <section class="panel">
-        <h2>حركات المخزون</h2>
+        <h2>{{ 'products.movements'|trans }}</h2>
         <div class="data-table">
-            <div class="table-head"><span>النوع</span><span>الكمية</span><span>المورد</span><span>التاريخ</span></div>
+            <div class="table-head"><span>{{ 'ui.type'|trans }}</span><span>{{ 'stock.quantity'|trans }}</span><span>{{ 'stock.supplier'|trans }}</span><span>{{ 'ui.date'|trans }}</span></div>
             {% for movement in movements %}
                 <div>
                     <strong>{{ movement.movement_type }}</strong>
@@ -34,7 +34,7 @@
                     <span>{{ movement.created_at }}</span>
                 </div>
             {% else %}
-                <p class="empty-state">لا توجد حركات.</p>
+                <p class="empty-state">{{ 'ui.empty'|trans }}</p>
             {% endfor %}
         </div>
     </section>

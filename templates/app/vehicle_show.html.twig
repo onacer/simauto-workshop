@@ -6,32 +6,32 @@
     <section class="page-head">
         <h1>{{ vehicle.plate }}</h1>
         <span class="row-actions">
-            <a class="btn btn-dark" href="{{ path('app_vehicles') }}">رجوع</a>
+            <a class="btn btn-dark" href="{{ path('app_vehicles') }}">{{ 'ui.back'|trans }}</a>
         </span>
     </section>
 
     {% include 'app/_show_info.html.twig' with {rows: [
-        {label: 'المالك', value: vehicle.client_name},
-        {label: 'الهاتف', value: vehicle.client_phone},
-        {label: 'الماركة', value: vehicle.brand_name},
-        {label: 'الموديل', value: vehicle.model_name},
-        {label: 'السنة', value: vehicle.year},
-        {label: 'الكيلومترات', value: vehicle.mileage},
-        {label: 'ملاحظات', value: vehicle.notes},
-        {label: 'تاريخ الإنشاء', value: vehicle.created_at}
+        {label: 'vehicles.owner'|trans, value: vehicle.client_name},
+        {label: 'ui.phone'|trans, value: vehicle.client_phone},
+        {label: 'vehicles.brand'|trans, value: vehicle.brand_name},
+        {label: 'vehicles.model'|trans, value: vehicle.model_name},
+        {label: 'vehicles.year'|trans, value: vehicle.year},
+        {label: 'vehicles.mileage'|trans, value: vehicle.mileage},
+        {label: 'vehicles.notes'|trans, value: vehicle.notes},
+        {label: 'ui.created_at'|trans, value: vehicle.created_at}
     ]} %}
 
     <section class="panel">
-        <h2>العميل المالك</h2>
+        <h2>{{ 'clients.owner'|trans }}</h2>
         <div class="row-actions">
-            <a href="{{ path('app_client_show', {id: vehicle.client_id}) }}">عرض بطاقة العميل</a>
+            <a href="{{ path('app_client_show', {id: vehicle.client_id}) }}">{{ 'clients.show_card'|trans }}</a>
         </div>
     </section>
 
     <section class="panel">
-        <h2>تاريخ العمليات</h2>
+        <h2>{{ 'vehicles.history'|trans }}</h2>
         <div class="data-table">
-            <div class="table-head"><span>التاريخ</span><span>الفاتورة</span><span>العميل</span><span>المبلغ</span></div>
+            <div class="table-head"><span>{{ 'ui.date'|trans }}</span><span>{{ 'billing.invoice'|trans }}</span><span>{{ 'ui.client'|trans }}</span><span>{{ 'ui.amount'|trans }}</span></div>
             {% for operation in operations %}
                 <div>
                     <strong>{{ operation.created_at|date('d/m/Y') }}</strong>
@@ -40,7 +40,7 @@
                     <span>{{ operation.total|number_format(2, ',', ' ') }} DH</span>
                 </div>
             {% else %}
-                <p class="empty-state">لا توجد عمليات لهذه السيارة.</p>
+                <p class="empty-state">{{ 'vehicles.no_operations'|trans }}</p>
             {% endfor %}
         </div>
     </section>

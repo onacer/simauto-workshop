@@ -1,6 +1,6 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}تسجيل الدخول - SIM Auto{% endblock %}
+{% block title %}{{ 'auth.login_title'|trans }} - SIM Auto{% endblock %}
 
 {% block body %}
 <main class="login-screen">
@@ -8,19 +8,19 @@
         <img class="login-logo" src="{{ asset('images/logo-light.png') }}" alt="SIM Auto">
 
         {% if error %}
-            <div class="alert alert-error">{{ error }}</div>
+            <div class="alert alert-error">{{ error|trans }}</div>
         {% endif %}
 
         <form method="post" class="form-stack">
             <label>
-                البريد الإلكتروني
+                {{ 'auth.email'|trans }}
                 <input type="email" name="email" autocomplete="username" required autofocus>
             </label>
             <label>
-                كلمة المرور
+                {{ 'auth.password'|trans }}
                 <input type="password" name="password" autocomplete="current-password" required>
             </label>
-            <button class="btn btn-primary" type="submit">دخول</button>
+            <button class="btn btn-primary" type="submit">{{ 'auth.submit'|trans }}</button>
         </form>
     </section>
 </main>

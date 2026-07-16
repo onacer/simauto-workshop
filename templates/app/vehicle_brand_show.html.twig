@@ -5,25 +5,25 @@
 <main class="main-board">
     <section class="page-head">
         <h1>{{ brand.name }}</h1>
-        <a class="btn btn-dark" href="{{ path('app_vehicle_settings') }}">رجوع</a>
+        <a class="btn btn-dark" href="{{ path('app_vehicle_settings') }}">{{ 'ui.back'|trans }}</a>
     </section>
 
     {% include 'app/_show_info.html.twig' with {rows: [
-        {label: 'الماركة', value: brand.name}
+        {label: 'vehicles.brand'|trans, value: brand.name}
     ]} %}
 
     <section class="panel">
-        <h2>الموديلات</h2>
+        <h2>{{ 'vehicles.models'|trans }}</h2>
         <div class="data-table">
-            <div class="table-head"><span>الموديل</span><span></span><span></span><span>إجراءات</span></div>
+            <div class="table-head"><span>{{ 'vehicles.model'|trans }}</span><span></span><span></span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for model in models %}
                 <div>
                     <strong>{{ model.name }}</strong>
                     <span></span><span></span>
-                    <span class="row-actions"><a href="{{ path('app_vehicle_model_show', {id: model.id}) }}">عرض</a></span>
+                    <span class="row-actions"><a href="{{ path('app_vehicle_model_show', {id: model.id}) }}">{{ 'ui.show'|trans }}</a></span>
                 </div>
             {% else %}
-                <p class="empty-state">لا توجد موديلات مرتبطة بهذه الماركة.</p>
+                <p class="empty-state">{{ 'vehicles.no_brand_models'|trans }}</p>
             {% endfor %}
         </div>
     </section>

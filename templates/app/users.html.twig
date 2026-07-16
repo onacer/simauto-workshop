@@ -1,60 +1,60 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}المستخدمون - SIM Auto{% endblock %}
+{% block title %}{{ 'users.title'|trans }} - SIM Auto{% endblock %}
 
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board">
     <section class="page-head">
-        <h1>المستخدمون</h1>
-        <a class="btn btn-primary" href="{{ path('app_user_new') }}">مستخدم جديد</a>
+        <h1>{{ 'users.title'|trans }}</h1>
+        <a class="btn btn-primary" href="{{ path('app_user_new') }}">{{ 'users.new'|trans }}</a>
     </section>
 
     {% for message in app.flashes('success') %}
-        <div class="alert alert-success">{{ message }}</div>
+        <div class="alert alert-success">{{ message|trans }}</div>
     {% endfor %}
     {% for message in app.flashes('error') %}
-        <div class="alert alert-error">{{ message }}</div>
+        <div class="alert alert-error">{{ message|trans }}</div>
     {% endfor %}
 
     <section class="panel">
         <div class="data-table user-table">
             <div class="table-head">
-                <span>الاسم</span>
-                <span>البريد</span>
-                <span>الدور</span>
-                <span>الحالة</span>
-                <span>تاريخ الإنشاء</span>
-                <span>إجراءات</span>
+                <span>{{ 'ui.name'|trans }}</span>
+                <span>{{ 'ui.email'|trans }}</span>
+                <span>{{ 'users.role'|trans }}</span>
+                <span>{{ 'ui.status'|trans }}</span>
+                <span>{{ 'ui.created_at'|trans }}</span>
+                <span>{{ 'ui.actions'|trans }}</span>
             </div>
             {% for row in users %}
                 <div>
                     <strong>
                         {{ row.name }}
                         {% if row.id == user.id %}
-                            <small class="you-badge">أنت</small>
+                            <small class="you-badge">{{ 'ui.you'|trans }}</small>
                         {% endif %}
                     </strong>
                     <span>{{ row.email }}</span>
                     <span class="badge {{ row.role == 'admin' ? 'badge-admin' : 'badge-manager' }}">
-                        {{ row.role == 'admin' ? 'مدير' : 'مسير' }}
+                        {{ row.role == 'admin' ? 'users.admin'|trans : 'users.manager'|trans }}
                     </span>
                     <span class="badge {{ row.active ? 'badge-active' : 'badge-disabled' }}">
-                        {{ row.active ? 'نشط' : 'غير نشط' }}
+                        {{ row.active ? 'state.active'|trans : 'state.inactive'|trans }}
                     </span>
                     <span>{{ row.created_at ? row.created_at|date('d/m/Y') : '-' }}</span>
                     <span class="row-actions">
-                        <a href="{{ path('app_user_edit', {id: row.id}) }}">تعديل</a>
-                        <a href="{{ path('app_user_password', {id: row.id}) }}">كلمة المرور</a>
+                        <a href="{{ path('app_user_edit', {id: row.id}) }}">{{ 'ui.edit'|trans }}</a>
+                        <a href="{{ path('app_user_password', {id: row.id}) }}">{{ 'nav.password'|trans }}</a>
                         <form method="post" action="{{ path('app_user_toggle', {id: row.id}) }}">
                             <input type="hidden" name="_token" value="{{ toggle_token }}">
-                            <button class="link-button" type="submit">{{ row.active ? 'تعطيل' : 'تفعيل' }}</button>
+                            <button class="link-button" type="submit">{{ row.active ? 'ui.deactivate'|trans : 'ui.activate'|trans }}</button>
                         </form>
                     </span>
                 </div>
             {% else %}
-                <p class="empty-state">لا يوجد مستخدمون.</p>
+                <p class="empty-state">{{ 'users.no_users'|trans }}</p>
             {% endfor %}
         </div>
     </section>

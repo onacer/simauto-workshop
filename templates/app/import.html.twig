@@ -1,35 +1,35 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}الاستيراد - SIM Auto{% endblock %}
+{% block title %}{{ 'import.title'|trans }} - SIM Auto{% endblock %}
 
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board">
     <section class="page-head">
-        <h1>الاستيراد</h1>
-        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">رجوع</a>
+        <h1>{{ 'import.title'|trans }}</h1>
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a>
     </section>
 
     {% for message in app.flashes('error') %}
-        <div class="alert alert-error">{{ message }}</div>
+        <div class="alert alert-error">{{ message|trans }}</div>
     {% endfor %}
 
     <section class="import-grid">
         {% for key, entity in entities %}
             <article class="panel import-card">
-                <h2>{{ entity.label }}</h2>
-                <p>حمّل النموذج، املأه في Excel، ثم ارفعه هنا.</p>
+                <h2>{{ entity.label|trans }}</h2>
+                <p>{{ 'ui.upload_template_hint'|trans }}</p>
                 <div class="row-actions">
-                    <a href="{{ path('app_import_template', {entity: key}) }}">تحميل النموذج</a>
+                    <a href="{{ path('app_import_template', {entity: key}) }}">{{ 'ui.download_template'|trans }}</a>
                 </div>
                 <form class="form-stack" method="post" action="{{ path('app_import_upload', {entity: key}) }}" enctype="multipart/form-data">
                     <input type="hidden" name="_token" value="{{ tokens[key] }}">
                     <label>
-                        ملف CSV
+                        {{ 'ui.file'|trans }}
                         <input type="file" name="file" accept=".csv,text/csv" required>
                     </label>
-                    <button class="btn btn-primary" type="submit">استيراد</button>
+                    <button class="btn btn-primary" type="submit">{{ 'ui.import'|trans }}</button>
                 </form>
             </article>
         {% endfor %}

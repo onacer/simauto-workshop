@@ -617,7 +617,7 @@ SQL);
         $twig->addFunction(new TwigFunction('path', fn (string $route, array $params = []) => '/' . $route . (isset($params['locale']) ? '/' . $params['locale'] : '')));
         $twig->addFunction(new TwigFunction('asset', fn (string $path) => '/assets/' . $path));
         $twig->addFunction(new TwigFunction('can', fn (string $permission, array $user) => $access->can($permission, $user)));
-        $twig->addFilter(new TwigFilter('trans', fn (string $key): string => $key));
+        $twig->addFilter(new TwigFilter('trans', fn (string $key, array $params = []): string => $this->testTrans($key, $params)));
 
         $request = Request::create('/');
         $request->attributes->set('_route', 'app_dashboard');
@@ -652,7 +652,7 @@ SQL);
         $access = new AccessControl();
         $twig->addFunction(new TwigFunction('asset', fn (string $path) => '/assets/' . $path));
         $twig->addFunction(new TwigFunction('can', fn (string $permission, array $user) => $access->can($permission, $user)));
-        $twig->addFilter(new TwigFilter('trans', fn (string $key): string => $key));
+        $twig->addFilter(new TwigFilter('trans', fn (string $key, array $params = []): string => $this->testTrans($key, $params)));
         $twig->addFunction(new TwigFunction('path', function (string $route, array $params = []): string {
             $suffix = isset($params['id']) ? '/' . $params['id'] : (isset($params['locale']) ? '/' . $params['locale'] : '');
             return '/' . $route . $suffix;
@@ -664,6 +664,15 @@ SQL);
         ];
 
         return $twig->render($template, $context);
+    }
+
+    private function testTrans(string $key, array $params = []): string
+    {
+        $translations = [
+            'clients.no_vehicles' => 'لا توجد سيارات لهذا العميل.',
+        ];
+
+        return strtr($translations[$key] ?? $key, $params);
     }
 
     private function company(): array

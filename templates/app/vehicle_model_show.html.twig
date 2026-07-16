@@ -5,12 +5,12 @@
 <main class="main-board">
     <section class="page-head">
         <h1>{{ model.name }}</h1>
-        <a class="btn btn-dark" href="{{ path('app_vehicle_settings') }}">رجوع</a>
+        <a class="btn btn-dark" href="{{ path('app_vehicle_settings') }}">{{ 'ui.back'|trans }}</a>
     </section>
 
     {% include 'app/_show_info.html.twig' with {rows: [
-        {label: 'الماركة', value: model.brand_name},
-        {label: 'الموديل', value: model.name}
+        {label: 'vehicles.brand'|trans, value: model.brand_name},
+        {label: 'vehicles.model'|trans, value: model.name}
     ]} %}
 </main>
 {% endblock %}

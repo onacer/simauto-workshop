@@ -1,35 +1,35 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}الرئيسية - SIM Auto{% endblock %}
+{% block title %}{{ 'nav.dashboard'|trans }} - SIM Auto{% endblock %}
 
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board compact-board">
     {% for message in app.flashes('success') %}
-        <div class="alert alert-success">{{ message }}</div>
+        <div class="alert alert-success">{{ message|trans }}</div>
     {% endfor %}
 
     <section class="home-grid">
         <a class="home-card tone-yellow" href="{{ path('app_products') }}">
             <span>01</span>
-            <strong>إدخال المنتجات</strong>
-            <small>{{ products|length }} منتج</small>
+            <strong>{{ 'dashboard.products'|trans }}</strong>
+            <small>{{ 'dashboard.products_count'|trans({'%count%': products|length}) }}</small>
         </a>
         <a class="home-card tone-black" href="{{ path('app_stock') }}">
             <span>02</span>
-            <strong>المخزون</strong>
-            <small>تتبع الكميات</small>
+            <strong>{{ 'dashboard.stock'|trans }}</strong>
+            <small>{{ 'dashboard.stock_hint'|trans }}</small>
         </a>
         <a class="home-card tone-red" href="{{ path('app_operations') }}">
             <span>03</span>
-            <strong>عمليات المرآب</strong>
-            <small>إصلاحات وخدمات</small>
+            <strong>{{ 'dashboard.operations'|trans }}</strong>
+            <small>{{ 'dashboard.operations_hint'|trans }}</small>
         </a>
         <a class="home-card tone-gold" href="{{ path('app_billing') }}">
             <span>04</span>
-            <strong>الفواتير والإيصالات</strong>
-            <small>{{ operations|length }} عملية</small>
+            <strong>{{ 'dashboard.billing'|trans }}</strong>
+            <small>{{ 'dashboard.operations_count'|trans({'%count%': operations|length}) }}</small>
         </a>
     </section>
 </main>

@@ -1,21 +1,21 @@
 {% extends 'base.html.twig' %}
-{% block title %}تعديل عميل - SIM Auto{% endblock %}
+{% block title %}{{ 'clients.edit'|trans }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 <main class="main-board">
-    <section class="page-head"><h1>تعديل عميل</h1><a class="btn btn-dark" href="{{ path('app_clients') }}">رجوع</a></section>
-    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message }}</div>{% endfor %}
+    <section class="page-head"><h1>{{ 'clients.edit'|trans }}</h1><a class="btn btn-dark" href="{{ path('app_clients') }}">{{ 'ui.back'|trans }}</a></section>
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
     <section class="panel">
         <form method="post" class="form-grid">
-            <label>النوع<select name="type" class="client-type"><option value="individual" {{ client.type == 'individual' ? 'selected' : '' }}>فرد</option><option value="company" {{ client.type == 'company' ? 'selected' : '' }}>شركة</option></select></label>
-            <label>الاسم<input name="name" value="{{ client.name }}" required></label>
-            <label>الهاتف<input name="phone" value="{{ client.phone }}"></label>
-            <label>البريد<input name="email" type="email" value="{{ client.email }}"></label>
-            <label>العنوان<input name="address" value="{{ client.address }}"></label>
+            <label>{{ 'clients.type'|trans }}<select name="type" class="client-type"><option value="individual" {{ client.type == 'individual' ? 'selected' : '' }}>{{ 'clients.individual'|trans }}</option><option value="company" {{ client.type == 'company' ? 'selected' : '' }}>{{ 'clients.company'|trans }}</option></select></label>
+            <label>{{ 'ui.name'|trans }}<input name="name" value="{{ client.name }}" required></label>
+            <label>{{ 'ui.phone'|trans }}<input name="phone" value="{{ client.phone }}"></label>
+            <label>{{ 'ui.email'|trans }}<input name="email" type="email" value="{{ client.email }}"></label>
+            <label>{{ 'ui.address'|trans }}<input name="address" value="{{ client.address }}"></label>
             <label class="company-field">ICE<input name="ice" value="{{ client.ice }}"></label>
             <label class="company-field">IF<input name="vat" value="{{ client.vat }}"></label>
             <label class="company-field">RC<input name="rc" value="{{ client.rc }}"></label>
-            <button class="btn btn-primary" type="submit">تحديث</button>
+            <button class="btn btn-primary" type="submit">{{ 'ui.update'|trans }}</button>
         </form>
     </section>
 </main>
