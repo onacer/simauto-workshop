@@ -162,13 +162,10 @@ select {
     color: #fff;
     background: #050505;
     border-bottom: 4px solid var(--red);
-    direction: ltr;
 }
 
 .topbar-logo {
-    grid-column: 3;
     grid-row: 1;
-    justify-self: end;
     display: inline-flex;
     align-items: center;
     height: 44px;
@@ -194,20 +191,46 @@ select {
     align-items: center;
     justify-content: center;
     gap: 6px;
-    direction: rtl;
 }
 
 .topbar-user {
-    grid-column: 1;
     grid-row: 1;
-    justify-self: start;
     min-width: 0;
     display: flex;
     align-items: center;
     gap: 10px;
     font-weight: 900;
     white-space: nowrap;
+}
+
+html[dir="rtl"] .topbar-logo {
+    grid-column: 3;
+    justify-self: end;
+}
+
+html[dir="rtl"] .topbar-nav {
     direction: rtl;
+}
+
+html[dir="rtl"] .topbar-user {
+    grid-column: 1;
+    justify-self: start;
+    direction: rtl;
+}
+
+html[dir="ltr"] .topbar-logo {
+    grid-column: 1;
+    justify-self: start;
+}
+
+html[dir="ltr"] .topbar-nav {
+    direction: ltr;
+}
+
+html[dir="ltr"] .topbar-user {
+    grid-column: 3;
+    justify-self: end;
+    direction: ltr;
 }
 
 .profile-dropdown {
@@ -304,6 +327,29 @@ select {
 .profile-menu {
     right: auto;
     left: 0;
+}
+
+html[dir="ltr"] .profile-menu {
+    left: auto;
+    right: 0;
+}
+
+.locale-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    color: rgba(255, 255, 255, .72);
+}
+
+.locale-switch a {
+    color: rgba(255, 255, 255, .84);
+    text-decoration: none;
+    font-weight: 900;
+}
+
+.locale-switch a.is-active {
+    color: var(--yellow);
 }
 
 .mobile-menu-toggle {
@@ -978,10 +1024,18 @@ select {
     }
 
     .topbar-logo {
-        grid-column: 2;
-        justify-self: end;
         height: 36px;
         max-width: 130px;
+    }
+
+    html[dir="rtl"] .topbar-logo {
+        grid-column: 2;
+        justify-self: end;
+    }
+
+    html[dir="ltr"] .topbar-logo {
+        grid-column: 1;
+        justify-self: start;
     }
 
     .topbar-logo img {
@@ -990,10 +1044,18 @@ select {
     }
 
     .mobile-menu-toggle {
-        grid-column: 1;
         grid-row: 1;
-        justify-self: start;
         display: block;
+    }
+
+    html[dir="rtl"] .mobile-menu-toggle {
+        grid-column: 1;
+        justify-self: start;
+    }
+
+    html[dir="ltr"] .mobile-menu-toggle {
+        grid-column: 2;
+        justify-self: end;
     }
 
     .topbar-nav,

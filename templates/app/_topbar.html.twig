@@ -59,16 +59,16 @@
     </nav>
 
     <div class="topbar-user">
+        <span class="locale-switch topbar-locale" aria-label="Language">
+            <a href="{{ path('app_locale', {locale: 'ar'}) }}" class="{{ locale == 'ar' ? 'is-active' : '' }}">AR</a>
+            <b>|</b>
+            <a href="{{ path('app_locale', {locale: 'fr'}) }}" class="{{ locale == 'fr' ? 'is-active' : '' }}">FR</a>
+        </span>
         <div class="nav-dropdown profile-dropdown {{ route == 'app_profile_password' ? 'is-current' : '' }}">
             <a class="topbar-item dropdown-toggle profile-toggle" href="{{ path('app_profile_password') }}" aria-expanded="false">
                 <span class="topbar-username">{{ user.name }}</span>
             </a>
             <div class="dropdown-menu profile-menu">
-                <span class="locale-switch">
-                    <a href="{{ path('app_locale', {locale: 'ar'}) }}" class="{{ locale == 'ar' ? 'is-active' : '' }}">AR</a>
-                    <b>|</b>
-                    <a href="{{ path('app_locale', {locale: 'fr'}) }}" class="{{ locale == 'fr' ? 'is-active' : '' }}">FR</a>
-                </span>
                 <a href="{{ path('app_profile_password') }}">{{ 'nav.password'|trans }}</a>
                 <a href="{{ path('app_logout') }}">{{ 'nav.logout'|trans }}</a>
             </div>
