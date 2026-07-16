@@ -82,7 +82,9 @@ final class AppDatabaseTest extends TestCase
         self::assertSame('15428-A-32', $operation['vehicle_real_plate']);
         self::assertSame('VW', $operation['brand_name']);
         self::assertSame('Tiguan', $operation['model_name']);
-        self::assertSame(432.0, (float) $operation['total_ttc']);
+        self::assertSame(360.0, (float) $operation['total_ttc']);
+        self::assertSame(300.0, (float) $operation['subtotal_ht']);
+        self::assertSame(60.0, (float) $operation['vat_amount']);
         self::assertCount(2, $operation['items']);
         self::assertSame('FLT-AIR-001', $operation['items'][0]['product_sku']);
         self::assertSame(3, (int) $pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId)->fetchColumn());

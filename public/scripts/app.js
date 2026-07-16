@@ -130,7 +130,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const totalHtNode = form.querySelector("[data-total-ht]");
         const totalVatNode = form.querySelector("[data-total-vat]");
         const totalTtcNode = form.querySelector("[data-total-ttc]");
-        let totalHt = 0;
+        let totalTtc = 0;
 
         form.querySelectorAll("[data-line]").forEach((line) => {
             const product = line.querySelector(".line-product");
@@ -142,10 +142,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const quantity = Number.parseFloat(qty?.value || "0");
             const unitPrice = Number.parseFloat(price?.value || "0");
             const discountRate = Number.parseFloat(discount?.value || "0");
-            const lineTotal = Math.max(0, quantity * unitPrice * (1 - discountRate / 100));
-            totalHt += lineTotal;
+            const lineTotalTtc = Math.max(0, quantity * unitPrice * (1 - discountRate / 100));
+            const vatRate = Number.parseFloat(vatInput?.value || "20");
+            const divisor = 1 + Math.max(0, vatRate) / 100;
+            const lineTotalHt = divisor > 0 ? lineTotalTtc / divisor : lineTotalTtc;
+            totalTtc += lineTotalTtc;
             if (total) {
-                total.textContent = `${lineTotal.toFixed(2)} DH`;
+                total.textContent = `${lineTotalHt.toFixed(2)} DH`;
             }
 
             product?.addEventListener("change", () => {
@@ -161,10 +164,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         const vatRate = Number.parseFloat(vatInput?.value || "20");
-        const vat = totalHt * (vatRate / 100);
+        const divisor = 1 + Math.max(0, vatRate) / 100;
+        const totalHt = divisor > 0 ? totalTtc / divisor : totalTtc;
+        const vat = totalTtc - totalHt;
         if (totalHtNode) totalHtNode.textContent = `${totalHt.toFixed(2)} DH`;
         if (totalVatNode) totalVatNode.textContent = `${vat.toFixed(2)} DH`;
-        if (totalTtcNode) totalTtcNode.textContent = `${(totalHt + vat).toFixed(2)} DH`;
+        if (totalTtcNode) totalTtcNode.textContent = `${totalTtc.toFixed(2)} DH`;
     };
 
     document.querySelectorAll(".dynamic-operation-form").forEach((form) => {

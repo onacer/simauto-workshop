@@ -532,11 +532,12 @@ class AppDatabase
         }
 
         $lines = $this->buildOperationLines($data);
-        $subtotalHt = round(array_sum(array_column($lines, 'total')), 2);
         $vatRate = (float) ($data['vat_rate'] ?? 20);
         $vatRate = $vatRate >= 0 ? $vatRate : 20;
-        $vatAmount = round($subtotalHt * ($vatRate / 100), 2);
-        $totalTtc = round($subtotalHt + $vatAmount, 2);
+        $totalTtc = round(array_sum(array_column($lines, 'total')), 2);
+        $totals = $this->splitIncludedTax($totalTtc, $vatRate);
+        $subtotalHt = $totals['ht'];
+        $vatAmount = $totals['vat'];
         $paymentMethod = $this->normalizePaymentMethod((string) ($data['payment_method'] ?? 'ESP'));
         $checkNumber = $paymentMethod === 'CHQ' ? trim((string) ($data['check_number'] ?? '')) : '';
 
@@ -599,7 +600,7 @@ class AppDatabase
                     'quantity' => $line['quantity'],
                     'unit_price' => $line['unit_price'],
                     'discount_rate' => $line['discount_rate'],
-                    'total_ht' => $line['total'],
+                    'total_ht' => $this->splitIncludedTax((float) $line['total'], $vatRate)['ht'],
                     'total' => $line['total'],
                 ]);
 
@@ -1186,6 +1187,19 @@ class AppDatabase
         }
 
         return $lines;
+    }
+
+    private function splitIncludedTax(float $totalTtc, float $vatRate): array
+    {
+        $totalTtc = round(max(0, $totalTtc), 2);
+        $factor = 1 + (max(0, $vatRate) / 100);
+        $subtotalHt = $factor > 0 ? round($totalTtc / $factor, 2) : $totalTtc;
+
+        return [
+            'ht' => $subtotalHt,
+            'vat' => round($totalTtc - $subtotalHt, 2),
+            'ttc' => $totalTtc,
+        ];
     }
 
     public function vehicle(int $id): ?array
