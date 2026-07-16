@@ -559,9 +559,9 @@ L'application calcule toujours cote serveur:
 
 Cycle:
 
-1. Devis `quote`: numero `DEV-YYYYMMDD-0001`, aucun mouvement de stock.
-2. Bon de commande `order`: numero `BC-YYYYMMDD-0001`, cree depuis le devis, aucun mouvement de stock.
-3. Facture `invoice`: numero `FAC-YYYYMMDD-0001`, verification du stock, sortie de stock et mouvements `out` dans la meme transaction.
+1. Devis `quote`: numero `DEV/YYYYMM/1`, aucun mouvement de stock.
+2. Bon de commande `order`: numero `BC/YYYYMM/1`, cree depuis le devis, aucun mouvement de stock.
+3. Facture `invoice`: numero `INV/YYYYMM/1`, verification du stock, sortie de stock et mouvements `out` dans la meme transaction.
 
 Un devis peut etre facture directement: l'application cree la commande intermediaire puis la facture. Si le stock est insuffisant au moment de facturer, rien n'est ecrit.
 

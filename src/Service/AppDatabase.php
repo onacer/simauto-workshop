@@ -801,7 +801,13 @@ class AppDatabase
         }
 
         $operation = $this->decorateOperation($operation);
-        $items = $this->pdo->prepare('SELECT * FROM operation_items WHERE operation_id = :id ORDER BY id');
+        $items = $this->pdo->prepare(
+            'SELECT oi.*, p.sku AS product_sku
+             FROM operation_items oi
+             LEFT JOIN products p ON p.id = oi.product_id
+             WHERE oi.operation_id = :id
+             ORDER BY oi.id'
+        );
         $items->execute(['id' => $id]);
         $operation['items'] = $items->fetchAll();
 
@@ -1540,7 +1546,7 @@ SQL);
     {
         $prefix = match ($type) {
             'order' => 'BC',
-            'invoice' => 'FAC',
+            'invoice' => 'INV',
             default => 'DEV',
         };
         $column = match ($type) {
@@ -1548,12 +1554,17 @@ SQL);
             'invoice' => 'invoice_no',
             default => 'quote_no',
         };
-        $date = date('Ymd');
-        $stmt = $this->pdo->prepare("SELECT COUNT(*) + 1 FROM operations WHERE doc_type = :doc_type AND date(created_at) = date('now')");
-        $stmt->execute(['doc_type' => $type]);
+        $period = date('Ym');
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) + 1
+             FROM operations
+             WHERE doc_type = :doc_type
+               AND strftime('%Y%m', created_at) = :period"
+        );
+        $stmt->execute(['doc_type' => $type, 'period' => $period]);
         $next = (int) $stmt->fetchColumn();
         do {
-            $number = $prefix . '-' . $date . '-' . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+            $number = $prefix . '/' . $period . '/' . $next;
             $exists = $this->row("SELECT id FROM operations WHERE invoice_no = :number OR $column = :number", ['number' => $number]);
             $next++;
         } while ($exists);

@@ -23,15 +23,15 @@
         <hr>
         {% for item in operation.items %}
             <div class="ticket-line">
-                <span>{{ item.label }}</span>
+                <span>{% if item.product_sku %}{{ item.product_sku }} - {% endif %}{{ item.label }}</span>
                 <small>{{ item.quantity }} x {{ item.unit_price|number_format(0, ',', ' ') }}</small>
-                <b>{{ item.total|number_format(0, ',', ' ') }} DH</b>
+                <b>{{ item.total_ht|default(item.total)|number_format(0, ',', ' ') }} DH</b>
             </div>
         {% endfor %}
         <hr>
         <div class="receipt-total">
             <span>TOTAL</span>
-            <strong>{{ operation.total|number_format(0, ',', ' ') }} DH</strong>
+            <strong>{{ operation.total_ttc|default(operation.total)|number_format(0, ',', ' ') }} DH</strong>
         </div>
         <div class="receipt-row"><span>Paiement</span><b>{{ operation.payment_label }}</b></div>
         {% if operation.check_number %}

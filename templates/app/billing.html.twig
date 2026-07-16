@@ -16,7 +16,7 @@
             <div class="table-head"><span>الفاتورة</span><span>العميل</span><span>المبلغ</span><span>إجراءات</span></div>
             {% for operation in operations %}
                 <div>
-                    <strong>{{ operation.invoice_no }}</strong>
+                    <strong>{{ operation.document_no|default(operation.invoice_no) }}</strong>
                     <span>{{ operation.client_real_name ?: operation.client_name }}</span>
                     <span>{{ operation.total|number_format(2, ',', ' ') }} DH</span>
                     <span class="row-actions">

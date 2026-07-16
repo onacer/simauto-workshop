@@ -19,7 +19,7 @@
             <label>المنتج
                 <select name="product_id" required>
                     {% for product in products %}
-                        <option value="{{ product.id }}">{{ product.name }} - {{ product.stock_qty }}</option>
+                        <option value="{{ product.id }}">[{{ product.sku }}] {{ product.name }} - {{ product.stock_qty }}</option>
                     {% endfor %}
                 </select>
             </label>
@@ -43,7 +43,7 @@
             <div class="table-head"><span>المنتج</span><span>الحالي</span><span>الحد الأدنى</span><span>الحالة</span></div>
             {% for product in products %}
                 <div>
-                    <strong>{{ product.name }}</strong>
+                    <strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong>
                     <span>{{ product.stock_qty }}</span>
                     <span>{{ product.min_qty }}</span>
                     <span>{{ product.stock_qty <= 0 ? 'نفد' : (product.stock_qty <= product.min_qty ? 'منخفض' : 'متوفر') }}</span>

@@ -59,7 +59,7 @@
                     <select name="line_product_id[]" class="line-product">
                         <option value="" data-price="0" data-name="">سطر حر</option>
                         {% for product in products %}
-                            <option value="{{ product.id }}" data-price="{{ product.sale_price }}" data-name="{{ product.name }}">{{ product.name }} - {{ product.sale_price }} DH</option>
+                            <option value="{{ product.id }}" data-price="{{ product.sale_price }}" data-name="{{ product.name }}">[{{ product.sku }}] {{ product.name }} - {{ product.sale_price }} DH</option>
                         {% endfor %}
                     </select>
                     <input name="line_label[]" class="line-label" placeholder="التسمية">

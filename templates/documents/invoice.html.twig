@@ -64,7 +64,7 @@
             <tbody>
                 {% for item in operation.items %}
                     <tr>
-                        <td>{{ item.label }}</td>
+                        <td>{% if item.product_sku %}{{ item.product_sku }} - {% endif %}{{ item.label }}</td>
                         <td>{{ item.quantity }}</td>
                         <td>{{ item.unit_price > 0 ? item.unit_price|number_format(2, ',', ' ') ~ ' DH' : '' }}</td>
                         <td>{{ item.total_ht|default(item.total) > 0 ? item.total_ht|default(item.total)|number_format(2, ',', ' ') ~ ' DH' : 'GRATUIT' }}</td>
