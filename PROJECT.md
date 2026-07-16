@@ -3,7 +3,7 @@
 ## Objectif
 
 Cette application est une petite application Symfony pour la gestion interne de SIM Auto.
-Elle n'est pas concue comme un site vitrine. C'est une application metier simple, en arabe RTL, centree sur quatre piliers:
+Elle n'est pas concue comme un site vitrine. C'est une application metier simple, bilingue arabe/francais, centree sur quatre piliers:
 
 1. Entree des produits dans le stock.
 2. Gestion et suivi du stock.
@@ -46,7 +46,7 @@ Le service PHP cree automatiquement les dossiers `data` et `var`, ajuste les dro
 Deux roles existent:
 
 - `admin`: acces au dashboard, produits, stock, operations, factures, receipts, categories, parametres vehicules et gestion complete des utilisateurs.
-- `manager`: acces au dashboard, produits, stock, operations, factures et receipts. Le manager peut supprimer les enregistrements non references.
+- `manager`: acces au dashboard, produits, stock, operations, factures, receipts, imports et modification des donnees metier autorisees par la matrice `AccessControl`.
 
 Des comptes initiaux sont crees automatiquement si la table `users` est vide:
 
@@ -479,9 +479,12 @@ L'interface utilise `symfony/translation`.
 
 - Fichiers: `translations/messages.ar.yaml` et `translations/messages.fr.yaml`.
 - Locale par defaut: `ar`.
-- Selecteur `AR | FR` dans le menu profil de la topbar.
+- Selecteur `AR | FR` visible directement dans la topbar.
 - Le choix est conserve en session et dans le cookie `simauto_locale`.
-- `templates/base.html.twig` adapte `lang` et `dir`.
+- `templates/base.html.twig` adapte `lang` et `dir`: arabe en RTL, francais en LTR.
+- La topbar inverse naturellement l'ordre de lecture selon la langue.
+- Les titres, boutons, labels, tableaux, messages vides, alertes connues et pages metier utilisent les cles `|trans`.
+- Les donnees saisies par l'utilisateur, par exemple les noms de categories ou produits, restent dans leur langue d'origine.
 - Les documents imprimes restent en francais LTR.
 
 ### 1. Entree Produit
@@ -514,7 +517,7 @@ Un produit peut etre:
 - `stockable`: gere le stock et les mouvements.
 - `service`: sans stock, jamais bloque par les controles de quantite.
 
-Le formulaire propose une aide de prix par marge `135%`, `145%`, `155%` ou manuel. Le prix de vente HT reste editable.
+Le formulaire propose une aide de prix par marge affichee `35%`, `45%`, `55%` ou manuel. En interne, les valeurs envoyees restent `135`, `145`, `155` pour conserver le calcul existant: prix de vente = prix d'achat x 1.35, 1.45 ou 1.55. Le prix de vente reste editable.
 
 ### 2. Gestion Stock
 
@@ -548,7 +551,7 @@ L'utilisateur cree un devis avec:
 - mode de paiement: `ESP` especes, `CHQ` cheque, `CB` carte/TPE, `VIR` virement,
 - numero de cheque optionnel si le mode est `CHQ`,
 - lignes dynamiques: produit stockable, produit service ou ligne libre,
-- quantite, prix unitaire HT, remise `%`.
+- quantite, prix unitaire TTC, remise `%`.
 
 L'application calcule toujours cote serveur:
 
@@ -556,6 +559,15 @@ L'application calcule toujours cote serveur:
 - `vat_rate`,
 - `vat_amount`,
 - `total_ttc`.
+
+Important: la TVA est incluse dans les prix saisis. L'application n'ajoute donc pas la TVA au total. Elle extrait le HT et la TVA depuis le TTC.
+
+Exemple avec TVA 20%:
+
+- prix saisi / total TTC: `2000.00 DH`,
+- montant HT: `1666.67 DH`,
+- TVA: `333.33 DH`,
+- total a payer: `2000.00 DH`.
 
 Cycle:
 
@@ -578,7 +590,7 @@ Liste les derniers documents et donne deux actions:
 - ouvrir le document imprimable: devis, bon de commande ou facture,
 - ouvrir le receipt.
 
-La facture imprimee reste en francais LTR et affiche le bloc `TOTAL HT / TVA / MT TTC A PAYER`, plus le montant TTC en lettres.
+La facture imprimee reste en francais LTR et affiche le bloc `TOTAL HT / TVA / MT TTC A PAYER`, plus le montant TTC en lettres. Le total TTC correspond au montant saisi; le HT et la TVA sont calcules par extraction de la TVA incluse.
 
 ## Templates
 
@@ -586,8 +598,8 @@ La facture imprimee reste en francais LTR et affiche le bloc `TOTAL HT / TVA / M
 
 Layout HTML principal:
 
-- `lang="ar"`
-- `dir="rtl"`
+- `lang` dynamique selon la locale courante,
+- `dir` dynamique: `rtl` en arabe, `ltr` en francais,
 - charge Google Font Cairo,
 - charge `public/styles/app.css`,
 - charge `public/scripts/app.js`.
@@ -608,13 +620,15 @@ La page ne montre pas les comptes de test et ne contient pas de texte marketing.
 
 Barre de navigation commune:
 
-- logo SIM Auto centre dans la barre,
+- logo SIM Auto dans la zone marque de la barre,
 - lien dashboard toujours visible,
 - menus deroulants par groupes: stock, vehicules, clients, operations, administration,
 - administration affiche l'import pour admin et manager,
 - administration affiche les utilisateurs pour admin seulement,
+- selecteur langue `AR | FR` visible dans la topbar,
+- profil utilisateur en menu dedie avec changement de mot de passe et logout,
 - fermeture des menus au clic exterieur et avec la touche Escape via JS vanilla,
-- nom utilisateur, changement de mot de passe et logout.
+- responsive mobile avec bouton hamburger.
 
 ### `templates/app/index.html.twig`
 
@@ -671,9 +685,10 @@ Page stock:
 Page operations:
 
 - choix client et vehicule,
-- choix des pieces,
-- saisie des services,
-- creation de l'operation.
+- lignes dynamiques produit/service/ligne libre,
+- prix unitaires TTC,
+- extraction HT/TVA/TTC dans la preview,
+- creation du devis.
 
 ### `templates/app/billing.html.twig`
 
@@ -763,8 +778,8 @@ Facture imprimable inspiree du modele SIM Auto fourni:
 - mode de paiement en clair: `ESP`, `CHEQUE`, `CB` ou `VIR`,
 - mention `Cheque N°` quand un numero de cheque est renseigne,
 - tableau designation / quantite / prix / montant,
-- total,
-- net a payer,
+- lignes en montant HT calcule depuis les prix TTC,
+- bloc `MT HT`, `TVA`, `MT TTC A PAYER`,
 - merci pour votre visite,
 - footer avec informations de contact centralisees dans `App\Service\CompanyProfile`,
 - filigrane transparent derriere le contenu.
@@ -839,6 +854,7 @@ Il gere aussi:
 - la fermeture clavier avec Escape,
 - l'affichage conditionnel des champs societe pour les clients.
 - l'affichage conditionnel du champ numero de cheque quand le paiement est `CHQ`.
+- la preview des operations avec prix TTC, extraction HT et TVA incluse.
 
 ## Vues Detail
 
@@ -980,6 +996,7 @@ Tests couverts:
 - creation produit et entree de stock,
 - creation client societe et vehicule,
 - operation garage avec sortie automatique de stock,
+- TVA incluse: le TTC reste le montant saisi, HT et TVA sont extraits du TTC,
 - donnees facture/receipt enrichies avec client et vehicule normalises,
 - titre facture `FACTURE N°` avec numero de facture,
 - paiement cheque stocke et imprime avec numero de cheque,
@@ -1088,8 +1105,11 @@ L'application est fonctionnelle avec:
 - roles admin et manager,
 - gestion complete des utilisateurs,
 - navbar avec menus deroulants,
+- interface bilingue AR/FR sur les ecrans applicatifs,
 - facture conforme au bon papier SIM Auto,
 - titre facture `FACTURE N°`,
+- TVA incluse dans les prix avec extraction HT/TVA sur facture,
+- aide marge affichee 35%, 45%, 55% avec calcul interne conserve,
 - paiement cheque avec numero optionnel,
 - vues detail clients, fournisseurs, vehicules, produits, categories, marques et modeles,
 - fiche client avec vehicules lies et dernieres operations,
