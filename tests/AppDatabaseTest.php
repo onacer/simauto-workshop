@@ -3,6 +3,7 @@
 namespace App\Tests;
 
 use App\Controller\DashboardController;
+use App\Controller\ReportController;
 use App\Service\AccessControl;
 use App\Service\AppDatabase;
 use App\Service\ImportService;
@@ -318,6 +319,116 @@ SQL);
         self::assertStringContainsString('MODE DE PAIEMENT :</b> ESP', $cashHtml);
         self::assertStringNotContainsString('Cheque N°', $cashHtml);
     }
+
+    public function testFinancialMarginsForProductsServicesAndEstimatedLines(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'MARGIN-001',
+            'name' => 'Piece marge',
+            'category_id' => $categoryId,
+            'stock_qty' => 5,
+            'min_qty' => 1,
+            'purchase_price' => 120,
+            'sale_price' => 240,
+        ], 1);
+        $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "MARGIN-001"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'line_product_id' => [$productId, '', ''],
+            'line_label' => ['', 'Service diagnostic', 'Ligne libre'],
+            'line_quantity' => [1, 1, 1],
+            'line_unit_price' => [240, 120, 60],
+            'line_discount' => [0, 0, 0],
+        ], 1);
+        $invoiceId = $db->invoiceDocument($quoteId, 1);
+        $details = $db->getOperationMarginDetails($invoiceId);
+
+        self::assertCount(3, $details['margin_lines']);
+        self::assertSame(100.0, (float) $details['margin_lines'][0]['cost_ht']);
+        self::assertSame(100.0, (float) $details['margin_lines'][0]['margin']);
+        self::assertSame(0.0, (float) $details['margin_lines'][1]['cost_ht']);
+        self::assertSame(100.0, (float) $details['margin_lines'][1]['margin']);
+        self::assertSame(0.0, (float) $details['margin_lines'][2]['cost_ht']);
+        self::assertSame(50.0, (float) $details['margin_lines'][2]['margin']);
+        self::assertTrue((bool) $details['margin_lines'][2]['is_estimated']);
+        self::assertSame(250.0, (float) $details['margin']);
+        self::assertSame(350.0, (float) $details['subtotal_ht']);
+    }
+
+    public function testFinancialSummaryUsesInvoicesOnlyInclusiveDatesAndPaymentBreakdown(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $quoteId = $this->operationWithService($db, 'CHQ', 'CHQ-42');
+        $orderId = $db->confirmQuote($quoteId, 1);
+        $invoiceId = $db->invoiceDocument($orderId, 1);
+        $date = date('Y-m-d');
+
+        $summary = $db->getFinancialSummary($date, $date);
+        $operations = $db->getFinancialOperations($date, $date);
+
+        self::assertSame(1, $summary['invoice_count']);
+        self::assertCount(1, $operations);
+        self::assertSame($invoiceId, (int) $operations[0]['id']);
+        self::assertSame(150.0, (float) $summary['total_ttc']);
+        self::assertSame(125.0, (float) $summary['subtotal_ht']);
+        self::assertSame(25.0, (float) $summary['vat_amount']);
+        self::assertSame(150.0, (float) $summary['payments']['CHQ']['total_ttc']);
+        self::assertSame(1, $summary['payments']['CHQ']['count']);
+        self::assertSame([], $db->getOperationMarginDetails($quoteId));
+    }
+
+    public function testFinancialMarginRateIsProtectedAgainstZeroSubtotal(): void
+    {
+        $db = $this->database();
+        $quoteId = $this->operationWithService($db, 'ESP');
+        $invoiceId = $db->invoiceDocument($quoteId, 1);
+        $db->pdo()->prepare('UPDATE operations SET subtotal_ht = 0, vat_amount = 0, total_ttc = 0, total = 0 WHERE id = :id')->execute(['id' => $invoiceId]);
+        $date = date('Y-m-d');
+
+        $summary = $db->getFinancialSummary($date, $date);
+        $operation = $db->getOperationMarginDetails($invoiceId);
+
+        self::assertSame(0.0, (float) $summary['margin_rate']);
+        self::assertSame(0.0, (float) $operation['margin_rate']);
+    }
+
+    public function testReportPeriodFallbackAndReportPermissions(): void
+    {
+        $controller = new ReportController();
+        $period = $controller->resolvePeriod(Request::create('/reports/finance?preset=custom&from=2026-07-20&to=2026-07-01'));
+        $access = new AccessControl();
+
+        self::assertSame('today', $period['preset']);
+        self::assertTrue($period['invalid']);
+        self::assertTrue($access->can('reports.view', ['role' => 'manager']));
+        self::assertTrue($access->can('reports.view', ['role' => 'admin']));
+    }
+
+    public function testDayReceiptTemplateRendersSeededTotals(): void
+    {
+        $db = $this->database();
+        $invoiceId = $db->invoiceDocument($this->operationWithService($db, 'ESP'), 1);
+        $operation = $db->operation($invoiceId);
+        $date = substr((string) $operation['created_at'], 0, 10);
+        $html = $this->renderTemplate('documents/day_receipt.html.twig', [
+            'report' => $db->getDailySessionReport($date),
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'company' => $this->company(),
+        ]);
+
+        self::assertStringContainsString('CLOTURE DE CAISSE', $html);
+        self::assertStringContainsString($operation['invoice_no'], $html);
+        self::assertStringContainsString('150,00 DH', $html);
+    }
+
     public function testClientShowListsRelatedVehiclesAndEmptyState(): void
     {
         $db = $this->database();
