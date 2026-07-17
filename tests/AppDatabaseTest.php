@@ -320,6 +320,113 @@ SQL);
         self::assertStringNotContainsString('Cheque N°', $cashHtml);
     }
 
+    public function testPrintableQuoteOrderAndInvoiceUseCorrectTitlesAndLegalMentions(): void
+    {
+        $db = $this->database();
+        $quoteId = $this->operationWithService($db, 'ESP');
+        $orderId = $db->confirmQuote($quoteId, 1);
+        $invoiceId = $db->invoiceDocument($orderId, 1);
+
+        $quote = $db->operation($quoteId);
+        $order = $db->operation($orderId);
+        $invoice = $db->operation($invoiceId);
+
+        $quoteHtml = $this->renderTemplate('documents/invoice.html.twig', [
+            'operation' => $quote,
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'company' => $this->company(),
+            'amount_words' => 'cent cinquante dirhams TTC',
+        ]);
+        $orderHtml = $this->renderTemplate('documents/invoice.html.twig', [
+            'operation' => $order,
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'company' => $this->company(),
+            'amount_words' => 'cent cinquante dirhams TTC',
+        ]);
+        $invoiceHtml = $this->renderTemplate('documents/invoice.html.twig', [
+            'operation' => $invoice,
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'company' => $this->company(),
+            'amount_words' => 'cent cinquante dirhams TTC',
+        ]);
+
+        self::assertStringContainsString('DEVIS N° ' . $quote['quote_no'], $quoteHtml);
+        self::assertStringContainsString('Devis valable 30 jours', $quoteHtml);
+        self::assertStringNotContainsString('FACTURE N°', $quoteHtml);
+        self::assertStringContainsString('BON DE COMMANDE N° ' . $order['order_no'], $orderHtml);
+        self::assertStringContainsString('FACTURE N° ' . $invoice['invoice_no'], $invoiceHtml);
+        self::assertStringContainsString('MT TTC A PAYER', $invoiceHtml);
+        self::assertStringContainsString(number_format((float) $invoice['total_ttc'], 2, ',', ' ') . ' DH', $invoiceHtml);
+    }
+
+    public function testBillingShowsReceiptOnlyForInvoices(): void
+    {
+        $db = $this->database();
+        $quoteId = $this->operationWithService($db, 'ESP');
+        $orderId = $db->confirmQuote($quoteId, 1);
+        $invoiceId = $db->invoiceDocument($orderId, 1);
+
+        $html = $this->renderTemplate('app/billing.html.twig', [
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'operations' => [$db->operation($quoteId), $db->operation($orderId), $db->operation($invoiceId)],
+            'products' => [],
+            'metrics' => [],
+            'categories' => [],
+            'suppliers' => [],
+            'clients' => [],
+            'brands' => [],
+            'models' => [],
+            'vehicles' => [],
+        ]);
+
+        self::assertSame(1, substr_count($html, '/app_receipt/'));
+    }
+
+    public function testSearchOperationsFiltersByTextTypePaymentAndInclusiveDates(): void
+    {
+        $db = $this->database();
+        $quoteId = $this->operationWithService($db, 'CHQ', 'CHQ-42');
+        $orderId = $db->confirmQuote($quoteId, 1);
+        $invoiceId = $db->invoiceDocument($orderId, 1);
+        $invoice = $db->operation($invoiceId);
+        $date = substr((string) $invoice['created_at'], 0, 10);
+
+        $byNumber = $db->searchOperations(['q' => $invoice['invoice_no']]);
+        self::assertSame($invoiceId, (int) $byNumber['rows'][0]['id']);
+
+        $byClient = $db->searchOperations(['q' => 'client sim']);
+        self::assertGreaterThanOrEqual(3, $byClient['total']);
+
+        $byType = $db->searchOperations(['doc_type' => 'invoice']);
+        self::assertSame([$invoiceId], array_map('intval', array_column($byType['rows'], 'id')));
+
+        $byPayment = $db->searchOperations(['payment_method' => 'CHQ', 'date_from' => $date, 'date_to' => $date]);
+        self::assertCount(3, $byPayment['rows']);
+        self::assertContains($invoiceId, array_map('intval', array_column($byPayment['rows'], 'id')));
+    }
+
+    public function testOperationShowDisplaysLinesTotalsAndDocumentChain(): void
+    {
+        $db = $this->database();
+        $quoteId = $this->operationWithService($db, 'ESP');
+        $orderId = $db->confirmQuote($quoteId, 1);
+        $invoiceId = $db->invoiceDocument($orderId, 1);
+        $invoice = $db->operation($invoiceId);
+
+        $html = $this->renderTemplate('app/operation_show.html.twig', [
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'operation' => $invoice,
+            'chain' => $db->operationDocumentChain($invoiceId),
+            'back_query' => ['doc_type' => 'invoice'],
+        ]);
+
+        self::assertStringContainsString('FACTURE N° ' . $invoice['invoice_no'], $html);
+        self::assertStringContainsString('DEVIS N°', $html);
+        self::assertStringContainsString('BON DE COMMANDE N°', $html);
+        self::assertStringContainsString('Diagnostic', $html);
+        self::assertStringContainsString('MT TTC', $html);
+    }
+
     public function testFinancialMarginsForProductsServicesAndEstimatedLines(): void
     {
         $db = $this->database();
