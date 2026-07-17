@@ -1,0 +1,83 @@
+{% set doc_no = operation.document_no|default(operation.invoice_no) %}
+<section class="invoice-sheet official-invoice" dir="ltr">
+    <div class="invoice-watermark"></div>
+
+    <header class="invoice-head">
+        <img src="{{ asset('images/logo-invoice.png') }}" alt="SIM Auto">
+        <div>
+            <span>{{ company.service_line_1 }}</span>
+            <span>{{ company.service_line_2 }}</span>
+        </div>
+    </header>
+
+    <h2 class="document-title">{{ operation.document_title }} {{ doc_no }}</h2>
+
+    <section class="invoice-meta">
+        <div>
+            <p><b>CLIENT :</b> {{ operation.client_real_name ?: operation.client_name }}</p>
+            {% if operation.client_ice %}<p><b>ICE :</b> {{ operation.client_ice }}</p>{% endif %}
+            <p><b>DATE :</b> {{ operation.created_at|date('d/m/Y') }}</p>
+            {% if operation.client_real_address ?: operation.client_address %}
+                <p><b>Adresse :</b> {{ operation.client_real_address ?: operation.client_address }}</p>
+            {% endif %}
+        </div>
+        <div>
+            <p><b>IMMATRICULATION :</b> {{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</p>
+            <p><b>MARQUE :</b> {{ operation.brand_name ?: operation.vehicle_brand }}</p>
+            <p><b>MODELE :</b> {{ operation.model_name ?: operation.vehicle_model }}</p>
+            <p><b>MODE DE PAIEMENT :</b> {{ operation.payment_label }}</p>
+            {% if operation.check_number %}
+                <p><b>Cheque N° :</b> {{ operation.check_number }}</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <table class="invoice-table">
+        <thead>
+            <tr>
+                <th>DESIGNATION</th>
+                <th>QUANTITE</th>
+                <th>PRIX UNITE</th>
+                <th>MONTANT</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in operation.items %}
+                <tr>
+                    <td>{% if item.product_sku %}{{ item.product_sku }} - {% endif %}{{ item.label }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ item.unit_price > 0 ? item.unit_price|number_format(2, ',', ' ') ~ ' DH' : '' }}</td>
+                    <td>{{ item.total_ht|default(item.total) > 0 ? item.total_ht|default(item.total)|number_format(2, ',', ' ') ~ ' DH' : 'GRATUIT' }}</td>
+                </tr>
+            {% endfor %}
+            <tr class="total-row">
+                <td colspan="3">TOTAL</td>
+                <td>{{ operation.subtotal_ht|number_format(2, ',', ' ') }} DH</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="invoice-totals">
+        <div><span>MT HT</span><strong>{{ operation.subtotal_ht|number_format(2, ',', ' ') }} DH</strong></div>
+        <div><span>TVA {{ operation.vat_rate|number_format(0) }}%</span><strong>{{ operation.vat_amount|number_format(2, ',', ' ') }} DH</strong></div>
+        <div><span>MT TTC A PAYER</span><strong>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</strong></div>
+    </div>
+
+    <p class="legal-amount">
+        {{ operation.amount_intro }}
+        {{ amount_words|default('') }}.
+    </p>
+
+    {% if operation.legal_notice %}
+        <p class="legal-notice">{{ operation.legal_notice }}</p>
+    {% endif %}
+
+    <p class="invoice-thanks">Cachet et Signature</p>
+
+    <footer class="invoice-footer">
+        <span>Contact : {{ company.contact }}</span>
+        <span>Adresse : {{ company.address }}</span>
+        <span>IF : {{ company.if }} - PT : {{ company.pt }} - ICE : {{ company.ice }} - RC : {{ company.rc }}</span>
+        <span>{{ company.email }}</span>
+    </footer>
+</section>

@@ -640,6 +640,70 @@ class AppDatabase
         return array_map(fn (array $operation): array => $this->decorateOperation($operation), $operations);
     }
 
+    public function searchOperations(array $filters): array
+    {
+        $where = ['o.doc_type IN ("quote", "order", "invoice")'];
+        $params = [];
+
+        $q = mb_strtolower(trim((string) ($filters['q'] ?? '')));
+        if ($q !== '') {
+            $where[] = '(lower(COALESCE(o.invoice_no, "")) LIKE :q
+                OR lower(COALESCE(o.quote_no, "")) LIKE :q
+                OR lower(COALESCE(o.order_no, "")) LIKE :q
+                OR lower(COALESCE(c.name, o.client_name, "")) LIKE :q
+                OR lower(COALESCE(v.plate, o.vehicle_plate, "")) LIKE :q)';
+            $params['q'] = '%' . $q . '%';
+        }
+
+        $docType = (string) ($filters['doc_type'] ?? '');
+        if (in_array($docType, ['quote', 'order', 'invoice'], true)) {
+            $where[] = 'o.doc_type = :doc_type';
+            $params['doc_type'] = $docType;
+        }
+
+        $paymentMethod = $this->normalizePaymentMethod((string) ($filters['payment_method'] ?? ''));
+        if (in_array((string) ($filters['payment_method'] ?? ''), ['ESP', 'CHQ', 'CB', 'VIR'], true)) {
+            $where[] = 'o.payment_method = :payment_method';
+            $params['payment_method'] = $paymentMethod;
+        }
+
+        if (($filters['date_from'] ?? '') !== '') {
+            $where[] = 'DATE(o.created_at) >= :date_from';
+            $params['date_from'] = (string) $filters['date_from'];
+        }
+
+        if (($filters['date_to'] ?? '') !== '') {
+            $where[] = 'DATE(o.created_at) <= :date_to';
+            $params['date_to'] = (string) $filters['date_to'];
+        }
+
+        $whereSql = implode(' AND ', $where);
+        $count = $this->pdo->prepare('SELECT COUNT(*) FROM operations o LEFT JOIN clients c ON c.id = o.client_id LEFT JOIN vehicles v ON v.id = o.vehicle_id WHERE ' . $whereSql);
+        $count->execute($params);
+        $total = (int) $count->fetchColumn();
+
+        $stmt = $this->pdo->prepare(
+            'SELECT o.id, o.doc_type, o.invoice_no, o.quote_no, o.order_no, o.created_at,
+                    COALESCE(c.name, o.client_name) AS client_name,
+                    COALESCE(v.plate, o.vehicle_plate) AS vehicle_plate,
+                    o.payment_method, o.total_ttc, o.total, o.status
+             FROM operations o
+             LEFT JOIN clients c ON c.id = o.client_id
+             LEFT JOIN vehicles v ON v.id = o.vehicle_id
+             WHERE ' . $whereSql . '
+             ORDER BY o.created_at DESC, o.id DESC
+             LIMIT 200'
+        );
+        $stmt->execute($params);
+        $rows = array_map(fn (array $operation): array => $this->decorateOperation($operation), $stmt->fetchAll());
+
+        return [
+            'rows' => $rows,
+            'total' => $total,
+            'limited' => $total > 200,
+        ];
+    }
+
     public function getFinancialSummary(string $dateFrom, string $dateTo): array
     {
         $operations = $this->getFinancialOperations($dateFrom, $dateTo);
@@ -931,6 +995,61 @@ class AppDatabase
         $operation['items'] = $items->fetchAll();
 
         return $operation;
+    }
+
+    public function operationDocumentChain(int $id): array
+    {
+        $operation = $this->operation($id);
+        if (!$operation) {
+            return ['parents' => [], 'children' => []];
+        }
+
+        $parents = [];
+        $parentId = (int) ($operation['parent_id'] ?? 0);
+        while ($parentId > 0) {
+            $parent = $this->operationSummary($parentId);
+            if (!$parent) {
+                break;
+            }
+            array_unshift($parents, $parent);
+            $parentId = (int) ($parent['parent_id'] ?? 0);
+        }
+
+        return [
+            'parents' => $parents,
+            'children' => $this->operationChildren($id),
+        ];
+    }
+
+    private function operationSummary(int $id): ?array
+    {
+        $operation = $this->row(
+            'SELECT id, doc_type, invoice_no, quote_no, order_no, parent_id, created_at, status, total_ttc, total
+             FROM operations
+             WHERE id = :id',
+            ['id' => $id]
+        );
+
+        return $operation ? $this->decorateOperation($operation) : null;
+    }
+
+    private function operationChildren(int $id): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, doc_type, invoice_no, quote_no, order_no, parent_id, created_at, status, total_ttc, total
+             FROM operations
+             WHERE parent_id = :id
+             ORDER BY id'
+        );
+        $stmt->execute(['id' => $id]);
+        $children = [];
+        foreach ($stmt->fetchAll() as $child) {
+            $child = $this->decorateOperation($child);
+            $child['children'] = $this->operationChildren((int) $child['id']);
+            $children[] = $child;
+        }
+
+        return $children;
     }
 
     public function clientVehicles(int $clientId): array
@@ -1447,6 +1566,21 @@ class AppDatabase
             'quote' => $operation['quote_no'] ?: $operation['invoice_no'],
             'order' => $operation['order_no'] ?: $operation['invoice_no'],
             default => $operation['invoice_no'],
+        };
+        $operation['document_title'] = match ($operation['doc_type']) {
+            'quote' => 'DEVIS N°',
+            'order' => 'BON DE COMMANDE N°',
+            default => 'FACTURE N°',
+        };
+        $operation['amount_intro'] = match ($operation['doc_type']) {
+            'quote' => 'Arrete le present devis a la somme de :',
+            'order' => 'Arrete le present bon de commande a la somme de :',
+            default => 'Arretee la presente facture a la somme de :',
+        };
+        $operation['legal_notice'] = match ($operation['doc_type']) {
+            'quote' => 'Devis valable 30 jours',
+            'order' => 'Bon de commande',
+            default => '',
         };
         $operation['subtotal_ht'] = (float) ($operation['subtotal_ht'] ?? ((float) ($operation['total'] ?? 0) / 1.2));
         $operation['vat_rate'] = (float) ($operation['vat_rate'] ?? 20);
