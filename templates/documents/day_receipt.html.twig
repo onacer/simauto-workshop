@@ -1,0 +1,42 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Cloture {{ report.date }} - SIM Auto{% endblock %}
+
+{% block body %}
+<main class="receipt-page">
+    <div class="doc-actions">
+        <a class="btn btn-dark" href="{{ path('app_report_finance', {preset: 'custom', from: report.date, to: report.date}) }}">Rapport</a>
+        <button class="btn btn-primary" onclick="window.print()">Imprimer</button>
+    </div>
+
+    <section class="receipt-ticket day-closing-ticket" dir="ltr">
+        <img src="{{ asset('images/logo-invoice.png') }}" alt="SIM Auto">
+        <h1>CLOTURE DE CAISSE</h1>
+        <p>{{ report.date|date('d/m/Y') }}</p>
+        <p>Imprime le {{ report.printed_at|date('d/m/Y H:i') }}</p>
+        <p>{{ user.name }}</p>
+        <hr>
+        <div class="receipt-row"><span>Factures</span><b>{{ report.summary.invoice_count }}</b></div>
+        <div class="receipt-row"><span>Total TTC</span><b>{{ report.summary.total_ttc|number_format(2, ',', ' ') }} DH</b></div>
+        <div class="receipt-row"><span>Total HT</span><b>{{ report.summary.subtotal_ht|number_format(2, ',', ' ') }} DH</b></div>
+        <div class="receipt-row"><span>TVA</span><b>{{ report.summary.vat_amount|number_format(2, ',', ' ') }} DH</b></div>
+        <div class="receipt-row"><span>TOTAL MARGE</span><b>{{ report.summary.total_margin|number_format(2, ',', ' ') }} DH</b></div>
+        <hr>
+        {% for method, payment in report.summary.payments %}
+            <div class="receipt-row"><span>{{ method }}</span><b>{{ payment.total_ttc|number_format(2, ',', ' ') }} DH</b></div>
+        {% endfor %}
+        <hr>
+        {% for operation in report.operations %}
+            <div class="ticket-line">
+                <span>{{ operation.invoice_no }}</span>
+                <small>{{ operation.client_display_name }}</small>
+                <b>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</b>
+            </div>
+        {% else %}
+            <p>Aucune facture</p>
+        {% endfor %}
+        <hr>
+        <p>{{ company.contact }}</p>
+    </section>
+</main>
+{% endblock %}
