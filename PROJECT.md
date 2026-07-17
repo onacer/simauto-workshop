@@ -8,7 +8,7 @@ Elle n'est pas concue comme un site vitrine. C'est une application metier simple
 1. Entree des produits dans le stock.
 2. Gestion et suivi du stock.
 3. Creation des operations de garage: reparations, services, pieces.
-4. Cycle devis -> bon de commande -> facture, avec TVA et impression des receipts.
+4. Cycle devis -> bon de commande -> facture, avec TVA, reporting financier et impression des receipts.
 
 L'application utilise une interface volontairement simple: login minimal, tableau de bord avec quatre grandes entrees, puis une page dediee par module.
 
@@ -228,6 +228,9 @@ Routes principales:
 - `GET /stock`: page de gestion du stock.
 - `GET /operations`: page de creation d'une operation garage.
 - `GET /billing`: page des factures et receipts.
+- `GET /reports/finance`: situation financiere jour, semaine, mois ou periode libre.
+- `GET /reports/finance/operation/{id}`: detail de marge d'une facture.
+- `GET /reports/finance/day-receipt`: ticket de cloture journalier 80 mm.
 - `GET /clients/{id}`: fiche client avec vehicules et dernieres operations.
 - `GET /suppliers/{id}`: fiche fournisseur avec dernieres entrees stock.
 - `GET /vehicles/{id}`: fiche vehicule avec client proprietaire et historique operations.
@@ -471,6 +474,83 @@ Champs:
 - `total_ht`
 - `total`
 
+## Reporting Financier
+
+Le module de situation financiere est accessible depuis:
+
+```text
+/reports/finance
+```
+
+Il est accessible aux roles `admin` et `manager` via la capacite:
+
+```text
+reports.view
+```
+
+Routes:
+
+- `GET /reports/finance`: tableau de bord financier.
+- `GET /reports/finance/operation/{id}`: detail des marges d'une facture.
+- `GET /reports/finance/day-receipt?date=Y-m-d`: ticket de cloture de caisse.
+
+Filtres disponibles:
+
+- `today`: jour courant.
+- `week`: semaine courante du lundi au dimanche.
+- `month`: mois courant.
+- `custom`: periode libre avec `from` et `to` au format `Y-m-d`.
+
+Si les dates custom sont invalides ou inversees, l'application revient au jour courant et affiche un avertissement.
+
+Le reporting ne compte que les operations:
+
+```sql
+doc_type = 'invoice'
+```
+
+Les devis et bons de commande sont exclus du chiffre d'affaires et de la marge.
+
+### Regles de marge
+
+Tous les prix stockes sont TTC. Le reporting travaille avec le HT extrait depuis le TTC et le taux TVA de l'operation.
+
+Pour chaque ligne de facture:
+
+- Produit stockable lie a un produit existant:
+  - `cout_ht = (purchase_price / (1 + vat_rate / 100)) * quantity`
+  - `marge = total_ht - cout_ht`
+- Service ou produit de type `service`:
+  - `cout_ht = 0`
+  - `marge = total_ht`
+- Ligne libre ou produit supprime:
+  - `cout_ht = 0`
+  - `marge = total_ht`
+  - ligne marquee comme estimee.
+
+Le cout utilise le `purchase_price` actuel du produit. Il n'y a pas d'historique de cout dans cette iteration.
+
+Le taux de marge est:
+
+```text
+marge / subtotal_ht * 100
+```
+
+avec protection contre la division par zero.
+
+Le ticket de cloture journalier est un document imprime en francais LTR, format 80 mm, avec:
+
+- date de la journee,
+- horodatage d'impression,
+- utilisateur,
+- nombre de factures,
+- total TTC,
+- total HT,
+- TVA,
+- ventilation par mode de paiement,
+- total marge,
+- liste compacte des factures.
+
 ## Flux Metier
 
 ## Internationalisation
@@ -698,6 +778,26 @@ Page facturation:
 - lien facture,
 - lien receipt.
 
+### `templates/app/report_finance.html.twig`
+
+Page situation financiere:
+
+- filtres jour, semaine, mois et periode libre,
+- cartes KPI: CA TTC, total HT, TVA, marge, taux de marge, nombre de factures,
+- ventilation par mode de paiement,
+- tableau des factures de la periode,
+- lien vers le detail marge de chaque facture,
+- bouton ticket de cloture quand la periode correspond a un seul jour.
+
+### `templates/app/report_finance_operation.html.twig`
+
+Detail marge d'une facture:
+
+- informations facture,
+- lignes avec type, quantite, PU TTC, total HT, cout HT, marge et taux,
+- badge estime pour les lignes libres ou produits introuvables,
+- totaux de facture.
+
 ### `templates/app/users.html.twig`
 
 Page reservee admin.
@@ -799,6 +899,18 @@ Ticket receipt format petite imprimante:
 - mode de paiement.
 - numero de cheque quand renseigne.
 
+### `templates/documents/day_receipt.html.twig`
+
+Ticket de cloture de caisse:
+
+- document francais LTR,
+- format petite imprimante 80 mm,
+- logo,
+- totaux du jour,
+- ventilation paiement,
+- marge totale,
+- liste compacte des factures.
+
 ## Assets Publics
 
 ### `public/images/logo-light.png`
@@ -855,6 +967,7 @@ Il gere aussi:
 - l'affichage conditionnel des champs societe pour les clients.
 - l'affichage conditionnel du champ numero de cheque quand le paiement est `CHQ`.
 - la preview des operations avec prix TTC, extraction HT et TVA incluse.
+- l'affichage du formulaire dates quand le preset reporting est `custom`.
 
 ## Vues Detail
 
@@ -924,6 +1037,7 @@ Admin:
 - acces total;
 - utilisateurs;
 - imports;
+- rapports financiers;
 - creation, modification et desactivation des produits, categories, fournisseurs;
 - clients, vehicules, marques, modeles;
 - operations, factures et receipts.
@@ -935,6 +1049,7 @@ Manager:
 - clients;
 - vehicules, marques, modeles;
 - imports;
+- rapports financiers;
 - operations, factures et receipts;
 - changement de son mot de passe.
 
@@ -1020,7 +1135,17 @@ Tests couverts:
 - rejet headers CSV invalides,
 - erreurs de ligne import sans annuler les lignes valides,
 - resolution marque/modele insensible a la casse,
-- matrice de droits admin/manager.
+- matrice de droits admin/manager,
+- calcul marge produit stockable avec cout achat HT extrait du TTC,
+- marge service a 100% du total HT,
+- ligne libre marquee estimee,
+- synthese financiere sur factures uniquement,
+- periode custom inclusive,
+- fallback sur aujourd'hui en cas de dates inversees,
+- ventilation par mode de paiement,
+- protection division par zero du taux de marge,
+- acces reporting admin et manager,
+- rendu ticket de cloture.
 
 ## Securite Utilisateurs
 
@@ -1109,6 +1234,9 @@ L'application est fonctionnelle avec:
 - facture conforme au bon papier SIM Auto,
 - titre facture `FACTURE N°`,
 - TVA incluse dans les prix avec extraction HT/TVA sur facture,
+- situation financiere jour/semaine/mois/periode libre,
+- calcul marge par facture et par ligne,
+- ticket de cloture journalier 80 mm,
 - aide marge affichee 35%, 45%, 55% avec calcul interne conserve,
 - paiement cheque avec numero optionnel,
 - vues detail clients, fournisseurs, vehicules, produits, categories, marques et modeles,
