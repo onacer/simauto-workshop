@@ -227,6 +227,8 @@ Routes principales:
 - `GET /products/{id}`: fiche detail produit.
 - `GET /stock`: page de gestion du stock.
 - `GET /operations`: page de creation d'une operation garage.
+- `GET /operations/history`: historique filtrable des devis, bons de commande et factures.
+- `GET /operations/{id}`: fiche detail lecture seule d'une operation avec lignes, totaux et chaine documentaire.
 - `GET /billing`: page des factures et receipts.
 - `GET /reports/finance`: situation financiere jour, semaine, mois ou periode libre.
 - `GET /reports/finance/operation/{id}`: detail de marge d'une facture.
@@ -252,8 +254,9 @@ Routes d'action:
 
 Routes documentaires:
 
-- `GET /invoice/{id}`: affiche une facture imprimable.
-- `GET /receipt/{id}`: affiche un ticket receipt imprimable.
+- `GET /document/{id}`: affiche le document imprimable universel selon son type: devis, bon de commande ou facture.
+- `GET /invoice/{id}`: alias historique de `/document/{id}` conserve pour compatibilite.
+- `GET /receipt/{id}`: affiche un ticket receipt imprimable, uniquement pour les factures.
 
 Chaque route verifie la session avec la methode privee:
 
@@ -665,12 +668,55 @@ Page:
 /billing
 ```
 
-Liste les derniers documents et donne deux actions:
+Liste les derniers documents et donne les actions:
 
+- afficher la fiche detail de l'operation,
 - ouvrir le document imprimable: devis, bon de commande ou facture,
-- ouvrir le receipt.
+- ouvrir le receipt uniquement pour une facture.
 
-La facture imprimee reste en francais LTR et affiche le bloc `TOTAL HT / TVA / MT TTC A PAYER`, plus le montant TTC en lettres. Le total TTC correspond au montant saisi; le HT et la TVA sont calcules par extraction de la TVA incluse.
+Le document imprime reste en francais LTR et utilise le meme gabarit A4 pour les trois types:
+
+- devis: `DEVIS N° {quote_no}` avec mention `Devis valable 30 jours`;
+- bon de commande: `BON DE COMMANDE N° {order_no}`;
+- facture: `FACTURE N° {invoice_no}`.
+
+Les trois documents affichent logo, blocs client et vehicule, tableau lignes, `MT HT`, `TVA`, `MT TTC A PAYER`, montant TTC en lettres, filigrane et footer `CompanyProfile`. Le total TTC correspond au montant saisi; le HT et la TVA sont calcules par extraction de la TVA incluse.
+
+### 5. Historique Operations
+
+Page:
+
+```text
+/operations/history
+```
+
+L'historique affiche tous les documents `quote`, `order` et `invoice` avec un badge distinctif.
+
+Filtres serveur:
+
+- recherche texte sur numero de devis, bon de commande, facture, client ou immatriculation;
+- type de document: devis, bon de commande, facture ou tous;
+- dates inclusives `from` et `to` sur la date de creation;
+- mode de paiement: `ESP`, `CHQ`, `CB`, `VIR`.
+
+Les dates invalides ou inversees sont ignorees avec un avertissement, sans planter la page. La liste est triee par date descendante et limitee a 200 lignes, avec compteur total.
+
+### 6. Detail Operation
+
+Page:
+
+```text
+/operations/{id}
+```
+
+La fiche detail affiche:
+
+- type de document, numero, date, statut, client, vehicule, paiement et numero de cheque;
+- lignes: designation, type, quantite, prix unitaire TTC, remise, total HT;
+- totaux: `MT HT`, `TVA`, `MT TTC`;
+- liens client et vehicule;
+- chaine documentaire via `parent_id`: devis, bon de commande et facture lies;
+- boutons imprimer, receipt pour facture seulement, et retour vers l'historique.
 
 ## Templates
 
@@ -768,7 +814,27 @@ Page operations:
 - lignes dynamiques produit/service/ligne libre,
 - prix unitaires TTC,
 - extraction HT/TVA/TTC dans la preview,
-- creation du devis.
+- creation du devis,
+- lien vers l'historique des operations.
+
+### `templates/app/operations_history.html.twig`
+
+Historique filtrable des documents:
+
+- barre de recherche,
+- filtres type, dates et paiement,
+- tableau avec badges de type,
+- actions afficher, imprimer et receipt pour factures.
+
+### `templates/app/operation_show.html.twig`
+
+Fiche detail lecture seule d'une operation:
+
+- informations principales,
+- lignes,
+- totaux,
+- liens client/vehicule,
+- chaine documentaire devis -> bon de commande -> facture.
 
 ### `templates/app/billing.html.twig`
 
@@ -867,11 +933,17 @@ Page admin pour ajouter marques et modeles de vehicules.
 
 ### `templates/documents/invoice.html.twig`
 
-Facture imprimable inspiree du modele SIM Auto fourni:
+Page document imprimable inspiree du modele SIM Auto fourni. Elle utilise le partiel commun:
+
+```text
+templates/documents/_operation_doc.html.twig
+```
+
+Le partiel rend le document A4 pour:
 
 - logo officiel `public/images/logo-invoice.png`,
 - en-tete conforme au bon papier: logo a gauche, services a droite,
-- titre `FACTURE N° {invoice_no}`,
+- titre dynamique `DEVIS N°`, `BON DE COMMANDE N°` ou `FACTURE N°`,
 - document en francais LTR,
 - bloc client a gauche,
 - bloc vehicule a droite,
@@ -883,6 +955,8 @@ Facture imprimable inspiree du modele SIM Auto fourni:
 - merci pour votre visite,
 - footer avec informations de contact centralisees dans `App\Service\CompanyProfile`,
 - filigrane transparent derriere le contenu.
+
+La facture garde le meme rendu visuel que l'ancien template; seul le HTML commun a ete factorise pour eviter la duplication entre devis, commande et facture.
 
 ### `templates/documents/receipt.html.twig`
 
@@ -1145,7 +1219,11 @@ Tests couverts:
 - ventilation par mode de paiement,
 - protection division par zero du taux de marge,
 - acces reporting admin et manager,
-- rendu ticket de cloture.
+- rendu ticket de cloture,
+- rendu document devis/commande/facture via le partiel commun,
+- recherche historique par texte, type, paiement et dates inclusives,
+- absence de receipt sur devis et bon de commande,
+- fiche detail operation avec liens parent/enfant.
 
 ## Securite Utilisateurs
 
@@ -1235,6 +1313,9 @@ L'application est fonctionnelle avec:
 - titre facture `FACTURE N°`,
 - TVA incluse dans les prix avec extraction HT/TVA sur facture,
 - situation financiere jour/semaine/mois/periode libre,
+- historique des operations avec filtres,
+- document imprimable universel `/document/{id}`,
+- fiche detail operation `/operations/{id}`,
 - calcul marge par facture et par ligne,
 - ticket de cloture journalier 80 mm,
 - aide marge affichee 35%, 45%, 55% avec calcul interne conserve,
