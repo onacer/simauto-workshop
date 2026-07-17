@@ -27,6 +27,7 @@ class AccessControl
             'vehicle_settings',
             'operations',
             'billing',
+            'reports.view',
             'imports',
             'edit',
             'create',
