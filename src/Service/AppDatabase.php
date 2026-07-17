@@ -640,6 +640,124 @@ class AppDatabase
         return array_map(fn (array $operation): array => $this->decorateOperation($operation), $operations);
     }
 
+    public function getFinancialSummary(string $dateFrom, string $dateTo): array
+    {
+        $operations = $this->getFinancialOperations($dateFrom, $dateTo);
+        $paymentMethods = $this->emptyPaymentBreakdown();
+        $summary = [
+            'invoice_count' => count($operations),
+            'total_ttc' => 0.0,
+            'subtotal_ht' => 0.0,
+            'vat_amount' => 0.0,
+            'total_cost_ht' => 0.0,
+            'total_margin' => 0.0,
+            'margin_rate' => 0.0,
+            'payments' => $paymentMethods,
+        ];
+
+        foreach ($operations as $operation) {
+            $summary['total_ttc'] += (float) $operation['total_ttc'];
+            $summary['subtotal_ht'] += (float) $operation['subtotal_ht'];
+            $summary['vat_amount'] += (float) $operation['vat_amount'];
+            $summary['total_cost_ht'] += (float) $operation['cost_ht'];
+            $summary['total_margin'] += (float) $operation['margin'];
+            $method = $this->normalizePaymentMethod((string) ($operation['payment_method'] ?? 'ESP'));
+            $summary['payments'][$method]['count']++;
+            $summary['payments'][$method]['total_ttc'] += (float) $operation['total_ttc'];
+        }
+
+        foreach ($summary['payments'] as $method => $payment) {
+            $summary['payments'][$method]['total_ttc'] = round((float) $payment['total_ttc'], 2);
+        }
+
+        $summary['total_ttc'] = round($summary['total_ttc'], 2);
+        $summary['subtotal_ht'] = round($summary['subtotal_ht'], 2);
+        $summary['vat_amount'] = round($summary['vat_amount'], 2);
+        $summary['total_cost_ht'] = round($summary['total_cost_ht'], 2);
+        $summary['total_margin'] = round($summary['total_margin'], 2);
+        $summary['margin_rate'] = $summary['subtotal_ht'] > 0 ? round(($summary['total_margin'] / $summary['subtotal_ht']) * 100, 2) : 0.0;
+
+        return $summary;
+    }
+
+    public function getFinancialOperations(string $dateFrom, string $dateTo): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT o.id, o.invoice_no, o.doc_type, o.created_at, o.client_name, o.vehicle_plate, o.payment_method,
+                    o.subtotal_ht, o.vat_rate, o.vat_amount, o.total_ttc, o.total,
+                    c.name AS client_real_name, v.plate AS vehicle_real_plate
+             FROM operations o
+             LEFT JOIN clients c ON c.id = o.client_id
+             LEFT JOIN vehicles v ON v.id = o.vehicle_id
+             WHERE o.doc_type = "invoice"
+               AND DATE(o.created_at) >= :date_from
+               AND DATE(o.created_at) <= :date_to
+             ORDER BY o.created_at DESC, o.id DESC'
+        );
+        $stmt->execute(['date_from' => $dateFrom, 'date_to' => $dateTo]);
+        $operations = $stmt->fetchAll();
+        if (!$operations) {
+            return [];
+        }
+
+        $linesByOperation = $this->financialLinesForOperations(array_column($operations, 'id'));
+        foreach ($operations as &$operation) {
+            $operation = $this->decorateOperation($operation);
+            $lines = $linesByOperation[(int) $operation['id']] ?? [];
+            $totals = $this->financialTotalsForLines($lines, (float) $operation['vat_rate']);
+            $operation['client_display_name'] = $operation['client_real_name'] ?: $operation['client_name'];
+            $operation['vehicle_display_plate'] = $operation['vehicle_real_plate'] ?: $operation['vehicle_plate'];
+            $operation['cost_ht'] = $totals['cost_ht'];
+            $operation['margin'] = $totals['margin'];
+            $operation['margin_rate'] = (float) $operation['subtotal_ht'] > 0 ? round(($totals['margin'] / (float) $operation['subtotal_ht']) * 100, 2) : 0.0;
+            $operation['has_estimated_lines'] = $totals['has_estimated_lines'];
+        }
+        unset($operation);
+
+        return $operations;
+    }
+
+    public function getOperationMarginDetails(int $operationId): array
+    {
+        $operation = $this->row(
+            'SELECT o.*, c.name AS client_real_name, v.plate AS vehicle_real_plate
+             FROM operations o
+             LEFT JOIN clients c ON c.id = o.client_id
+             LEFT JOIN vehicles v ON v.id = o.vehicle_id
+             WHERE o.id = :id AND o.doc_type = "invoice"',
+            ['id' => $operationId]
+        );
+        if (!$operation) {
+            return [];
+        }
+
+        $operation = $this->decorateOperation($operation);
+        $operation['client_display_name'] = $operation['client_real_name'] ?: $operation['client_name'];
+        $operation['vehicle_display_plate'] = $operation['vehicle_real_plate'] ?: $operation['vehicle_plate'];
+        $lines = $this->financialLinesForOperations([$operationId])[$operationId] ?? [];
+        $operation['margin_lines'] = array_map(
+            fn (array $line): array => $this->decorateFinancialLine($line, (float) $operation['vat_rate']),
+            $lines
+        );
+        $totals = $this->financialTotalsForLines($lines, (float) $operation['vat_rate']);
+        $operation['cost_ht'] = $totals['cost_ht'];
+        $operation['margin'] = $totals['margin'];
+        $operation['margin_rate'] = (float) $operation['subtotal_ht'] > 0 ? round(($totals['margin'] / (float) $operation['subtotal_ht']) * 100, 2) : 0.0;
+        $operation['has_estimated_lines'] = $totals['has_estimated_lines'];
+
+        return $operation;
+    }
+
+    public function getDailySessionReport(string $date): array
+    {
+        return [
+            'date' => $date,
+            'summary' => $this->getFinancialSummary($date, $date),
+            'operations' => $this->getFinancialOperations($date, $date),
+            'printed_at' => date('Y-m-d H:i:s'),
+        ];
+    }
+
     public function confirmQuote(int $id, int $userId): int
     {
         return $this->copyDocument($id, 'order', $userId, false);
@@ -756,7 +874,7 @@ class AppDatabase
                     'unit_price' => $line['unit_price'],
                     'discount_rate' => $line['discount_rate'] ?? 0,
                     'total_ht' => $line['total_ht'] ?? $line['total'],
-                    'total' => $line['total_ht'] ?? $line['total'],
+                    'total' => $line['total'] ?? $line['total_ht'],
                 ]);
 
                 if ($decrementStock && (int) ($line['product_id'] ?? 0) > 0) {
@@ -1200,6 +1318,89 @@ class AppDatabase
             'vat' => round($totalTtc - $subtotalHt, 2),
             'ttc' => $totalTtc,
         ];
+    }
+
+    private function emptyPaymentBreakdown(): array
+    {
+        return [
+            'ESP' => ['count' => 0, 'total_ttc' => 0.0],
+            'CHQ' => ['count' => 0, 'total_ttc' => 0.0],
+            'CB' => ['count' => 0, 'total_ttc' => 0.0],
+            'VIR' => ['count' => 0, 'total_ttc' => 0.0],
+        ];
+    }
+
+    private function financialLinesForOperations(array $operationIds): array
+    {
+        $operationIds = array_values(array_unique(array_map('intval', $operationIds)));
+        if (!$operationIds) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($operationIds), '?'));
+        $stmt = $this->pdo->prepare(
+            'SELECT oi.*, p.product_type, p.purchase_price, p.sku AS product_sku
+             FROM operation_items oi
+             LEFT JOIN products p ON p.id = oi.product_id
+             WHERE oi.operation_id IN (' . $placeholders . ')
+             ORDER BY oi.operation_id, oi.id'
+        );
+        $stmt->execute($operationIds);
+
+        $lines = [];
+        foreach ($stmt->fetchAll() as $line) {
+            $lines[(int) $line['operation_id']][] = $line;
+        }
+
+        return $lines;
+    }
+
+    private function financialTotalsForLines(array $lines, float $vatRate): array
+    {
+        $totals = ['cost_ht' => 0.0, 'margin' => 0.0, 'has_estimated_lines' => false];
+        foreach ($lines as $line) {
+            $decorated = $this->decorateFinancialLine($line, $vatRate);
+            $totals['cost_ht'] += (float) $decorated['cost_ht'];
+            $totals['margin'] += (float) $decorated['margin'];
+            $totals['has_estimated_lines'] = $totals['has_estimated_lines'] || (bool) $decorated['is_estimated'];
+        }
+
+        $totals['cost_ht'] = round($totals['cost_ht'], 2);
+        $totals['margin'] = round($totals['margin'], 2);
+
+        return $totals;
+    }
+
+    private function decorateFinancialLine(array $line, float $vatRate): array
+    {
+        $quantity = (float) ($line['quantity'] ?? 0);
+        $totalHt = round((float) ($line['total_ht'] ?? $line['total'] ?? 0), 2);
+        $productId = (int) ($line['product_id'] ?? 0);
+        $productType = (string) ($line['product_type'] ?? '');
+        $isMissingProduct = $productId <= 0 || $productType === '';
+        $isStockableProduct = !$isMissingProduct
+            && (string) ($line['line_type'] ?? '') === 'product'
+            && $productType === 'stockable';
+
+        $costHt = 0.0;
+        if ($isStockableProduct) {
+            $purchasePriceTtc = (float) ($line['purchase_price'] ?? 0);
+            $factor = 1 + (max(0, $vatRate) / 100);
+            $unitCostHt = $factor > 0 ? $purchasePriceTtc / $factor : $purchasePriceTtc;
+            $costHt = round($unitCostHt * $quantity, 2);
+        }
+
+        $margin = round($totalHt - $costHt, 2);
+        $line['product_type'] = $productType ?: null;
+        $line['quantity'] = $quantity;
+        $line['unit_price'] = (float) ($line['unit_price'] ?? 0);
+        $line['total_ht'] = $totalHt;
+        $line['cost_ht'] = $costHt;
+        $line['margin'] = $margin;
+        $line['margin_rate'] = $totalHt > 0 ? round(($margin / $totalHt) * 100, 2) : 0.0;
+        $line['is_estimated'] = $isMissingProduct;
+
+        return $line;
     }
 
     public function vehicle(int $id): ?array
