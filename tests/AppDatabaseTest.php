@@ -3,6 +3,7 @@
 namespace App\Tests;
 
 use App\Controller\DashboardController;
+use App\Controller\ImportController;
 use App\Controller\ReportController;
 use App\Service\AccessControl;
 use App\Service\AppDatabase;
@@ -12,9 +13,14 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use RuntimeException;
+use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\Routing\RequestContext;
 use Twig\Environment;
 use Twig\Loader\ArrayLoader;
 use Twig\Loader\FilesystemLoader;
@@ -515,7 +521,7 @@ SQL);
 
         self::assertSame('today', $period['preset']);
         self::assertTrue($period['invalid']);
-        self::assertTrue($access->can('reports.view', ['role' => 'manager']));
+        self::assertFalse($access->can('reports.view', ['role' => 'manager']));
         self::assertTrue($access->can('reports.view', ['role' => 'admin']));
     }
 
@@ -815,18 +821,167 @@ SQL);
         self::assertNotNull($db->vehicleModelByName($brandId, 'logan'));
     }
 
-    public function testAccessControlKeepsManagerAwayFromDeleteAndUsers(): void
+    public function testAccessControlRestrictsManagerToViewCreateAndDocumentProgress(): void
     {
         $access = new AccessControl();
         $manager = ['role' => 'manager'];
         $admin = ['role' => 'admin'];
 
-        self::assertTrue($access->can('imports', $manager));
+        self::assertTrue($access->can('view', $manager));
+        self::assertTrue($access->can('create', $manager));
+        self::assertTrue($access->can('progress_document', $manager));
         self::assertTrue($access->can('clients', $manager));
-        self::assertTrue($access->can('delete', $manager));
+        self::assertFalse($access->can('edit', $manager));
+        self::assertFalse($access->can('delete', $manager));
+        self::assertFalse($access->can('toggle', $manager));
+        self::assertFalse($access->can('import', $manager));
+        self::assertFalse($access->can('imports', $manager));
         self::assertFalse($access->can('manage_users', $manager));
+        self::assertFalse($access->can('vehicle_settings', $manager));
         self::assertTrue($access->can('delete', $admin));
+        self::assertTrue($access->can('toggle', $admin));
+        self::assertTrue($access->can('import', $admin));
         self::assertTrue($access->can('manage_users', $admin));
+    }
+
+    public function testManagerForcedEditAndToggleRoutesAreDeniedWithoutChangingData(): void
+    {
+        $db = $this->database();
+        $access = new AccessControl();
+        $controller = new DashboardController();
+
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'ACL-001',
+            'name' => 'Produit ACL',
+            'category_id' => $categoryId,
+            'stock_qty' => 2,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $productId = $this->id($db->pdo(), 'SELECT id FROM products WHERE sku = "ACL-001"');
+
+        $editRequest = $this->requestWithUser('/products/' . $productId . '/edit', 'POST', [
+            'sku' => 'ACL-001',
+            'name' => 'Produit modifie',
+            'category_id' => $categoryId,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager']);
+        $controller->setContainer($this->controllerContainer($editRequest));
+
+        $response = $controller->productEdit($productId, $editRequest, $db, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame('Produit ACL', $db->product($productId)['name']);
+
+        $toggleRequest = $this->requestWithUser('/records/product/' . $productId . '/deactivate', 'POST', [], ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager']);
+        $controller->setContainer($this->controllerContainer($toggleRequest));
+        $response = $controller->recordState('product', $productId, 'deactivate', $toggleRequest, $db, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame(1, (int) $db->product($productId)['active']);
+    }
+
+    public function testManagerImportRoutesAreDenied(): void
+    {
+        $db = $this->database();
+        $access = new AccessControl();
+        $imports = new ImportService($db);
+        $controller = new ImportController();
+
+        $request = $this->requestWithUser('/import', 'GET', [], ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager']);
+        $controller->setContainer($this->controllerContainer($request));
+        $response = $controller->index($request, $db, $imports, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+
+        $post = $this->requestWithUser('/import/products', 'POST', [], ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager']);
+        $controller->setContainer($this->controllerContainer($post));
+        $response = $controller->upload('products', $post, $db, $imports, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+    }
+
+    public function testManagerCanCreateDailyRecordsAndProgressDocumentWorkflow(): void
+    {
+        $db = $this->database();
+        $access = new AccessControl();
+        $controller = new DashboardController();
+        $manager = ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager'];
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+
+        $productRequest = $this->requestWithUser('/products/new', 'POST', [
+            'sku' => 'ACL-CREATE',
+            'name' => 'Creation manager',
+            'category_id' => $categoryId,
+            'stock_qty' => 5,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 30,
+        ], $manager);
+        $controller->setContainer($this->controllerContainer($productRequest));
+        $controller->newProduct($productRequest, $db, $access);
+        $productId = $this->id($db->pdo(), 'SELECT id FROM products WHERE sku = "ACL-CREATE"');
+        self::assertGreaterThan(0, $productId);
+
+        $clientRequest = $this->requestWithUser('/clients', 'POST', [
+            'type' => 'individual',
+            'name' => 'Client Manager',
+            'phone' => '0600000001',
+            'email' => '',
+            'address' => 'Agadir',
+        ], $manager);
+        $controller->setContainer($this->controllerContainer($clientRequest));
+        $controller->clients($clientRequest, $db, $access);
+        self::assertGreaterThan(0, $this->id($db->pdo(), 'SELECT id FROM clients WHERE name = "Client Manager"'));
+
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $db->pdo());
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'product_1' => $productId,
+            'product_qty_1' => 2,
+        ], 2);
+        $orderId = $db->confirmQuote($quoteId, 2);
+        $invoiceId = $db->invoiceDocument($orderId, 2);
+
+        self::assertSame('invoice', $db->operation($invoiceId)['doc_type']);
+        self::assertSame(3, (int) $db->product($productId)['stock_qty']);
+    }
+
+    public function testManagerListHtmlHidesEditAndDeleteButtonsWhileAdminKeepsThem(): void
+    {
+        $db = $this->database();
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'BTN-001',
+            'name' => 'Produit bouton',
+            'category_id' => $categoryId,
+            'stock_qty' => 1,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $context = $db->dashboardData() + [
+            'filters' => [],
+            'record_token' => 'token',
+        ];
+
+        $managerHtml = $this->renderTemplate('app/products.html.twig', $context + [
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+        ]);
+        $adminHtml = $this->renderTemplate('app/products.html.twig', $context + [
+            'user' => ['role' => 'admin', 'name' => 'Admin'],
+        ]);
+
+        self::assertStringNotContainsString('تعديل', $managerHtml);
+        self::assertStringNotContainsString('حذف', $managerHtml);
+        self::assertStringContainsString('تعديل', $adminHtml);
+        self::assertStringContainsString('حذف', $adminHtml);
     }
 
     public function testTopbarDropdownsAreClosedByDefaultAndManagerHasNoUsersEntry(): void
@@ -848,7 +1003,10 @@ SQL);
         self::assertStringContainsString('dropdown-menu', $adminHtml);
         self::assertStringNotContainsString('is-open', $adminHtml);
         self::assertStringContainsString('/app_users', $adminHtml);
+        self::assertStringContainsString('/app_import', $adminHtml);
         self::assertStringNotContainsString('/app_users', $managerHtml);
+        self::assertStringNotContainsString('/app_import', $managerHtml);
+        self::assertStringNotContainsString('nav.admin', $managerHtml);
         self::assertMatchesRegularExpression('/\\.dropdown-menu\\s*\\{[^}]*display:\\s*none;/s', $css);
     }
 
@@ -880,7 +1038,21 @@ SQL);
 
         $context += [
             'app_name' => 'SIM Auto',
-            'app' => ['request' => Request::create('/')],
+            'app' => new class {
+                public Request $request;
+
+                public function __construct()
+                {
+                    $this->request = Request::create('/');
+                    $this->request->attributes->set('_route', 'app_dashboard');
+                    $this->request->setLocale('ar');
+                }
+
+                public function flashes(string $type): array
+                {
+                    return [];
+                }
+            },
         ];
 
         return $twig->render($template, $context);
@@ -890,9 +1062,93 @@ SQL);
     {
         $translations = [
             'clients.no_vehicles' => 'لا توجد سيارات لهذا العميل.',
+            'ui.edit' => 'تعديل',
+            'ui.delete' => 'حذف',
+            'ui.deactivate' => 'تعطيل',
+            'ui.activate' => 'تفعيل',
+            'ui.show' => 'عرض',
+            'ui.back' => 'رجوع',
+            'ui.save' => 'حفظ',
+            'ui.filter' => 'تصفية',
+            'ui.search' => 'بحث',
+            'ui.actions' => 'إجراءات',
+            'ui.all' => 'الكل',
+            'ui.code' => 'الكود',
+            'ui.active_record' => 'حالة السجل',
+            'ui.confirm_delete' => 'تأكيد الحذف؟',
+            'products.title' => 'المنتجات',
+            'products.new' => 'منتج جديد',
+            'products.name' => 'اسم المنتج',
+            'products.type' => 'النوع',
+            'products.stockable' => 'قطعة مخزون',
+            'products.service' => 'خدمة',
+            'products.category' => 'الصنف',
+            'products.quantity' => 'الكمية',
+            'products.min_qty' => 'الحد الأدنى',
+            'products.purchase_price_ht' => 'ثمن الشراء HT',
+            'products.sale_price_ht' => 'ثمن البيع HT',
+            'products.margin' => 'هامش الربح',
+            'products.manual' => 'يدوي',
+            'products.product' => 'المنتج',
+            'products.stock' => 'المخزون',
+            'products.sku' => 'SKU / الاسم',
+            'products.stock_state' => 'حالة المخزون',
+            'products.low' => 'تحت الحد',
+            'products.empty_stock' => 'نفد',
+            'products.no_products' => 'لا توجد منتجات.',
+            'state.active' => 'نشط',
+            'state.inactive' => 'غير نشط',
         ];
 
         return strtr($translations[$key] ?? $key, $params);
+    }
+
+    private function requestWithUser(string $uri, string $method, array $parameters, array $user): Request
+    {
+        $request = Request::create($uri, $method, $parameters);
+        $session = new Session(new MockArraySessionStorage());
+        $session->set('user', $user);
+        $request->setSession($session);
+
+        return $request;
+    }
+
+    private function controllerContainer(Request $request): Container
+    {
+        $container = new Container();
+        $stack = new RequestStack();
+        $stack->push($request);
+        $container->set('request_stack', $stack);
+        $container->set('router', new class implements UrlGeneratorInterface {
+            private RequestContext $context;
+
+            public function __construct()
+            {
+                $this->context = new RequestContext();
+            }
+
+            public function setContext(RequestContext $context): void
+            {
+                $this->context = $context;
+            }
+
+            public function getContext(): RequestContext
+            {
+                return $this->context;
+            }
+
+            public function generate(string $name, array $parameters = [], int $referenceType = self::ABSOLUTE_PATH): string
+            {
+                $suffix = '';
+                foreach ($parameters as $value) {
+                    $suffix .= '/' . $value;
+                }
+
+                return '/' . $name . $suffix;
+            }
+        });
+
+        return $container;
     }
 
     private function company(): array
