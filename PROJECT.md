@@ -1179,6 +1179,78 @@ Il contient:
 - operations,
 - lignes de facture.
 
+En version desktop Windows, la base n'est pas stockee dans le dossier d'installation. Elle est creee ici:
+
+```text
+%APPDATA%\SIMAutoWorkshop\data\simauto.sqlite
+```
+
+Le cache et les logs Symfony sont egalement deplaces hors du dossier applicatif:
+
+```text
+%APPDATA%\SIMAutoWorkshop\var\
+```
+
+Ce deplacement est pilote par la variable d'environnement `SIMAUTO_DATA_DIR`. Sans cette variable, l'application garde le comportement web/Docker classique et utilise le dossier local `data/`.
+
+La version desktop cree une sauvegarde automatique au demarrage:
+
+```text
+%APPDATA%\SIMAutoWorkshop\backups\simauto-YYYYMMDD-HHMMSS.sqlite
+```
+
+Les 30 dernieres sauvegardes sont conservees. Une page admin `Sauvegardes` permet de voir les fichiers et d'ouvrir le dossier dans l'explorateur Windows.
+
+## Version Desktop Windows 11
+
+Une version installable Windows 11 est preparee sans Docker cote client.
+
+Choix technique:
+
+- coque PowerShell + WebView2/Edge app mode, pour eviter Tauri/Rust et garder un packaging simple,
+- PHP 8.3 NTS x64 portable integre au package,
+- serveur PHP built-in lie uniquement a `127.0.0.1`,
+- port dynamique a partir de `8090` si le port est occupe,
+- healthcheck `/login` avec timeout 15 secondes,
+- instance unique par mutex Windows,
+- arret propre du processus PHP a la fermeture.
+
+Fichiers importants:
+
+```text
+desktop/Start-SIMAutoWorkshop.ps1
+desktop/php/php.ini
+desktop/SIMAutoWorkshop.cmd
+desktop/SIMAutoWorkshopPortable.cmd
+build-desktop.ps1
+installer/simauto-workshop.iss
+DESKTOP_WINDOWS_CHECKLIST.txt
+```
+
+Build desktop depuis un poste de build Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-desktop.ps1 -PhpZipUrl "URL_PHP_8_3_NTS_X64.zip" -PhpSha256 "SHA256_OFFICIEL"
+```
+
+Le script:
+
+- assemble l'application dans `build/desktop/app`,
+- verifie le hash SHA256 de PHP,
+- installe Composer en mode production (`--no-dev --optimize-autoloader`),
+- cree `dist/SIMAutoWorkshop-portable.zip`,
+- compile `dist/SIMAutoWorkshop-Setup.exe` si Inno Setup (`iscc.exe`) est disponible.
+
+La version portable stocke ses donnees dans le dossier portable:
+
+```text
+data/
+var/
+backups/
+```
+
+Important: la version desktop est volontairement locale (`127.0.0.1`) et n'est pas destinee a etre exposee aux autres PC. Pour un acces multi-postes sur reseau local, utiliser la version serveur/Docker de production decrite dans `INSTALL_CLIENT_PROD.txt`.
+
 ## Tests
 
 La suite de tests utilise Symfony PHPUnit Bridge.
@@ -1266,9 +1338,8 @@ Au prochain acces, la base sera recreree avec les donnees initiales.
 
 1. Changer les mots de passe initiaux au premier login.
 2. Ajouter les exports PDF si necessaire.
-3. Ajouter une sauvegarde automatique de `data/simauto.sqlite`.
-4. Ajouter HTTPS si deploye sur un serveur accessible publiquement.
-5. Remplacer `chmod -R 777` par une gestion de droits plus stricte selon le serveur cible.
+3. Ajouter HTTPS si deploye sur un serveur accessible publiquement.
+4. Remplacer `chmod -R 777` par une gestion de droits plus stricte selon le serveur cible.
 
 ## Commandes Utiles
 
@@ -1329,6 +1400,10 @@ L'application est fonctionnelle avec:
 - ticket de cloture journalier 80 mm,
 - aide marge affichee 35%, 45%, 55% avec calcul interne conserve,
 - paiement cheque avec numero optionnel,
+- version desktop Windows 11 avec PHP portable,
+- donnees desktop dans AppData via `SIMAUTO_DATA_DIR`,
+- sauvegarde automatique au demarrage desktop,
+- page admin des sauvegardes,
 - vues detail clients, fournisseurs, vehicules, produits, categories, marques et modeles,
 - fiche client avec vehicules lies et dernieres operations,
 - import CSV en masse,

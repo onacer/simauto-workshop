@@ -1,0 +1,34 @@
+SIM Auto Workshop - Checklist version desktop Windows 11
+
+Build
+1. Installer Composer, Inno Setup et une connexion internet sur le poste de build.
+2. Telecharger/choisir l'archive PHP 8.3 NTS x64 officielle pour Windows et relever son SHA256.
+3. Lancer depuis la racine:
+   powershell -ExecutionPolicy Bypass -File .\build-desktop.ps1 -PhpZipUrl "URL_PHP_ZIP" -PhpSha256 "SHA256"
+4. Verifier:
+   dist\SIMAutoWorkshop-portable.zip
+   dist\SIMAutoWorkshop-Setup.exe si Inno Setup est installe.
+
+Installation client
+1. Installer SIMAutoWorkshop-Setup.exe sur le poste central.
+2. Lancer SIM Auto Workshop depuis le raccourci.
+3. Verifier que la fenetre s'ouvre sur /login.
+4. Verifier que la base est creee ici:
+   %APPDATA%\SIMAutoWorkshop\data\simauto.sqlite
+5. Verifier que le cache/log Symfony sont ici:
+   %APPDATA%\SIMAutoWorkshop\var\
+
+Tests manuels obligatoires
+1. Demarrage normal: login OK, dashboard OK.
+2. Port 8090 occupe: lancer une autre application sur 8090 puis demarrer SIM Auto; verifier qu'un autre port local est choisi automatiquement.
+3. Double clic deux fois: une seule instance reste active.
+4. Sauvegarde: redemarrer l'application et verifier un fichier:
+   %APPDATA%\SIMAutoWorkshop\backups\simauto-YYYYMMDD-HHMMSS.sqlite
+5. Rotation: conserver seulement les 30 dernieres sauvegardes.
+6. Menu Sauvegardes: ouvrir la page admin et tester "Ouvrir le dossier".
+7. Uninstall/reinstall: choisir de conserver les donnees, reinstall, verifier que la base est conservee.
+8. Uninstall final: choisir de supprimer les donnees si le client le demande explicitement.
+
+Acces reseau local
+La version desktop est volontairement liee a 127.0.0.1 et n'est pas faite pour etre exposee aux autres PC.
+Pour un acces multi-postes sur le reseau local, utiliser la version serveur/Docker de production decrite dans INSTALL_CLIENT_PROD.txt.
