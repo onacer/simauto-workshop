@@ -88,6 +88,12 @@ a {
     background: var(--red);
 }
 
+.alert-warning {
+    color: #2c2407;
+    background: #fff4be;
+    border: 1px solid #e8c948;
+}
+
 .login-screen {
     position: relative;
     z-index: 1;
@@ -643,6 +649,25 @@ html[dir="ltr"] .profile-menu {
     background: var(--red);
 }
 
+.doc-badge {
+    min-width: 86px;
+}
+
+.doc-badge-quote {
+    color: #202020;
+    background: #eeeeea;
+}
+
+.doc-badge-order {
+    color: #080808;
+    background: var(--yellow);
+}
+
+.doc-badge-invoice {
+    color: #fff;
+    background: var(--red);
+}
+
 .row-actions {
     display: flex;
     align-items: center;
@@ -849,6 +874,51 @@ html[dir="ltr"] .profile-menu {
     grid-template-columns: 1.1fr .8fr 1.1fr .9fr .7fr .9fr .9fr .7fr;
 }
 
+.billing-table > div {
+    grid-template-columns: .7fr 1fr 1.2fr .8fr 1.5fr;
+}
+
+.operation-history-table > div {
+    grid-template-columns: .8fr 1fr .9fr 1.1fr 1fr .8fr .8fr 1.7fr;
+}
+
+.operation-lines-table > div {
+    grid-template-columns: 1.8fr .7fr .5fr .8fr .6fr .8fr;
+}
+
+.document-chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.document-chain a,
+.document-chain strong {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-weight: 900;
+    text-decoration: none;
+}
+
+.document-chain a {
+    color: #080808;
+    background: rgba(241, 205, 53, .35);
+}
+
+.document-chain strong {
+    color: #fff;
+    background: #080808;
+}
+
+.operation-totals {
+    width: min(420px, 100%);
+    margin: 0 0 0 auto;
+}
+
 .table-row-link {
     display: grid;
     gap: 12px;
@@ -1052,6 +1122,16 @@ html[dir="ltr"] .profile-menu {
     direction: ltr;
     font-size: 14px;
     font-weight: 600;
+}
+
+.legal-notice {
+    position: relative;
+    z-index: 1;
+    max-width: 150mm;
+    margin: 5mm 0 0;
+    direction: ltr;
+    font-size: 13px;
+    font-weight: 700;
 }
 
 .net-pay span,
@@ -1297,12 +1377,18 @@ html[dir="ltr"] .profile-menu {
     }
 
     .finance-table .table-head,
-    .finance-detail-table .table-head {
+    .finance-detail-table .table-head,
+    .billing-table .table-head,
+    .operation-history-table .table-head,
+    .operation-lines-table .table-head {
         display: none;
     }
 
     .finance-table .table-row-link,
-    .finance-detail-table > div:not(.empty-state) {
+    .finance-detail-table > div:not(.empty-state),
+    .billing-table > div,
+    .operation-history-table > div,
+    .operation-lines-table > div {
         grid-template-columns: 1fr;
         gap: 6px;
     }

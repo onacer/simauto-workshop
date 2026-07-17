@@ -201,6 +201,74 @@ class DashboardController extends AbstractController
         return $this->render('app/billing.html.twig', $db->dashboardData() + ['user' => $user]);
     }
 
+    #[Route('/operations/history', name: 'app_operations_history', methods: ['GET'])]
+    public function operationsHistory(Request $request, AppDatabase $db, AccessControl $access): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if (!$access->can('operations', $user)) {
+            $this->addFlash('error', 'access.denied');
+            return $this->redirectToRoute('app_dashboard');
+        }
+
+        $filters = [
+            'q' => trim((string) $request->query->get('q', '')),
+            'doc_type' => (string) $request->query->get('doc_type', ''),
+            'date_from' => (string) $request->query->get('from', ''),
+            'date_to' => (string) $request->query->get('to', ''),
+            'payment_method' => (string) $request->query->get('payment', ''),
+        ];
+
+        if (!$this->validDateRange($filters['date_from'], $filters['date_to'])) {
+            $filters['date_from'] = '';
+            $filters['date_to'] = '';
+            $this->addFlash('warning', 'operations.history.invalid_dates');
+        }
+
+        $result = $db->searchOperations($filters);
+
+        return $this->render('app/operations_history.html.twig', [
+            'user' => $user,
+            'operations' => $result['rows'],
+            'result_total' => $result['total'],
+            'is_limited' => $result['limited'],
+            'filters' => [
+                'q' => $filters['q'],
+                'doc_type' => $filters['doc_type'],
+                'from' => $filters['date_from'],
+                'to' => $filters['date_to'],
+                'payment' => $filters['payment_method'],
+            ],
+        ]);
+    }
+
+    #[Route('/operations/{id}', name: 'app_operation_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function operationShow(int $id, Request $request, AppDatabase $db, AccessControl $access): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if (!$access->can('operations', $user)) {
+            $this->addFlash('error', 'access.denied');
+            return $this->redirectToRoute('app_dashboard');
+        }
+
+        $operation = $db->operation($id);
+        if (!$operation) {
+            throw $this->createNotFoundException();
+        }
+
+        return $this->render('app/operation_show.html.twig', [
+            'user' => $user,
+            'operation' => $operation,
+            'chain' => $db->operationDocumentChain($id),
+            'back_query' => $request->query->all(),
+        ]);
+    }
+
     #[Route('/records/{entity}/{id}/{action}', name: 'app_record_state', methods: ['POST'], requirements: ['id' => '\d+', 'action' => 'delete|deactivate|reactivate'])]
     public function recordState(string $entity, int $id, string $action, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
     {
@@ -577,12 +645,16 @@ class DashboardController extends AbstractController
         ]);
     }
 
-    #[Route('/invoice/{id}', name: 'app_invoice')]
-    public function invoice(int $id, Request $request, AppDatabase $db, CompanyProfile $company, FrenchNumberFormatter $formatter): Response
+    #[Route('/document/{id}', name: 'app_document', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function document(int $id, Request $request, AppDatabase $db, CompanyProfile $company, FrenchNumberFormatter $formatter, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if (!$access->can('billing', $user)) {
+            $this->addFlash('error', 'access.denied');
+            return $this->redirectToRoute('app_dashboard');
         }
         $operation = $db->operation($id);
         if (!$operation) {
@@ -596,15 +668,25 @@ class DashboardController extends AbstractController
         ]);
     }
 
-    #[Route('/receipt/{id}', name: 'app_receipt')]
-    public function receipt(int $id, Request $request, AppDatabase $db, CompanyProfile $company): Response
+    #[Route('/invoice/{id}', name: 'app_invoice', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function invoice(int $id, Request $request, AppDatabase $db, CompanyProfile $company, FrenchNumberFormatter $formatter, AccessControl $access): Response
+    {
+        return $this->document($id, $request, $db, $company, $formatter, $access);
+    }
+
+    #[Route('/receipt/{id}', name: 'app_receipt', requirements: ['id' => '\d+'])]
+    public function receipt(int $id, Request $request, AppDatabase $db, CompanyProfile $company, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
         }
+        if (!$access->can('billing', $user)) {
+            $this->addFlash('error', 'access.denied');
+            return $this->redirectToRoute('app_dashboard');
+        }
         $operation = $db->operation($id);
-        if (!$operation) {
+        if (!$operation || $operation['doc_type'] !== 'invoice') {
             throw $this->createNotFoundException();
         }
         return $this->render('documents/receipt.html.twig', ['operation' => $operation, 'user' => $user, 'company' => $company->data()]);
@@ -845,5 +927,22 @@ class DashboardController extends AbstractController
     private function safeMessage(Throwable $e): string
     {
         return $e instanceof InvalidArgumentException ? $e->getMessage() : 'تعذر تنفيذ العملية';
+    }
+
+    private function validDateRange(string $from, string $to): bool
+    {
+        if ($from === '' && $to === '') {
+            return true;
+        }
+        foreach ([$from, $to] as $date) {
+            if ($date !== '') {
+                $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+                if (!$parsed || $parsed->format('Y-m-d') !== $date) {
+                    return false;
+                }
+            }
+        }
+
+        return !($from !== '' && $to !== '' && $from > $to);
     }
 }

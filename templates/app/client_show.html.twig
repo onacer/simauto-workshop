@@ -47,7 +47,7 @@
             {% for operation in operations %}
                 <div>
                     <strong>{{ operation.created_at|date('d/m/Y') }}</strong>
-                    <span><a href="{{ path('app_invoice', {id: operation.id}) }}">{{ operation.document_no|default(operation.invoice_no) }}</a></span>
+                    <span><a href="{{ path('app_operation_show', {id: operation.id}) }}">{{ operation.document_no|default(operation.invoice_no) }}</a></span>
                     <span>{{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</span>
                     <span>{{ operation.total|number_format(2, ',', ' ') }} DH</span>
                 </div>

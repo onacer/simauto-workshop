@@ -1,0 +1,94 @@
+{% extends 'base.html.twig' %}
+
+{% macro child_links(children) %}
+    {% for child in children %}
+        <a href="{{ path('app_operation_show', {id: child.id}) }}">{{ child.document_title }} {{ child.document_no }}</a>
+        {% if child.children is defined and child.children %}
+            {{ _self.child_links(child.children) }}
+        {% endif %}
+    {% endfor %}
+{% endmacro %}
+
+{% block title %}{{ operation.document_no }} - SIM Auto{% endblock %}
+
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+
+<main class="main-board">
+    <section class="page-head">
+        <h1>{{ operation.document_title }} {{ operation.document_no }}</h1>
+        <span class="row-actions">
+            <a class="btn btn-primary" href="{{ path('app_document', {id: operation.id}) }}" target="_blank" rel="noopener">{{ 'documents.print'|trans }}</a>
+            {% if operation.doc_type == 'invoice' %}
+                <a class="btn btn-primary" href="{{ path('app_receipt', {id: operation.id}) }}">{{ 'billing.receipt'|trans }}</a>
+            {% endif %}
+            <a class="btn btn-dark" href="{{ path('app_operations_history', back_query) }}">{{ 'ui.back'|trans }}</a>
+        </span>
+    </section>
+
+    {% include 'app/_show_info.html.twig' with {rows: [
+        {label: 'ui.type'|trans, value: ('documents.type.' ~ operation.doc_type)|trans},
+        {label: 'billing.invoice'|trans, value: operation.document_no},
+        {label: 'ui.date'|trans, value: operation.created_at|date('d/m/Y H:i')},
+        {label: 'ui.status'|trans, value: ('documents.status.' ~ operation.status)|trans},
+        {label: 'ui.client'|trans, value: operation.client_real_name ?: operation.client_name},
+        {label: 'vehicles.vehicle'|trans, value: (operation.vehicle_real_plate ?: operation.vehicle_plate) ~ ' - ' ~ (operation.brand_name ?: operation.vehicle_brand) ~ ' ' ~ (operation.model_name ?: operation.vehicle_model)},
+        {label: 'operations.payment'|trans, value: ('payment.code.' ~ operation.payment_method)|trans},
+        {label: 'operations.check_number'|trans, value: operation.check_number}
+    ]} %}
+
+    <section class="panel">
+        <div class="panel-title-row">
+            <h2>{{ 'operations.detail.links'|trans }}</h2>
+            <span class="row-actions">
+                {% if operation.client_id %}<a href="{{ path('app_client_show', {id: operation.client_id}) }}">{{ 'clients.card'|trans }}</a>{% endif %}
+                {% if operation.vehicle_id %}<a href="{{ path('app_vehicle_show', {id: operation.vehicle_id}) }}">{{ 'vehicles.vehicle'|trans }}</a>{% endif %}
+            </span>
+        </div>
+        <div class="document-chain">
+            {% for parent in chain.parents %}
+                <a href="{{ path('app_operation_show', {id: parent.id}) }}">{{ parent.document_title }} {{ parent.document_no }}</a>
+            {% endfor %}
+            <strong>{{ operation.document_title }} {{ operation.document_no }}</strong>
+            {{ _self.child_links(chain.children) }}
+            {% if chain.parents is empty and chain.children is empty %}
+                <span class="empty-state">{{ 'operations.detail.no_chain'|trans }}</span>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>{{ 'operations.detail.lines'|trans }}</h2>
+        <div class="data-table operation-lines-table">
+            <div class="table-head">
+                <span>{{ 'operations.label'|trans }}</span>
+                <span>{{ 'ui.type'|trans }}</span>
+                <span>{{ 'operations.quantity'|trans }}</span>
+                <span>{{ 'operations.price_ttc'|trans }}</span>
+                <span>{{ 'operations.discount'|trans }}</span>
+                <span>{{ 'operations.total_ht'|trans }}</span>
+            </div>
+            {% for item in operation.items %}
+                <div>
+                    <strong>{% if item.product_sku %}{{ item.product_sku }} - {% endif %}{{ item.label }}</strong>
+                    <span>{{ ('operations.line_type.' ~ item.line_type)|trans }}</span>
+                    <span>{{ item.quantity }}</span>
+                    <span>{{ item.unit_price|number_format(2, ',', ' ') }} DH</span>
+                    <span>{{ item.discount_rate|default(0)|number_format(2, ',', ' ') }}%</span>
+                    <span>{{ item.total_ht|default(item.total)|number_format(2, ',', ' ') }} DH</span>
+                </div>
+            {% else %}
+                <p class="empty-state">{{ 'ui.empty'|trans }}</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="panel totals-panel">
+        <div class="invoice-totals operation-totals">
+            <div><span>MT HT</span><strong>{{ operation.subtotal_ht|number_format(2, ',', ' ') }} DH</strong></div>
+            <div><span>TVA {{ operation.vat_rate|number_format(0) }}%</span><strong>{{ operation.vat_amount|number_format(2, ',', ' ') }} DH</strong></div>
+            <div><span>MT TTC</span><strong>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</strong></div>
+        </div>
+    </section>
+</main>
+{% endblock %}

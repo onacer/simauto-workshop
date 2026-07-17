@@ -1,0 +1,2 @@
+{% set type = type|default('invoice') %}
+<span class="badge doc-badge doc-badge-{{ type }}">{{ ('documents.type.' ~ type)|trans }}</span>

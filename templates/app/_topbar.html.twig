@@ -35,10 +35,11 @@
 
         <a class="topbar-item {{ route in ['app_clients', 'app_client_show', 'app_client_edit'] ? 'is-active' : '' }}" href="{{ path('app_clients') }}">{{ 'nav.clients'|trans }}</a>
 
-        <div class="nav-dropdown {{ route in ['app_operations', 'app_billing', 'app_invoice', 'app_receipt'] ? 'is-current' : '' }}">
+        <div class="nav-dropdown {{ route in ['app_operations', 'app_operations_history', 'app_operation_show', 'app_billing', 'app_document', 'app_invoice', 'app_receipt'] ? 'is-current' : '' }}">
             <a class="topbar-item dropdown-toggle" href="{{ path('app_operations') }}" aria-expanded="false">{{ 'nav.operations'|trans }}</a>
             <div class="dropdown-menu">
                 <a href="{{ path('app_operations') }}">{{ 'nav.new_operation'|trans }}</a>
+                <a href="{{ path('app_operations_history') }}">{{ 'nav.operations_history'|trans }}</a>
                 <a href="{{ path('app_billing') }}">{{ 'nav.billing'|trans }}</a>
             </div>
         </div>

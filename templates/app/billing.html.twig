@@ -12,16 +12,24 @@
     </section>
 
     <section class="panel">
-        <div class="data-table">
-            <div class="table-head"><span>{{ 'billing.invoice'|trans }}</span><span>{{ 'ui.client'|trans }}</span><span>{{ 'ui.amount'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
+        <div class="panel-title-row">
+            <h2>{{ 'billing.title'|trans }}</h2>
+            <a class="btn btn-primary" href="{{ path('app_operations_history') }}">{{ 'operations.history.title'|trans }}</a>
+        </div>
+        <div class="data-table billing-table">
+            <div class="table-head"><span>{{ 'ui.type'|trans }}</span><span>{{ 'billing.invoice'|trans }}</span><span>{{ 'ui.client'|trans }}</span><span>{{ 'ui.amount'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for operation in operations %}
                 <div>
+                    <span>{% include 'app/_doc_badge.html.twig' with {type: operation.doc_type} %}</span>
                     <strong>{{ operation.document_no|default(operation.invoice_no) }}</strong>
                     <span>{{ operation.client_real_name ?: operation.client_name }}</span>
-                    <span>{{ operation.total|number_format(2, ',', ' ') }} DH</span>
+                    <span>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</span>
                     <span class="row-actions">
-                        <a href="{{ path('app_invoice', {id: operation.id}) }}">{{ 'billing.invoice'|trans }}</a>
-                        <a href="{{ path('app_receipt', {id: operation.id}) }}">{{ 'billing.receipt'|trans }}</a>
+                        <a href="{{ path('app_operation_show', {id: operation.id}) }}">{{ 'ui.show'|trans }}</a>
+                        <a href="{{ path('app_document', {id: operation.id}) }}" target="_blank" rel="noopener">{{ 'documents.print'|trans }}</a>
+                        {% if operation.doc_type == 'invoice' %}
+                            <a href="{{ path('app_receipt', {id: operation.id}) }}">{{ 'billing.receipt'|trans }}</a>
+                        {% endif %}
                     </span>
                 </div>
             {% else %}
