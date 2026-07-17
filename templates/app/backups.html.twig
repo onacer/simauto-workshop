@@ -1,0 +1,66 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ 'backups.title'|trans }}{% endblock %}
+
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+
+<main class="content-shell page-shell">
+    <div class="page-head">
+        <h1>{{ 'backups.title'|trans }}</h1>
+        <a class="btn dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a>
+    </div>
+
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="flash {{ label }}">{{ message|trans }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <section class="panel-card">
+        <div class="detail-grid">
+            <div>
+                <span>{{ 'backups.database'|trans }}</span>
+                <strong>{{ database_path }}</strong>
+            </div>
+            <div>
+                <span>{{ 'backups.folder'|trans }}</span>
+                <strong>{{ backup_dir }}</strong>
+            </div>
+        </div>
+
+        <form method="post" action="{{ path('app_backups_open') }}" class="inline-form">
+            <input type="hidden" name="_token" value="{{ token }}">
+            <button class="btn yellow" type="submit">{{ 'backups.open_folder'|trans }}</button>
+        </form>
+    </section>
+
+    <section class="panel-card">
+        <h2>{{ 'backups.files'|trans }}</h2>
+        {% if backups %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>{{ 'ui.name'|trans }}</th>
+                            <th>{{ 'ui.created_at'|trans }}</th>
+                            <th>{{ 'backups.size'|trans }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for backup in backups %}
+                            <tr>
+                                <td>{{ backup.name }}</td>
+                                <td>{{ backup.created_at }}</td>
+                                <td>{{ (backup.size / 1024 / 1024)|number_format(2, '.', ' ') }} MB</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="empty-state">{{ 'backups.empty'|trans }}</p>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}

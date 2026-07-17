@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Service\AppDatabase;
 use App\Service\AccessControl;
+use App\Service\BackupManager;
 use App\Service\CompanyProfile;
 use App\Service\FrenchNumberFormatter;
 use InvalidArgumentException;
@@ -906,6 +907,41 @@ class DashboardController extends AbstractController
             'error' => $error,
             'token' => $this->csrfToken($request, 'profile_password'),
         ]);
+    }
+
+    #[Route('/backups', name: 'app_backups', methods: ['GET'])]
+    public function backups(Request $request, AppDatabase $db, BackupManager $backups): Response
+    {
+        $user = $this->requireAdmin($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+
+        return $this->render('app/backups.html.twig', [
+            'user' => $user,
+            'backups' => $backups->backups(),
+            'backup_dir' => $backups->backupDir(),
+            'database_path' => $backups->databasePath(),
+            'token' => $this->csrfToken($request, 'backups_open'),
+        ]);
+    }
+
+    #[Route('/backups/open', name: 'app_backups_open', methods: ['POST'])]
+    public function backupsOpen(Request $request, AppDatabase $db, BackupManager $backups): RedirectResponse
+    {
+        $user = $this->requireAdmin($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+
+        try {
+            $this->verifyCsrf($request, 'backups_open');
+            $backups->openFolder();
+        } catch (Throwable $e) {
+            $this->addFlash('error', $this->safeMessage($e));
+        }
+
+        return $this->redirectToRoute('app_backups');
     }
 
     private function requireUser(Request $request, AppDatabase $db): array|RedirectResponse
