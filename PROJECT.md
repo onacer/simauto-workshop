@@ -45,8 +45,8 @@ Le service PHP cree automatiquement les dossiers `data` et `var`, ajuste les dro
 
 Deux roles existent:
 
-- `admin`: acces au dashboard, produits, stock, operations, factures, receipts, categories, parametres vehicules et gestion complete des utilisateurs.
-- `manager`: acces au dashboard, produits, stock, operations, factures, receipts, imports et modification des donnees metier autorisees par la matrice `AccessControl`.
+- `admin`: acces total sans exception: lecture, creation, modification, suppression, activation/desactivation, imports, rapports, parametres et utilisateurs.
+- `manager`: lecture + creation uniquement pour le travail quotidien: listes, fiches detail, creation produits/clients/fournisseurs/vehicules, entrees de stock, devis, progression devis -> commande -> facture, impression documents/receipts et changement de son mot de passe.
 
 Des comptes initiaux sont crees automatiquement si la table `users` est vide:
 
@@ -1118,21 +1118,30 @@ Admin:
 
 Manager:
 
-- dashboard;
-- produits, categories, fournisseurs;
-- clients;
-- vehicules, marques, modeles;
-- imports;
-- rapports financiers;
-- operations, factures et receipts;
+- lecture de toutes les listes et fiches detail metier;
+- creation de produits, clients, fournisseurs et vehicules;
+- creation d'entrees de stock;
+- creation de devis et progression du workflow devis -> bon de commande -> facture;
+- impression documents et receipts;
 - changement de son mot de passe.
 
 Restrictions manager:
 
+- pas de modification d'enregistrements existants (`/edit` et POST associes);
+- pas de suppression;
+- pas d'activation/desactivation;
+- pas d'import en masse;
+- pas de rapports financiers;
+- pas d'acces aux parametres de marques/modeles;
 - pas d'acces au module utilisateurs `/users/...`;
-- pas de desactivation/suppression d'enregistrements;
 - les boutons interdits sont masques dans Twig avec `can(...)`;
 - les actions interdites sont aussi verifiees cote serveur avec `App\Service\AccessControl`.
+
+Permissions centralisees:
+
+- admin: `can(...)` retourne vrai pour toutes les permissions;
+- manager autorise: `view`, `create`, `progress_document`, `dashboard`, `products`, `stock`, `categories`, `suppliers`, `clients`, `vehicles`, `operations`, `billing`;
+- manager interdit: `edit`, `delete`, `toggle`, `import`, `imports`, `manage_users`, `reports.view`, `vehicle_settings`.
 
 ## Mode Impression
 

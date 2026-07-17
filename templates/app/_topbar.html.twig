@@ -29,7 +29,9 @@
             <a class="topbar-item dropdown-toggle" href="{{ path('app_vehicles') }}" aria-expanded="false">{{ 'nav.vehicles'|trans }}</a>
             <div class="dropdown-menu">
                 <a href="{{ path('app_vehicles') }}">{{ 'nav.vehicles'|trans }}</a>
-                <a href="{{ path('app_vehicle_settings') }}">{{ 'nav.vehicle_settings'|trans }}</a>
+                {% if can('edit', user) %}
+                    <a href="{{ path('app_vehicle_settings') }}">{{ 'nav.vehicle_settings'|trans }}</a>
+                {% endif %}
             </div>
         </div>
 
@@ -44,14 +46,14 @@
             </div>
         </div>
 
-        {% if can('imports', user) or can('manage_users', user) or can('reports.view', user) %}
+        {% if can('import', user) or can('manage_users', user) or can('reports.view', user) %}
             <div class="nav-dropdown {{ route starts with 'app_import' or route starts with 'app_user' or route == 'app_users' or route starts with 'app_report' ? 'is-current' : '' }}">
                 <a class="topbar-item dropdown-toggle" href="{{ can('reports.view', user) ? path('app_report_finance') : path('app_import') }}" aria-expanded="false">{{ 'nav.admin'|trans }}</a>
                 <div class="dropdown-menu">
                     {% if can('reports.view', user) %}
                         <a href="{{ path('app_report_finance') }}">{{ 'nav.reports'|trans }}</a>
                     {% endif %}
-                    {% if can('imports', user) %}
+                    {% if can('import', user) %}
                         <a href="{{ path('app_import') }}">{{ 'nav.imports'|trans }}</a>
                     {% endif %}
                     {% if can('manage_users', user) %}

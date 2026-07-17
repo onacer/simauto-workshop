@@ -88,7 +88,7 @@
                     <span class="row-actions">
                         <a href="{{ path('app_product_show', {id: product.id}) }}">{{ 'ui.show'|trans }}</a>
                         {% if can('edit', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
-                        {% if can('delete', user) %}
+                        {% if can('toggle', user) %}
                             {% if product.active|default(1) == 1 %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'deactivate'}) }}">
                                     <input type="hidden" name="_token" value="{{ record_token }}">
@@ -100,6 +100,8 @@
                                     <button type="submit">{{ 'ui.activate'|trans }}</button>
                                 </form>
                             {% endif %}
+                        {% endif %}
+                        {% if can('delete', user) %}
                             <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'delete'}) }}" onsubmit="return confirm('{{ 'ui.confirm_delete'|trans|e('js') }}')">
                                 <input type="hidden" name="_token" value="{{ record_token }}">
                                 <button type="submit">{{ 'ui.delete'|trans }}</button>

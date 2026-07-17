@@ -90,8 +90,8 @@ class ImportController extends AbstractController
         }
         $sessionUser = ['id' => (int) $user['id'], 'name' => $user['name'], 'email' => $user['email'], 'role' => $user['role']];
         $request->getSession()->set('user', $sessionUser);
-        if (!$access->can('imports', $sessionUser)) {
-            $this->addFlash('error', 'ليست لديك صلاحية الاستيراد');
+        if (!$access->can('import', $sessionUser)) {
+            $this->addFlash('error', 'access.denied');
             return $this->redirectToRoute('app_dashboard');
         }
         return $sessionUser;

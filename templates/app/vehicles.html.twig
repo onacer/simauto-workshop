@@ -6,7 +6,7 @@
     <section class="page-head">
         <h1>{{ 'vehicles.title'|trans }}</h1>
         <span class="row-actions">
-            {% if user.role == 'admin' %}<a href="{{ path('app_vehicle_settings') }}">{{ 'vehicles.settings'|trans }}</a>{% endif %}
+            {% if can('edit', user) %}<a href="{{ path('app_vehicle_settings') }}">{{ 'vehicles.settings'|trans }}</a>{% endif %}
             <a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a>
         </span>
     </section>

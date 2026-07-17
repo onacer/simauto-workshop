@@ -16,22 +16,21 @@ class AccessControl
             return false;
         }
 
-        return in_array($permission, [
+        $managerPermissions = [
             'dashboard',
+            'view',
+            'create',
+            'progress_document',
             'products',
             'stock',
             'categories',
             'suppliers',
             'clients',
             'vehicles',
-            'vehicle_settings',
             'operations',
             'billing',
-            'reports.view',
-            'imports',
-            'edit',
-            'create',
-            'delete',
-        ], true);
+        ];
+
+        return in_array($permission, $managerPermissions, true);
     }
 }

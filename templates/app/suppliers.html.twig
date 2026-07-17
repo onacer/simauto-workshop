@@ -27,7 +27,7 @@
                     <span class="row-actions">
                         <a href="{{ path('app_supplier_show', {id: supplier.id}) }}">{{ 'ui.show'|trans }}</a>
                         {% if can('edit', user) %}<a href="{{ path('app_supplier_edit', {id: supplier.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
-                        {% if can('delete', user) %}
+                        {% if can('toggle', user) %}
                             <form method="post" action="{{ path('app_supplier_deactivate', {id: supplier.id}) }}"><button class="link-button">{{ 'ui.deactivate'|trans }}</button></form>
                         {% endif %}
                     </span>

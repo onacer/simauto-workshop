@@ -43,11 +43,14 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/products/new', name: 'app_product_new', methods: ['POST'])]
-    public function newProduct(Request $request, AppDatabase $db): RedirectResponse
+    public function newProduct(Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'create', 'app_products')) {
+            return $denied;
         }
 
         try {
@@ -81,11 +84,14 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/products/{id}/edit', name: 'app_product_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function productEdit(int $id, Request $request, AppDatabase $db): Response
+    public function productEdit(int $id, Request $request, AppDatabase $db, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_product_show', ['id' => $id])) {
+            return $denied;
         }
 
         $product = $db->product($id);
@@ -117,7 +123,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if (!$access->can('delete', $user)) {
+        if (!$access->can('toggle', $user)) {
             $this->addFlash('error', 'ليست لديك صلاحية التعطيل');
             return $this->redirectToRoute('app_products');
         }
@@ -138,11 +144,14 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/stock/in', name: 'app_stock_in', methods: ['POST'])]
-    public function stockIn(Request $request, AppDatabase $db): RedirectResponse
+    public function stockIn(Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'create', 'app_stock')) {
+            return $denied;
         }
 
         try {
@@ -174,11 +183,14 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/operations/new', name: 'app_operation_new', methods: ['POST'])]
-    public function newOperation(Request $request, AppDatabase $db): RedirectResponse
+    public function newOperation(Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'create', 'app_operations')) {
+            return $denied;
         }
 
         try {
@@ -276,7 +288,8 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if (!$access->can('delete', $user)) {
+        $permission = $action === 'delete' ? 'delete' : 'toggle';
+        if (!$access->can($permission, $user)) {
             $this->addFlash('error', 'ليست لديك صلاحية الحذف');
             return $this->redirectToRoute('app_dashboard');
         }
@@ -299,11 +312,14 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/documents/{id}/confirm', name: 'app_document_confirm', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function confirmDocument(int $id, Request $request, AppDatabase $db): RedirectResponse
+    public function confirmDocument(int $id, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'progress_document', 'app_invoice', ['id' => $id])) {
+            return $denied;
         }
         try {
             $orderId = $db->confirmQuote($id, (int) $user['id']);
@@ -316,11 +332,14 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/documents/{id}/invoice', name: 'app_document_invoice', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function invoiceDocument(int $id, Request $request, AppDatabase $db): RedirectResponse
+    public function invoiceDocument(int $id, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'progress_document', 'app_invoice', ['id' => $id])) {
+            return $denied;
         }
         try {
             $invoiceId = $db->invoiceDocument($id, (int) $user['id']);
@@ -333,7 +352,7 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/categories', name: 'app_categories', methods: ['GET', 'POST'])]
-    public function categories(Request $request, AppDatabase $db): Response
+    public function categories(Request $request, AppDatabase $db, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
@@ -341,6 +360,9 @@ class DashboardController extends AbstractController
         }
 
         if ($request->isMethod('POST')) {
+            if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_categories')) {
+                return $denied;
+            }
             try {
                 $db->saveCategory($request->request->all());
                 $this->addFlash('success', 'تم حفظ الصنف');
@@ -354,11 +376,14 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/categories/{id}/edit', name: 'app_category_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function categoryEdit(int $id, Request $request, AppDatabase $db): Response
+    public function categoryEdit(int $id, Request $request, AppDatabase $db, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_category_show', ['id' => $id])) {
+            return $denied;
         }
         $category = $db->category($id);
         if (!$category) {
@@ -401,7 +426,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if (!$access->can('delete', $user)) {
+        if (!$access->can('toggle', $user)) {
             $this->addFlash('error', 'ليست لديك صلاحية التعطيل');
             return $this->redirectToRoute('app_categories');
         }
@@ -410,13 +435,16 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/suppliers', name: 'app_suppliers', methods: ['GET', 'POST'])]
-    public function suppliers(Request $request, AppDatabase $db): Response
+    public function suppliers(Request $request, AppDatabase $db, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
         }
         if ($request->isMethod('POST')) {
+            if ($denied = $this->denyUnlessCan($access, $user, 'create', 'app_suppliers')) {
+                return $denied;
+            }
             try {
                 $db->saveSupplier($request->request->all());
                 $this->addFlash('success', 'تم حفظ المورد');
@@ -429,11 +457,14 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/suppliers/{id}/edit', name: 'app_supplier_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function supplierEdit(int $id, Request $request, AppDatabase $db): Response
+    public function supplierEdit(int $id, Request $request, AppDatabase $db, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_supplier_show', ['id' => $id])) {
+            return $denied;
         }
         $supplier = $db->supplier($id);
         if (!$supplier) {
@@ -475,7 +506,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if (!$access->can('delete', $user)) {
+        if (!$access->can('toggle', $user)) {
             $this->addFlash('error', 'ليست لديك صلاحية التعطيل');
             return $this->redirectToRoute('app_suppliers');
         }
@@ -484,13 +515,16 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/clients', name: 'app_clients', methods: ['GET', 'POST'])]
-    public function clients(Request $request, AppDatabase $db): Response
+    public function clients(Request $request, AppDatabase $db, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
         }
         if ($request->isMethod('POST')) {
+            if ($denied = $this->denyUnlessCan($access, $user, 'create', 'app_clients')) {
+                return $denied;
+            }
             try {
                 $db->saveClient($request->request->all());
                 $this->addFlash('success', 'تم حفظ العميل');
@@ -503,11 +537,14 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/clients/{id}/edit', name: 'app_client_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function clientEdit(int $id, Request $request, AppDatabase $db): Response
+    public function clientEdit(int $id, Request $request, AppDatabase $db, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_client_show', ['id' => $id])) {
+            return $denied;
         }
         $client = $db->client($id);
         if (!$client) {
@@ -544,13 +581,16 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/vehicles', name: 'app_vehicles', methods: ['GET', 'POST'])]
-    public function vehicles(Request $request, AppDatabase $db): Response
+    public function vehicles(Request $request, AppDatabase $db, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
         }
         if ($request->isMethod('POST')) {
+            if ($denied = $this->denyUnlessCan($access, $user, 'create', 'app_vehicles')) {
+                return $denied;
+            }
             try {
                 $db->saveVehicle($request->request->all());
                 $this->addFlash('success', 'تم حفظ السيارة');
@@ -588,11 +628,14 @@ class DashboardController extends AbstractController
     }
 
     #[Route('/vehicles/settings', name: 'app_vehicle_settings', methods: ['GET', 'POST'])]
-    public function vehicleSettings(Request $request, AppDatabase $db): Response
+    public function vehicleSettings(Request $request, AppDatabase $db, AccessControl $access): Response
     {
         $user = $this->requireUser($request, $db);
         if ($user instanceof RedirectResponse) {
             return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_vehicles')) {
+            return $denied;
         }
         if ($request->isMethod('POST')) {
             try {
@@ -901,6 +944,16 @@ class DashboardController extends AbstractController
             return $this->redirectToRoute('app_dashboard');
         }
         return $user;
+    }
+
+    private function denyUnlessCan(AccessControl $access, array $user, string $permission, string $route, array $params = []): ?RedirectResponse
+    {
+        if ($access->can($permission, $user)) {
+            return null;
+        }
+
+        $this->addFlash('error', 'access.denied');
+        return $this->redirectToRoute($route, $params);
     }
 
     private function csrfToken(Request $request, string $key): string
