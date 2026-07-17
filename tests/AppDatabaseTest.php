@@ -5,8 +5,10 @@ namespace App\Tests;
 use App\Controller\DashboardController;
 use App\Controller\ImportController;
 use App\Controller\ReportController;
+use App\Kernel;
 use App\Service\AccessControl;
 use App\Service\AppDatabase;
+use App\Service\DesktopPaths;
 use App\Service\ImportService;
 use InvalidArgumentException;
 use PDO;
@@ -37,6 +39,56 @@ final class AppDatabaseTest extends TestCase
             $this->removeDirectory($directory);
         }
         $this->temporaryDirectories = [];
+    }
+
+    public function testDatabaseUsesConfiguredDesktopDataDirectory(): void
+    {
+        $project = $this->temporaryDirectory();
+        $base = $this->temporaryDirectory();
+        $previous = getenv('SIMAUTO_DATA_DIR');
+
+        try {
+            putenv('SIMAUTO_DATA_DIR=' . $base);
+            new AppDatabase($project);
+
+            self::assertSame(str_replace('\\', '/', $base) . '/data', DesktopPaths::dataDir($project));
+            self::assertFileExists($base . '/data/simauto.sqlite');
+            self::assertFileDoesNotExist($project . '/data/simauto.sqlite');
+        } finally {
+            $previous === false ? putenv('SIMAUTO_DATA_DIR') : putenv('SIMAUTO_DATA_DIR=' . $previous);
+        }
+    }
+
+    public function testDatabaseFallsBackToProjectDataDirectory(): void
+    {
+        $project = $this->temporaryDirectory();
+        $previous = getenv('SIMAUTO_DATA_DIR');
+
+        try {
+            putenv('SIMAUTO_DATA_DIR');
+            new AppDatabase($project);
+
+            self::assertSame(str_replace('\\', '/', $project) . '/data', DesktopPaths::dataDir($project));
+            self::assertFileExists($project . '/data/simauto.sqlite');
+        } finally {
+            $previous === false ? putenv('SIMAUTO_DATA_DIR') : putenv('SIMAUTO_DATA_DIR=' . $previous);
+        }
+    }
+
+    public function testKernelUsesConfiguredDesktopVarDirectory(): void
+    {
+        $base = $this->temporaryDirectory();
+        $previous = getenv('SIMAUTO_DATA_DIR');
+
+        try {
+            putenv('SIMAUTO_DATA_DIR=' . $base);
+            $kernel = new Kernel('prod', false);
+
+            self::assertStringStartsWith(str_replace('\\', '/', $base) . '/var/cache/prod', str_replace('\\', '/', $kernel->getCacheDir()));
+            self::assertStringStartsWith(str_replace('\\', '/', $base) . '/var/log', str_replace('\\', '/', $kernel->getLogDir()));
+        } finally {
+            $previous === false ? putenv('SIMAUTO_DATA_DIR') : putenv('SIMAUTO_DATA_DIR=' . $previous);
+        }
     }
 
     public function testCompleteWorkshopFlowKeepsStockAndDocumentsConsistent(): void
