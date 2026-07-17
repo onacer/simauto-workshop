@@ -125,6 +125,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     syncProductPricing();
 
+    const syncReportFilters = () => {
+        document.querySelectorAll("[data-custom-report-toggle]").forEach((button) => {
+            const form = document.querySelector("[data-custom-report-form]");
+            button.addEventListener("click", () => {
+                form?.classList.toggle("is-hidden", false);
+            });
+        });
+    };
+
+    syncReportFilters();
+
     const syncOperationLines = (form) => {
         const vatInput = form.querySelector(".operation-vat-rate");
         const totalHtNode = form.querySelector("[data-total-ht]");

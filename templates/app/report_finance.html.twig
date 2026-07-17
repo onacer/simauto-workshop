@@ -1,0 +1,96 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ 'reports.finance.title'|trans }} - SIM Auto{% endblock %}
+
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+
+<main class="main-board">
+    <section class="page-head">
+        <h1>{{ 'reports.finance.title'|trans }}</h1>
+        <a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a>
+    </section>
+
+    {% for message in app.flashes('warning') %}
+        <div class="alert alert-warning">{{ message|trans }}</div>
+    {% endfor %}
+    {% for message in app.flashes('error') %}
+        <div class="alert alert-error">{{ message|trans }}</div>
+    {% endfor %}
+
+    <section class="panel report-filters">
+        <div class="preset-tabs">
+            <a class="{{ period.preset == 'today' ? 'is-active' : '' }}" href="{{ path('app_report_finance', {preset: 'today'}) }}">{{ 'reports.preset.today'|trans }}</a>
+            <a class="{{ period.preset == 'week' ? 'is-active' : '' }}" href="{{ path('app_report_finance', {preset: 'week'}) }}">{{ 'reports.preset.week'|trans }}</a>
+            <a class="{{ period.preset == 'month' ? 'is-active' : '' }}" href="{{ path('app_report_finance', {preset: 'month'}) }}">{{ 'reports.preset.month'|trans }}</a>
+            <button type="button" class="{{ period.preset == 'custom' ? 'is-active' : '' }}" data-custom-report-toggle>{{ 'reports.preset.custom'|trans }}</button>
+        </div>
+        <form class="form-grid custom-report-form {{ period.preset == 'custom' ? '' : 'is-hidden' }}" method="get" data-custom-report-form>
+            <input type="hidden" name="preset" value="custom">
+            <label>{{ 'reports.date_from'|trans }}<input type="date" name="from" value="{{ period.from }}"></label>
+            <label>{{ 'reports.date_to'|trans }}<input type="date" name="to" value="{{ period.to }}"></label>
+            <button class="btn btn-primary" type="submit">{{ 'ui.filter'|trans }}</button>
+        </form>
+        <p class="period-caption">{{ period.from|date('d/m/Y') }} - {{ period.to|date('d/m/Y') }}</p>
+    </section>
+
+    <section class="report-kpis">
+        <article class="kpi-card tone-yellow"><span>{{ 'reports.kpi.total_ttc'|trans }}</span><strong>{{ summary.total_ttc|number_format(2, ',', ' ') }} DH</strong></article>
+        <article class="kpi-card tone-black"><span>{{ 'reports.kpi.subtotal_ht'|trans }}</span><strong>{{ summary.subtotal_ht|number_format(2, ',', ' ') }} DH</strong></article>
+        <article class="kpi-card tone-red"><span>{{ 'reports.kpi.vat'|trans }}</span><strong>{{ summary.vat_amount|number_format(2, ',', ' ') }} DH</strong></article>
+        <article class="kpi-card tone-gold"><span>{{ 'reports.kpi.margin'|trans }}</span><strong class="{{ summary.total_margin < 0 ? 'negative-value' : '' }}">{{ summary.total_margin|number_format(2, ',', ' ') }} DH</strong></article>
+        <article class="kpi-card tone-yellow"><span>{{ 'reports.kpi.margin_rate'|trans }}</span><strong>{{ summary.margin_rate|number_format(2, ',', ' ') }}%</strong></article>
+        <article class="kpi-card tone-black"><span>{{ 'reports.kpi.invoice_count'|trans }}</span><strong>{{ summary.invoice_count }}</strong></article>
+    </section>
+
+    <section class="panel">
+        <div class="panel-title-row">
+            <h2>{{ 'reports.payments.title'|trans }}</h2>
+            {% if period.is_single_day %}
+                <a class="btn btn-primary" href="{{ path('app_report_day_receipt', {date: period.from}) }}">{{ 'reports.day_receipt'|trans }}</a>
+            {% endif %}
+        </div>
+        <div class="payment-breakdown">
+            {% for method, payment in summary.payments %}
+                <div>
+                    <span>{{ ('payment.code.' ~ method)|trans }}</span>
+                    <strong>{{ payment.total_ttc|number_format(2, ',', ' ') }} DH</strong>
+                    <small>{{ payment.count }} {{ 'reports.invoice_short'|trans }}</small>
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="data-table finance-table">
+            <div class="table-head">
+                <span>{{ 'reports.table.invoice'|trans }}</span>
+                <span>{{ 'ui.date'|trans }}</span>
+                <span>{{ 'ui.client'|trans }}</span>
+                <span>{{ 'vehicles.vehicle'|trans }}</span>
+                <span>{{ 'reports.table.payment'|trans }}</span>
+                <span>{{ 'reports.table.total_ttc'|trans }}</span>
+                <span>{{ 'reports.table.margin'|trans }}</span>
+                <span>{{ 'reports.table.margin_rate'|trans }}</span>
+            </div>
+            {% for operation in operations %}
+                <a class="table-row-link" href="{{ path('app_report_finance_operation', {id: operation.id, preset: period.preset, from: period.from, to: period.to}) }}">
+                    <strong>{{ operation.invoice_no }}</strong>
+                    <span>{{ operation.created_at|date('d/m/Y') }}</span>
+                    <span>{{ operation.client_display_name }}</span>
+                    <span>{{ operation.vehicle_display_plate }}</span>
+                    <span>{{ ('payment.code.' ~ operation.payment_method)|trans }}</span>
+                    <span>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</span>
+                    <span class="margin-cell {{ operation.margin < 0 ? 'negative-value' : '' }}">
+                        {{ operation.margin|number_format(2, ',', ' ') }} DH
+                        {% if operation.has_estimated_lines %}<small class="badge-estimated">{{ 'reports.estimated'|trans }}</small>{% endif %}
+                    </span>
+                    <span>{{ operation.margin_rate|number_format(2, ',', ' ') }}%</span>
+                </a>
+            {% else %}
+                <p class="empty-state">{{ 'reports.empty'|trans }}</p>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

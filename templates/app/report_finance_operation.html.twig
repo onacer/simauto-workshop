@@ -1,0 +1,65 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ operation.invoice_no }} - {{ 'reports.operation.title'|trans }}{% endblock %}
+
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+
+<main class="main-board">
+    <section class="page-head">
+        <h1>{{ 'reports.operation.title'|trans }} {{ operation.invoice_no }}</h1>
+        <a class="btn btn-dark" href="{{ path('app_report_finance', return_filters) }}">{{ 'ui.back'|trans }}</a>
+    </section>
+
+    {% include 'app/_show_info.html.twig' with {rows: [
+        {label: 'reports.table.invoice'|trans, value: operation.invoice_no},
+        {label: 'ui.date'|trans, value: operation.created_at|date('d/m/Y H:i')},
+        {label: 'ui.client'|trans, value: operation.client_display_name},
+        {label: 'vehicles.vehicle'|trans, value: operation.vehicle_display_plate},
+        {label: 'reports.table.payment'|trans, value: ('payment.code.' ~ operation.payment_method)|trans},
+        {label: 'reports.kpi.total_ttc'|trans, value: operation.total_ttc|number_format(2, ',', ' ') ~ ' DH'},
+        {label: 'reports.kpi.subtotal_ht'|trans, value: operation.subtotal_ht|number_format(2, ',', ' ') ~ ' DH'},
+        {label: 'reports.kpi.margin'|trans, value: operation.margin|number_format(2, ',', ' ') ~ ' DH'}
+    ]} %}
+
+    <section class="panel">
+        <div class="data-table finance-detail-table">
+            <div class="table-head">
+                <span>{{ 'reports.line.designation'|trans }}</span>
+                <span>{{ 'ui.type'|trans }}</span>
+                <span>{{ 'operations.quantity'|trans }}</span>
+                <span>{{ 'reports.line.unit_ttc'|trans }}</span>
+                <span>{{ 'reports.line.total_ht'|trans }}</span>
+                <span>{{ 'reports.line.cost_ht'|trans }}</span>
+                <span>{{ 'reports.table.margin'|trans }}</span>
+                <span>{{ 'reports.table.margin_rate'|trans }}</span>
+            </div>
+            {% for line in operation.margin_lines %}
+                <div>
+                    <strong>
+                        {{ line.label }}
+                        {% if line.is_estimated %}<small class="badge-estimated">{{ 'reports.estimated'|trans }}</small>{% endif %}
+                    </strong>
+                    <span>{{ line.product_type ?: line.line_type }}</span>
+                    <span>{{ line.quantity }}</span>
+                    <span>{{ line.unit_price|number_format(2, ',', ' ') }} DH</span>
+                    <span>{{ line.total_ht|number_format(2, ',', ' ') }} DH</span>
+                    <span>{{ line.cost_ht|number_format(2, ',', ' ') }} DH</span>
+                    <span class="margin-cell {{ line.margin < 0 ? 'negative-value' : '' }}">{{ line.margin|number_format(2, ',', ' ') }} DH</span>
+                    <span>{{ line.margin_rate|number_format(2, ',', ' ') }}%</span>
+                </div>
+            {% endfor %}
+            <div class="finance-total-row">
+                <strong>{{ 'operations.total'|trans }}</strong>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span>{{ operation.subtotal_ht|number_format(2, ',', ' ') }} DH</span>
+                <span>{{ operation.cost_ht|number_format(2, ',', ' ') }} DH</span>
+                <span class="{{ operation.margin < 0 ? 'negative-value' : '' }}">{{ operation.margin|number_format(2, ',', ' ') }} DH</span>
+                <span>{{ operation.margin_rate|number_format(2, ',', ' ') }}%</span>
+            </div>
+        </div>
+    </section>
+</main>
+{% endblock %}
