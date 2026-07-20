@@ -136,6 +136,179 @@ document.addEventListener("DOMContentLoaded", () => {
 
     syncReportFilters();
 
+    const normalize = (value) => (value || "").toString().toLowerCase().trim().replace(/\s+/g, " ");
+
+    const enhanceCombobox = (root = document) => {
+        root.querySelectorAll("select[data-combobox]").forEach((select) => {
+            if (select.classList.contains("is-combobox-native")) return;
+            const minimum = Number.parseInt(select.dataset.comboboxMin || "0", 10);
+            if (minimum > 0 && select.options.length <= minimum) return;
+
+            select.classList.add("is-combobox-native");
+            select.tabIndex = -1;
+
+            const combo = document.createElement("div");
+            combo.className = "combobox";
+            combo.dir = document.documentElement.dir || "rtl";
+
+            const input = document.createElement("input");
+            input.type = "text";
+            input.className = "combobox-input";
+            input.autocomplete = "off";
+            input.setAttribute("role", "combobox");
+            input.setAttribute("aria-expanded", "false");
+            input.placeholder = select.options[0]?.textContent?.trim() || "";
+
+            const list = document.createElement("div");
+            list.className = "combobox-list";
+            list.setAttribute("role", "listbox");
+
+            combo.append(input, list);
+            select.insertAdjacentElement("afterend", combo);
+
+            let activeIndex = -1;
+
+            const visibleOptions = () => Array.from(select.options).filter((option) => !option.hidden && !option.disabled);
+            const selectedText = () => select.selectedOptions[0]?.textContent?.trim() || "";
+            const syncInput = () => {
+                input.value = selectedText();
+            };
+            const close = () => {
+                combo.classList.remove("is-open");
+                input.setAttribute("aria-expanded", "false");
+                activeIndex = -1;
+            };
+            const open = () => {
+                combo.classList.add("is-open");
+                input.setAttribute("aria-expanded", "true");
+                render(input.value);
+            };
+            const choose = (option) => {
+                select.value = option.value;
+                select.dispatchEvent(new Event("change", { bubbles: true }));
+                syncInput();
+                close();
+            };
+            const render = (query = "") => {
+                const term = normalize(query);
+                const matches = visibleOptions().filter((option) => {
+                    const haystack = normalize(`${option.dataset.search || ""} ${option.textContent || ""}`);
+                    return option.value === "" || haystack.includes(term);
+                }).slice(0, 80);
+
+                list.innerHTML = "";
+                matches.forEach((option, index) => {
+                    const item = document.createElement("button");
+                    item.type = "button";
+                    item.className = "combobox-option";
+                    item.setAttribute("role", "option");
+                    item.textContent = option.textContent.trim();
+                    item.dataset.value = option.value;
+                    if (option.value === select.value) item.classList.add("is-selected");
+                    if (index === activeIndex) item.classList.add("is-active");
+                    item.addEventListener("mousedown", (event) => {
+                        event.preventDefault();
+                        choose(option);
+                    });
+                    list.appendChild(item);
+                });
+            };
+
+            input.addEventListener("focus", open);
+            input.addEventListener("input", () => {
+                activeIndex = -1;
+                open();
+            });
+            input.addEventListener("keydown", (event) => {
+                const items = Array.from(list.querySelectorAll(".combobox-option"));
+                if (event.key === "Escape") {
+                    event.preventDefault();
+                    syncInput();
+                    close();
+                    return;
+                }
+                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    event.preventDefault();
+                    if (!combo.classList.contains("is-open")) open();
+                    const direction = event.key === "ArrowDown" ? 1 : -1;
+                    activeIndex = items.length ? (activeIndex + direction + items.length) % items.length : -1;
+                    render(input.value);
+                    return;
+                }
+                if (event.key === "Enter" && combo.classList.contains("is-open")) {
+                    event.preventDefault();
+                    const option = visibleOptions().find((candidate) => candidate.value === items[activeIndex]?.dataset.value);
+                    if (option) choose(option);
+                }
+            });
+
+            select.addEventListener("change", syncInput);
+            select.addEventListener("combobox:refresh", () => {
+                syncInput();
+                render(input.value);
+            });
+            document.addEventListener("click", (event) => {
+                if (!combo.contains(event.target)) close();
+            });
+            syncInput();
+        });
+    };
+
+    const syncDependentSelects = () => {
+        document.querySelectorAll("[data-vehicle-select]").forEach((vehicleSelect) => {
+            const form = vehicleSelect.closest("form") || document;
+            const clientSelect = form.querySelector("[name='client_id']");
+            const sync = () => {
+                const clientId = clientSelect?.value || "";
+                Array.from(vehicleSelect.options).forEach((option) => {
+                    const matches = !option.dataset.clientId || !clientId || option.dataset.clientId === clientId;
+                    option.hidden = !matches;
+                    option.disabled = !matches;
+                });
+                if (vehicleSelect.selectedOptions[0]?.hidden) vehicleSelect.value = "";
+                vehicleSelect.dispatchEvent(new Event("combobox:refresh"));
+            };
+            clientSelect?.addEventListener("change", sync);
+            sync();
+        });
+
+        document.querySelectorAll("[data-model-select]").forEach((modelSelect) => {
+            const form = modelSelect.closest("form") || document;
+            const brandSelect = form.querySelector("[data-brand-select]");
+            const sync = () => {
+                const brandId = brandSelect?.value || "";
+                Array.from(modelSelect.options).forEach((option) => {
+                    const matches = !option.dataset.brandId || !brandId || option.dataset.brandId === brandId;
+                    option.hidden = !matches;
+                    option.disabled = !matches;
+                });
+                if (modelSelect.selectedOptions[0]?.hidden) modelSelect.value = "";
+                modelSelect.dispatchEvent(new Event("combobox:refresh"));
+            };
+            brandSelect?.addEventListener("change", sync);
+            sync();
+        });
+    };
+
+    const syncLiveSearch = () => {
+        document.querySelectorAll("[data-live-search]").forEach((input) => {
+            const targetSelector = input.dataset.liveTarget;
+            const target = targetSelector ? document.querySelector(targetSelector) : input.closest(".panel")?.querySelector(".data-table");
+            if (!target) return;
+
+            input.addEventListener("input", () => {
+                const term = normalize(input.value);
+                target.querySelectorAll("[data-live-row]").forEach((row) => {
+                    row.classList.toggle("is-live-hidden", term !== "" && !normalize(row.dataset.search || row.textContent).includes(term));
+                });
+            });
+        });
+    };
+
+    enhanceCombobox();
+    syncDependentSelects();
+    syncLiveSearch();
+
     const syncOperationLines = (form) => {
         const vatInput = form.querySelector(".operation-vat-rate");
         const totalHtNode = form.querySelector("[data-total-ht]");
@@ -210,16 +383,23 @@ document.addEventListener("DOMContentLoaded", () => {
             const first = container?.querySelector("[data-line]");
             if (!first || !container) return;
             const clone = first.cloneNode(true);
+            clone.querySelectorAll(".combobox").forEach((combo) => combo.remove());
+            clone.querySelectorAll("select").forEach((select) => {
+                select.classList.remove("is-combobox-native");
+                select.removeAttribute("tabindex");
+                select.selectedIndex = 0;
+            });
             clone.querySelectorAll("input").forEach((input) => {
                 input.value = input.classList.contains("line-qty") ? "1" : "0";
                 if (input.classList.contains("line-label")) input.value = "";
             });
-            clone.querySelectorAll("select").forEach((select) => select.selectedIndex = 0);
             container.appendChild(clone);
+            enhanceCombobox(clone);
             attach();
             syncOperationLines(form);
         });
         attach();
+        enhanceCombobox(form);
         syncOperationLines(form);
     });
 });

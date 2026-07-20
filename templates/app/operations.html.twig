@@ -20,18 +20,18 @@
         <form action="{{ path('app_operation_new') }}" method="post" class="operation-form dynamic-operation-form">
             <div class="form-grid">
                 <label>{{ 'ui.client'|trans }}
-                    <select name="client_id" required>
+                    <select name="client_id" required data-combobox>
                         <option value="">{{ 'operations.choose_client'|trans }}</option>
                         {% for client in clients %}
-                            <option value="{{ client.id }}">{{ client.name }}</option>
+                            <option value="{{ client.id }}" data-search="{{ (client.name ~ ' ' ~ client.phone ~ ' ' ~ client.email)|lower }}">{{ client.name }}{% if client.phone %} - {{ client.phone }}{% endif %}</option>
                         {% endfor %}
                     </select>
                 </label>
                 <label>{{ 'operations.vehicle'|trans }}
-                    <select name="vehicle_id" required>
+                    <select name="vehicle_id" required data-combobox data-vehicle-select>
                         <option value="">{{ 'operations.choose_vehicle'|trans }}</option>
                         {% for vehicle in vehicles %}
-                            <option value="{{ vehicle.id }}">{{ vehicle.client_name }} - {{ vehicle.plate }} - {{ vehicle.brand_name }} {{ vehicle.model_name }}</option>
+                            <option value="{{ vehicle.id }}" data-client-id="{{ vehicle.client_id }}" data-search="{{ (vehicle.plate ~ ' ' ~ vehicle.brand_name ~ ' ' ~ vehicle.model_name ~ ' ' ~ vehicle.client_name)|lower }}">{{ vehicle.client_name }} - {{ vehicle.plate }} - {{ vehicle.brand_name }} {{ vehicle.model_name }}</option>
                         {% endfor %}
                     </select>
                 </label>
@@ -59,10 +59,19 @@
                     <span>{{ 'operations.line_total_ht'|trans }}</span>
                 </div>
                 <div class="operation-line" data-line>
-                    <select name="line_product_id[]" class="line-product">
+                    <select name="line_product_id[]" class="line-product" data-combobox>
                         <option value="" data-price="0" data-name="">{{ 'operations.free_line'|trans }}</option>
                         {% for product in products %}
-                            <option value="{{ product.id }}" data-price="{{ product.sale_price }}" data-name="{{ product.name }}">[{{ product.sku }}] {{ product.name }} - {{ product.sale_price }} DH</option>
+                            {% set product_ref = product.ref_company ?: (product.ref_universal ?: product.sku) %}
+                            <option value="{{ product.id }}"
+                                    data-price="{{ product.sale_price }}"
+                                    data-name="{{ product.name }}"
+                                    data-ref-company="{{ product.ref_company }}"
+                                    data-ref-universal="{{ product.ref_universal }}"
+                                    data-sku="{{ product.sku }}"
+                                    data-search="{{ (product.ref_company ~ ' ' ~ product.ref_universal ~ ' ' ~ product.sku ~ ' ' ~ product.name)|lower }}">
+                                [{{ product_ref }}] {{ product.name }} - {{ product.stock_qty }} - {{ product.sale_price }} DH
+                            </option>
                         {% endfor %}
                     </select>
                     <input name="line_label[]" class="line-label" placeholder="{{ 'operations.label'|trans }}">

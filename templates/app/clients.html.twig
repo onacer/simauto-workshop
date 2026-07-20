@@ -20,10 +20,11 @@
         </form>
     </section>
     <section class="panel">
-        <div class="data-table">
+        <label class="list-live-search">{{ 'ui.search'|trans }}<input type="search" data-live-search data-live-target="#clients-table" placeholder="{{ 'clients.client'|trans }}"></label>
+        <div class="data-table" id="clients-table">
             <div class="table-head"><span>{{ 'clients.client'|trans }}</span><span>{{ 'clients.type'|trans }}</span><span>{{ 'ui.phone'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for client in clients %}
-                <div>
+                <div data-live-row data-search="{{ (client.name ~ ' ' ~ client.phone ~ ' ' ~ client.email ~ ' ' ~ client.ice)|lower }}">
                     <strong>{{ client.name }}</strong>
                     <span>{{ client.type == 'company' ? 'clients.company'|trans : 'clients.individual'|trans }}</span>
                     <span>{{ client.phone }}</span>

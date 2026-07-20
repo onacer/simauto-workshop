@@ -537,6 +537,67 @@ html[dir="ltr"] .profile-menu {
     grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.combobox {
+    position: relative;
+}
+
+select.is-combobox-native {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.combobox-input {
+    width: 100%;
+}
+
+.combobox-list {
+    position: absolute;
+    inset-inline: 0;
+    top: calc(100% + 6px);
+    z-index: 45;
+    display: none;
+    max-height: 260px;
+    overflow: auto;
+    padding: 6px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, .12);
+    background: rgba(12, 12, 12, .96);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .25);
+}
+
+.combobox.is-open .combobox-list {
+    display: grid;
+    gap: 4px;
+}
+
+.combobox-option {
+    width: 100%;
+    border: 0;
+    border-radius: 8px;
+    padding: 9px 11px;
+    background: transparent;
+    color: #fff;
+    text-align: inherit;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.combobox-option:hover,
+.combobox-option.is-active,
+.combobox-option.is-selected {
+    background: var(--yellow);
+    color: var(--black);
+}
+
+.list-live-search {
+    display: block;
+    max-width: 360px;
+    margin-bottom: 16px;
+}
+
 .stock-form {
     grid-template-columns: 1.5fr .7fr 1fr auto;
 }
@@ -577,6 +638,15 @@ html[dir="ltr"] .profile-menu {
 
 .data-table strong {
     font-weight: 900;
+}
+
+.products-table > div,
+.products-table .table-head {
+    grid-template-columns: 1.5fr 1fr 1fr .7fr 1.4fr;
+}
+
+.is-live-hidden {
+    display: none !important;
 }
 
 .info-grid {
@@ -1209,6 +1279,22 @@ html[dir="ltr"] .profile-menu {
     grid-template-columns: 1fr auto;
     gap: 8px;
     font-size: 13px;
+}
+
+.receipt-total-main {
+    display: grid;
+    gap: 4px;
+    margin: 10px 0;
+    text-align: center;
+    font-weight: 900;
+}
+
+.receipt-total-main span {
+    font-size: 14px;
+}
+
+.receipt-total-main b {
+    font-size: 22px;
 }
 
 .ticket-line {

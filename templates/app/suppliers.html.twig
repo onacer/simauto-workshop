@@ -17,10 +17,11 @@
         </form>
     </section>
     <section class="panel">
-        <div class="data-table">
+        <label class="list-live-search">{{ 'ui.search'|trans }}<input type="search" data-live-search data-live-target="#suppliers-table" placeholder="{{ 'suppliers.supplier'|trans }}"></label>
+        <div class="data-table" id="suppliers-table">
             <div class="table-head"><span>{{ 'suppliers.supplier'|trans }}</span><span>{{ 'ui.phone'|trans }}</span><span>ICE</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for supplier in suppliers %}
-                <div>
+                <div data-live-row data-search="{{ (supplier.name ~ ' ' ~ supplier.phone ~ ' ' ~ supplier.email ~ ' ' ~ supplier.ice)|lower }}">
                     <strong>{{ supplier.name }}</strong>
                     <span>{{ supplier.phone }}</span>
                     <span>{{ supplier.ice }}</span>
