@@ -324,6 +324,8 @@ SQL);
         self::assertGreaterThan(0, (int) $migrated->query('SELECT client_id FROM operations WHERE invoice_no = "FAC-OLD"')->fetchColumn());
         self::assertGreaterThan(0, (int) $migrated->query('SELECT vehicle_id FROM operations WHERE invoice_no = "FAC-OLD"')->fetchColumn());
         self::assertSame('check_number', $migrated->query("SELECT name FROM pragma_table_info('operations') WHERE name = 'check_number'")->fetchColumn());
+        self::assertSame('ref_universal', $migrated->query("SELECT name FROM pragma_table_info('products') WHERE name = 'ref_universal'")->fetchColumn());
+        self::assertSame('ref_company', $migrated->query("SELECT name FROM pragma_table_info('products') WHERE name = 'ref_company'")->fetchColumn());
         self::assertSame('FAC-OLD', $migrated->query('SELECT invoice_no FROM operations WHERE invoice_no = "FAC-OLD"')->fetchColumn());
     }
 
@@ -592,6 +594,112 @@ SQL);
         self::assertStringContainsString('CLOTURE DE CAISSE', $html);
         self::assertStringContainsString($operation['invoice_no'], $html);
         self::assertStringContainsString('150,00 DH', $html);
+        self::assertStringContainsString('TOTAL GENERAL', $html);
+        self::assertStringNotContainsString('Total HT', $html);
+        self::assertStringNotContainsString('TVA</span>', $html);
+        self::assertStringNotContainsString('MARGE', $html);
+        $financeHtml = $this->renderTemplate('app/report_finance.html.twig', [
+            'user' => ['role' => 'admin', 'name' => 'Admin'],
+            'period' => ['preset' => 'today', 'from' => $date, 'to' => $date, 'invalid' => false],
+            'summary' => $db->getFinancialSummary($date, $date),
+            'operations' => [],
+        ]);
+        self::assertStringContainsString('reports.kpi.subtotal_ht', $financeHtml);
+        self::assertStringContainsString('reports.kpi.vat', $financeHtml);
+        self::assertStringContainsString('reports.kpi.margin', $financeHtml);
+    }
+
+    public function testProductReferencesAreSavedUniqueAndSearchPriorityUsesReferences(): void
+    {
+        $db = $this->database();
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'SKU-A',
+            'ref_universal' => 'OEM-777',
+            'ref_company' => 'RC100',
+            'name' => 'Filtre prioritaire',
+            'category_id' => $categoryId,
+            'stock_qty' => 1,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $db->saveProduct([
+            'sku' => 'SKU-B',
+            'name' => 'Produit RC100 dans le nom',
+            'category_id' => $categoryId,
+            'stock_qty' => 1,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $db->saveProduct([
+            'sku' => 'SKU-C',
+            'name' => 'Sans reference',
+            'category_id' => $categoryId,
+            'stock_qty' => 1,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+
+        try {
+            $db->saveProduct([
+                'sku' => 'SKU-D',
+                'ref_company' => 'RC100',
+                'name' => 'Double ref',
+                'category_id' => $categoryId,
+                'stock_qty' => 1,
+                'min_qty' => 1,
+                'purchase_price' => 10,
+                'sale_price' => 20,
+            ], 1);
+            self::fail('Expected duplicate company reference rejection.');
+        } catch (InvalidArgumentException $e) {
+            self::assertSame('مرجع الشركة مستعمل مسبقا', $e->getMessage());
+        }
+
+        $results = $db->products(['q' => 'RC100', 'state' => 'all']);
+        self::assertSame('SKU-A', $results[0]['sku']);
+        self::assertSame('RC100', $results[0]['ref_company']);
+        self::assertSame('SKU-A', $db->products(['q' => 'OEM-777', 'state' => 'all'])[0]['sku']);
+        self::assertNotEmpty($db->products(['q' => 'Filtre', 'state' => 'all']));
+    }
+
+    public function testProductReferencesAreRenderedInProductPagesAndOperationFallbackSelect(): void
+    {
+        $db = $this->database();
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'RENDER-001',
+            'ref_universal' => 'OEM-RENDER',
+            'ref_company' => 'SIM-RENDER',
+            'name' => 'Produit rendu',
+            'category_id' => $categoryId,
+            'stock_qty' => 2,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $product = $db->productBySku('RENDER-001');
+        $productsHtml = $this->renderTemplate('app/products.html.twig', $db->dashboardData(['state' => 'all']) + [
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'filters' => ['state' => 'all'],
+            'record_token' => 'token',
+        ]);
+        $showHtml = $this->renderTemplate('app/product_show.html.twig', [
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'product' => $product,
+            'movements' => [],
+        ]);
+        $operationHtml = $this->renderTemplate('app/operations.html.twig', $db->dashboardData() + [
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+        ]);
+
+        self::assertStringContainsString('SIM-RENDER', $productsHtml);
+        self::assertStringContainsString('OEM-RENDER', $showHtml);
+        self::assertStringContainsString('<select name="line_product_id[]"', $operationHtml);
+        self::assertStringContainsString('data-ref-company="SIM-RENDER"', $operationHtml);
     }
 
     public function testClientShowListsRelatedVehiclesAndEmptyState(): void
@@ -805,8 +913,8 @@ SQL);
         $db = $this->database();
         $imports = new ImportService($db);
         $path = $this->csv([
-            ['sku', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
-            ['IMP-001', 'Produit import', 'Categorie Import', '8', '2', '10', '20'],
+            ['sku', 'ref_universal', 'ref_company', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
+            ['IMP-001', 'OEM-IMP-001', 'SIM-IMP-001', 'Produit import', 'Categorie Import', '8', '2', '10', '20'],
         ]);
 
         $first = $imports->import('products', $path, 1);
@@ -814,12 +922,14 @@ SQL);
 
         self::assertSame(1, $first['created']);
         self::assertSame(8, (int) $product['stock_qty']);
+        self::assertSame('OEM-IMP-001', $product['ref_universal']);
+        self::assertSame('SIM-IMP-001', $product['ref_company']);
         self::assertSame('Categorie Import', $product['category_name']);
         self::assertSame(1, (int) $db->pdo()->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . (int) $product['id'])->fetchColumn());
 
         $updatePath = $this->csv([
-            ['sku', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
-            ['IMP-001', 'Produit import modifie', 'Categorie Import', '99', '3', '11', '25'],
+            ['sku', 'ref_universal', 'ref_company', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
+            ['IMP-001', 'OEM-IMP-001-B', 'SIM-IMP-001', 'Produit import modifie', 'Categorie Import', '99', '3', '11', '25'],
         ]);
         $second = $imports->import('products', $updatePath, 1);
         $updated = $db->productBySku('IMP-001');
@@ -827,6 +937,16 @@ SQL);
         self::assertSame(1, $second['updated']);
         self::assertSame(8, (int) $updated['stock_qty']);
         self::assertSame('Produit import modifie', $updated['name']);
+        self::assertSame('OEM-IMP-001-B', $updated['ref_universal']);
+
+        $duplicate = $imports->import('products', $this->csv([
+            ['sku', 'ref_universal', 'ref_company', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
+            ['IMP-002', '', 'SIM-DUP', 'Produit A', 'Categorie Import', '1', '1', '10', '20'],
+            ['IMP-003', '', 'SIM-DUP', 'Produit B', 'Categorie Import', '1', '1', '10', '20'],
+        ]), 1);
+        self::assertSame(1, $duplicate['created']);
+        self::assertSame(1, $duplicate['ignored']);
+        self::assertSame('مرجع الشركة مكرر في الملف', $duplicate['errors'][0]['message']);
     }
 
     public function testImportErrorsRejectInvalidHeadersAndKeepValidRowsOnLineErrors(): void
@@ -845,9 +965,9 @@ SQL);
         }
 
         $report = $imports->import('products', $this->csv([
-            ['sku', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
-            ['GOOD-001', 'Produit valide', 'Import Erreurs', '1', '1', '10', '20'],
-            ['BAD-001', 'Produit invalide', 'Import Erreurs', '1', '1', '-10', '20'],
+            ['sku', 'ref_universal', 'ref_company', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
+            ['GOOD-001', '', '', 'Produit valide', 'Import Erreurs', '1', '1', '10', '20'],
+            ['BAD-001', '', '', 'Produit invalide', 'Import Erreurs', '1', '1', '-10', '20'],
         ]), 1);
 
         self::assertSame(2, $report['processed']);
