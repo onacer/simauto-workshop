@@ -47,10 +47,10 @@ class ImportService
         ],
         'products' => [
             'label' => 'import.entities.products',
-            'headers' => ['sku', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
+            'headers' => ['sku', 'ref_universal', 'ref_company', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
             'examples' => [
-                ['FILT-AIR-001', 'FILTRE A AIR', 'Filtres', '10', '2', '35', '60'],
-                ['HUILE-5W30-001', 'HUILE MOTEUR 5W30', 'Huiles', '5', '1', '250', '400'],
+                ['FILT-AIR-001', 'OEM-AIR-001', 'SIM-AIR-001', 'FILTRE A AIR', 'Filtres', '10', '2', '35', '60'],
+                ['HUILE-5W30-001', 'OEM-5W30-001', 'SIM-HUILE-001', 'HUILE MOTEUR 5W30', 'Huiles', '5', '1', '250', '400'],
             ],
         ],
     ];
@@ -90,8 +90,18 @@ class ImportService
             'errors' => [],
         ];
 
+        $seenProductRefs = [];
         foreach ($rows as $lineNumber => $row) {
             try {
+                if ($entity === 'products') {
+                    $refCompany = mb_strtolower(trim((string) ($row['ref_company'] ?? '')));
+                    if ($refCompany !== '' && isset($seenProductRefs[$refCompany])) {
+                        throw new InvalidArgumentException('مرجع الشركة مكرر في الملف');
+                    }
+                    if ($refCompany !== '') {
+                        $seenProductRefs[$refCompany] = true;
+                    }
+                }
                 $status = $this->importRow($entity, $row, $userId);
                 $report[$status]++;
             } catch (Throwable $e) {
@@ -250,6 +260,8 @@ class ImportService
         $categoryId = $this->db->getOrCreateCategory($row['category_name']);
         $payload = [
             'sku' => $row['sku'],
+            'ref_universal' => $row['ref_universal'] ?? '',
+            'ref_company' => $row['ref_company'] ?? '',
             'name' => $row['name'],
             'category_id' => $categoryId,
             'stock_qty' => (int) $row['stock_qty'],
@@ -261,7 +273,7 @@ class ImportService
         if ($existing) {
             $compare = $payload;
             unset($compare['stock_qty']);
-            if ($this->same($existing, $compare, ['sku', 'name', 'category_id', 'min_qty', 'purchase_price', 'sale_price'])) {
+            if ($this->same($existing, $compare, ['sku', 'ref_universal', 'ref_company', 'name', 'category_id', 'min_qty', 'purchase_price', 'sale_price'])) {
                 return 'ignored';
             }
             $this->db->saveProduct($payload, $userId, (int) $existing['id']);

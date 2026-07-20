@@ -13,6 +13,8 @@
 
     {% include 'app/_show_info.html.twig' with {rows: [
         {label: 'SKU', value: product.sku},
+        {label: 'products.ref_universal'|trans, value: product.ref_universal ?: 'ui.none'|trans},
+        {label: 'products.ref_company'|trans, value: product.ref_company ?: 'ui.none'|trans},
         {label: 'products.category'|trans, value: product.category_name ?: product.category},
         {label: 'products.stock'|trans, value: product.stock_qty},
         {label: 'products.min_qty'|trans, value: product.min_qty},

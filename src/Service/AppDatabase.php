@@ -371,10 +371,34 @@ class AppDatabase
         $state = (string) ($filters['state'] ?? 'active');
         $where = [$state === 'inactive' ? 'p.active = 0' : ($state === 'all' ? '1 = 1' : 'p.active = 1')];
         $params = [];
+        $order = 'p.name';
 
         if (($filters['q'] ?? '') !== '') {
-            $where[] = '(p.name LIKE :q OR p.sku LIKE :q)';
-            $params['q'] = '%' . trim($filters['q']) . '%';
+            $search = $this->normalizeSearchTerm((string) $filters['q']);
+            $where[] = '(
+                lower(trim(COALESCE(p.ref_company, ""))) = :q_exact
+                OR lower(trim(COALESCE(p.ref_universal, ""))) = :q_exact
+                OR lower(trim(p.sku)) = :q_exact
+                OR lower(trim(COALESCE(p.ref_company, ""))) LIKE :q_prefix
+                OR lower(trim(COALESCE(p.ref_universal, ""))) LIKE :q_prefix
+                OR lower(trim(p.sku)) LIKE :q_prefix
+                OR lower(p.name) LIKE :q_contains
+                OR lower(COALESCE(c.name, p.category, "")) LIKE :q_contains
+            )';
+            $params['q_exact'] = $search;
+            $params['q_prefix'] = $search . '%';
+            $params['q_contains'] = '%' . $search . '%';
+            $order = 'CASE
+                WHEN lower(trim(COALESCE(p.ref_company, ""))) = :q_exact THEN 1
+                WHEN lower(trim(COALESCE(p.ref_universal, ""))) = :q_exact THEN 2
+                WHEN lower(trim(p.sku)) = :q_exact THEN 3
+                WHEN lower(trim(COALESCE(p.ref_company, ""))) LIKE :q_prefix THEN 4
+                WHEN lower(trim(COALESCE(p.ref_universal, ""))) LIKE :q_prefix THEN 5
+                WHEN lower(trim(p.sku)) LIKE :q_prefix THEN 6
+                WHEN lower(p.name) LIKE :q_contains THEN 7
+                WHEN lower(COALESCE(c.name, p.category, "")) LIKE :q_contains THEN 8
+                ELSE 9
+            END, p.name';
         }
         if ((int) ($filters['category_id'] ?? 0) > 0) {
             $where[] = 'p.category_id = :category_id';
@@ -387,7 +411,7 @@ class AppDatabase
             $where[] = 'p.stock_qty <= 0';
         }
 
-        $sql = 'SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE ' . implode(' AND ', $where) . ' ORDER BY p.name';
+        $sql = 'SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE ' . implode(' AND ', $where) . ' ORDER BY ' . $order;
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
@@ -403,6 +427,19 @@ class AppDatabase
         return $this->row(
             'SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE lower(trim(p.sku)) = lower(trim(:sku))',
             ['sku' => $sku]
+        );
+    }
+
+    public function productByCompanyReference(string $reference): ?array
+    {
+        $reference = trim($reference);
+        if ($reference === '') {
+            return null;
+        }
+
+        return $this->row(
+            'SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE lower(trim(COALESCE(p.ref_company, ""))) = lower(trim(:reference))',
+            ['reference' => $reference]
         );
     }
 
@@ -426,7 +463,7 @@ class AppDatabase
         if ($id) {
             $payload['id'] = $id;
             $stmt = $this->pdo->prepare(
-                'UPDATE products SET sku=:sku, name=:name, category_id=:category_id, category=:category, min_qty=:min_qty, purchase_price=:purchase_price, sale_price=:sale_price, product_type=:product_type, margin_rate=:margin_rate WHERE id=:id'
+                'UPDATE products SET sku=:sku, ref_universal=:ref_universal, ref_company=:ref_company, name=:name, category_id=:category_id, category=:category, min_qty=:min_qty, purchase_price=:purchase_price, sale_price=:sale_price, product_type=:product_type, margin_rate=:margin_rate WHERE id=:id'
             );
             $stmt->execute($payload);
             return;
@@ -440,8 +477,8 @@ class AppDatabase
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                'INSERT INTO products (sku, name, category, category_id, stock_qty, min_qty, purchase_price, sale_price, product_type, margin_rate, active, created_at)
-                 VALUES (:sku, :name, :category, :category_id, :stock_qty, :min_qty, :purchase_price, :sale_price, :product_type, :margin_rate, 1, datetime("now"))'
+                'INSERT INTO products (sku, ref_universal, ref_company, name, category, category_id, stock_qty, min_qty, purchase_price, sale_price, product_type, margin_rate, active, created_at)
+                 VALUES (:sku, :ref_universal, :ref_company, :name, :category, :category_id, :stock_qty, :min_qty, :purchase_price, :sale_price, :product_type, :margin_rate, 1, datetime("now"))'
             );
             $stmt->execute($payload);
             $productId = (int) $this->pdo->lastInsertId();
@@ -1279,6 +1316,8 @@ class AppDatabase
     private function validateProduct(array $data, ?int $id): array
     {
         $sku = trim((string) ($data['sku'] ?? ''));
+        $refUniversal = trim((string) ($data['ref_universal'] ?? ''));
+        $refCompany = trim((string) ($data['ref_company'] ?? ''));
         $name = trim((string) ($data['name'] ?? ''));
         $categoryId = (int) ($data['category_id'] ?? 0);
         $minQty = (int) ($data['min_qty'] ?? 0);
@@ -1307,6 +1346,12 @@ class AppDatabase
         if ($stmt->fetch()) {
             throw new InvalidArgumentException('كود المنتج موجود مسبقا');
         }
+        if ($refCompany !== '') {
+            $existingRef = $this->productByCompanyReference($refCompany);
+            if ($existingRef && (!$id || (int) $existingRef['id'] !== $id)) {
+                throw new InvalidArgumentException('مرجع الشركة مستعمل مسبقا');
+            }
+        }
 
         $category = $this->category($categoryId);
         if (!$category) {
@@ -1315,6 +1360,8 @@ class AppDatabase
 
         return [
             'sku' => $sku,
+            'ref_universal' => $refUniversal !== '' ? $refUniversal : null,
+            'ref_company' => $refCompany !== '' ? $refCompany : null,
             'name' => $name,
             'category_id' => $categoryId,
             'category' => $category['name'],
@@ -1324,6 +1371,11 @@ class AppDatabase
             'product_type' => $productType,
             'margin_rate' => $marginRate,
         ];
+    }
+
+    private function normalizeSearchTerm(string $term): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $term) ?: ''));
     }
 
     private function buildOperationLines(array $data): array
@@ -1674,6 +1726,8 @@ CREATE TABLE IF NOT EXISTS vehicles (
 CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sku TEXT NOT NULL UNIQUE,
+    ref_universal TEXT,
+    ref_company TEXT,
     name TEXT NOT NULL,
     category TEXT,
     category_id INTEGER,
@@ -1736,6 +1790,8 @@ SQL);
         $this->addColumnIfMissing('users', 'created_at', 'TEXT');
         $this->pdo->exec("UPDATE users SET created_at = datetime('now') WHERE created_at IS NULL OR created_at = ''");
         $this->addColumnIfMissing('products', 'category_id', 'INTEGER');
+        $this->addColumnIfMissing('products', 'ref_universal', 'TEXT');
+        $this->addColumnIfMissing('products', 'ref_company', 'TEXT');
         $this->addColumnIfMissing('products', 'active', 'INTEGER NOT NULL DEFAULT 1');
         $this->addColumnIfMissing('products', 'product_type', "TEXT NOT NULL DEFAULT 'stockable'");
         $this->addColumnIfMissing('products', 'margin_rate', 'REAL');
@@ -1763,6 +1819,9 @@ SQL);
         $this->pdo->exec("UPDATE operations SET subtotal_ht = ROUND(COALESCE(total_ttc, total) / 1.2, 2) WHERE subtotal_ht IS NULL");
         $this->pdo->exec("UPDATE operations SET vat_amount = ROUND(COALESCE(total_ttc, total) - subtotal_ht, 2) WHERE vat_amount IS NULL");
         $this->pdo->exec("UPDATE operation_items SET total_ht = total WHERE total_ht IS NULL");
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_products_ref_universal ON products(ref_universal)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_products_ref_company ON products(ref_company)');
+        $this->pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_ref_company_unique ON products(ref_company) WHERE ref_company IS NOT NULL AND trim(ref_company) <> ''");
 
         $this->migrateCategories();
         $this->migrateClientsAndVehicles();

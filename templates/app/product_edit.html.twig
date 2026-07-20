@@ -8,8 +8,10 @@
     <section class="panel">
         <form method="post" class="form-grid">
             <label>{{ 'ui.code'|trans }}<input name="sku" value="{{ product.sku }}" required></label>
+            <label>{{ 'products.ref_universal'|trans }}<input name="ref_universal" value="{{ product.ref_universal }}"></label>
+            <label>{{ 'products.ref_company'|trans }}<input name="ref_company" value="{{ product.ref_company }}"></label>
             <label>{{ 'products.name'|trans }}<input name="name" value="{{ product.name }}" required></label>
-            <label>{{ 'products.category'|trans }}<select name="category_id" required>{% for category in categories %}<option value="{{ category.id }}" {{ product.category_id == category.id ? 'selected' : '' }}>{{ category.name }}</option>{% endfor %}</select></label>
+            <label>{{ 'products.category'|trans }}<select name="category_id" required data-combobox data-combobox-min="10">{% for category in categories %}<option value="{{ category.id }}" {{ product.category_id == category.id ? 'selected' : '' }}>{{ category.name }}</option>{% endfor %}</select></label>
             <label>{{ 'products.min_qty'|trans }}<input name="min_qty" type="number" min="0" value="{{ product.min_qty }}"></label>
             <label>{{ 'products.purchase_price'|trans }}<input name="purchase_price" type="number" step="0.01" min="0" value="{{ product.purchase_price }}"></label>
             <label>{{ 'products.sale_price'|trans }}<input name="sale_price" type="number" step="0.01" min="0" value="{{ product.sale_price }}"></label>
