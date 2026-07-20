@@ -17,10 +17,7 @@
         <p>{{ user.name }}</p>
         <hr>
         <div class="receipt-row"><span>Factures</span><b>{{ report.summary.invoice_count }}</b></div>
-        <div class="receipt-row"><span>Total TTC</span><b>{{ report.summary.total_ttc|number_format(2, ',', ' ') }} DH</b></div>
-        <div class="receipt-row"><span>Total HT</span><b>{{ report.summary.subtotal_ht|number_format(2, ',', ' ') }} DH</b></div>
-        <div class="receipt-row"><span>TVA</span><b>{{ report.summary.vat_amount|number_format(2, ',', ' ') }} DH</b></div>
-        <div class="receipt-row"><span>TOTAL MARGE</span><b>{{ report.summary.total_margin|number_format(2, ',', ' ') }} DH</b></div>
+        <div class="receipt-total-main"><span>TOTAL GENERAL</span><b>{{ report.summary.total_ttc|number_format(2, ',', ' ') }} DH</b></div>
         <hr>
         {% for method, payment in report.summary.payments %}
             <div class="receipt-row"><span>{{ method }}</span><b>{{ payment.total_ttc|number_format(2, ',', ' ') }} DH</b></div>
