@@ -320,6 +320,8 @@ Champs:
 
 - `id`
 - `sku`
+- `ref_universal`: reference constructeur/OEM universelle, optionnelle.
+- `ref_company`: reference interne SIM Auto, optionnelle et unique quand renseignee.
 - `name`
 - `category`
 - `category_id`
@@ -581,6 +583,8 @@ Page:
 L'utilisateur saisit:
 
 - code produit,
+- reference universelle constructeur/OEM,
+- reference interne SIM Auto,
 - nom,
 - categorie,
 - quantite initiale,
@@ -593,7 +597,16 @@ L'application:
 1. Cree le produit dans `products`.
 2. Cree un mouvement d'entree dans `stock_movements`.
 
-Le produit est rattache a une categorie obligatoire. Le SKU est unique et les prix/quantites negatives sont refuses.
+Le produit est rattache a une categorie obligatoire. Le SKU est le code produit historique et reste unique. `ref_universal` identifie la reference constructeur/OEM. `ref_company` identifie la reference interne SIM Auto; elle est unique quand elle est renseignee, mais plusieurs produits peuvent rester sans reference interne.
+
+La recherche produit donne priorite aux references:
+
+1. correspondance exacte `ref_company`, puis `ref_universal`, puis `sku`;
+2. correspondance prefixe sur les trois memes champs;
+3. correspondance partielle sur le nom produit;
+4. correspondance partielle sur le nom categorie.
+
+Les espaces superflus et la casse sont ignores. Les filtres categorie, etat stock et actif/inactif restent combinables.
 
 Un produit peut etre:
 
@@ -980,10 +993,13 @@ Ticket de cloture de caisse:
 - document francais LTR,
 - format petite imprimante 80 mm,
 - logo,
-- totaux du jour,
+- date, horodatage, utilisateur,
+- nombre de factures,
+- total general TTC en grand,
 - ventilation paiement,
-- marge totale,
 - liste compacte des factures.
+
+Le ticket imprime ne montre pas HT, TVA ni marge. Ces indicateurs restent disponibles dans `/reports/finance`.
 
 ## Assets Publics
 
@@ -1083,7 +1099,9 @@ Regles d'import:
 
 - resolution categorie/marque/modele par nom, insensible a la casse et aux espaces;
 - creation automatique des categories, marques et modeles absents;
-- produit existant par SKU: mise a jour des informations sans ecraser `stock_qty`;
+- produits CSV avec colonnes `sku`, `ref_universal`, `ref_company`, `name`, `category_name`, `stock_qty`, `min_qty`, `purchase_price`, `sale_price`;
+- produit existant par SKU: mise a jour des informations et references sans ecraser `stock_qty`;
+- `ref_company` dupliquee dans le fichier ou deja utilisee par un autre produit: ligne rejetee;
 - produit nouveau avec stock initial: creation du mouvement `in`;
 - client existant par telephone ou email: mise a jour;
 - lignes invalides ignorees avec rapport ligne par ligne;
@@ -1103,6 +1121,21 @@ Templates:
 templates/app/import.html.twig
 templates/app/import_result.html.twig
 ```
+
+## Composant Select avec Recherche
+
+`public/scripts/app.js` enrichit progressivement les `<select data-combobox>` en combobox vanilla:
+
+- le `<select>` natif reste dans le HTML et continue a porter la valeur POST;
+- sans JavaScript, le formulaire reste utilisable avec le select classique;
+- recherche locale sur les options chargees;
+- navigation clavier fleches, Entree et Echappement;
+- fermeture au clic exterieur;
+- compatibilite RTL et LTR.
+
+Le composant est utilise pour les choix de clients, vehicules, produits, fournisseurs, categories, marques et modeles. Les listes longues sont filtrees cote client dans cette iteration; il n'y a pas encore d'appel AJAX, donc la recherche live couvre seulement les options chargees dans la page.
+
+Les listes produits, clients, fournisseurs et vehicules disposent aussi d'une recherche live cote client sur les lignes deja affichees. La recherche serveur reste la reference pour couvrir toute la base.
 
 ## Matrice de Droits
 
@@ -1392,12 +1425,17 @@ L'application est fonctionnelle avec:
 - facture conforme au bon papier SIM Auto,
 - titre facture `FACTURE N°`,
 - TVA incluse dans les prix avec extraction HT/TVA sur facture,
+- references produits `ref_universal` et `ref_company`,
+- recherche produit priorisee par references,
+- combobox vanilla reutilisable sur les selects d'entites,
+- recherche live cote client sur listes principales,
 - situation financiere jour/semaine/mois/periode libre,
 - historique des operations avec filtres,
 - document imprimable universel `/document/{id}`,
 - fiche detail operation `/operations/{id}`,
 - calcul marge par facture et par ligne,
 - ticket de cloture journalier 80 mm,
+- ticket de cloture simplifie sans HT/TVA/marge imprimee,
 - aide marge affichee 35%, 45%, 55% avec calcul interne conserve,
 - paiement cheque avec numero optionnel,
 - version desktop Windows 11 avec PHP portable,
