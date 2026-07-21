@@ -310,11 +310,43 @@ document.addEventListener("DOMContentLoaded", () => {
     syncLiveSearch();
 
     const syncOperationLines = (form) => {
-        const vatInput = form.querySelector(".operation-vat-rate");
-        const totalHtNode = form.querySelector("[data-total-ht]");
-        const totalVatNode = form.querySelector("[data-total-vat]");
         const totalTtcNode = form.querySelector("[data-total-ttc]");
         let totalTtc = 0;
+        const marginValues = ["135", "145", "155"];
+
+        const recalculateLinePrice = (line, force = false) => {
+            const product = line.querySelector(".line-product");
+            const margin = line.querySelector(".line-margin-mode");
+            const price = line.querySelector(".line-price");
+            const option = product?.selectedOptions[0];
+            if (!margin || !price || !option) return;
+
+            const purchasePrice = Number.parseFloat(option.dataset.purchasePrice || "0");
+            const productType = option.dataset.productType || "stockable";
+            const hasProduct = Boolean(option.value);
+            const canUseMargin = hasProduct && productType !== "service" && purchasePrice > 0;
+
+            margin.disabled = !canUseMargin;
+            if (!canUseMargin) {
+                margin.value = "manual";
+                return;
+            }
+
+            if (force) {
+                const productMargin = option.dataset.marginRate || "";
+                margin.value = marginValues.includes(productMargin) ? productMargin : "manual";
+            }
+
+            if (marginValues.includes(margin.value)) {
+                price.dataset.syncingMargin = "1";
+                price.value = (purchasePrice * (Number.parseFloat(margin.value) / 100)).toFixed(2);
+                delete price.dataset.syncingMargin;
+            } else if (force && option.dataset.price) {
+                price.dataset.syncingMargin = "1";
+                price.value = Number.parseFloat(option.dataset.price || "0").toFixed(2);
+                delete price.dataset.syncingMargin;
+            }
+        };
 
         form.querySelectorAll("[data-line]").forEach((line) => {
             const product = line.querySelector(".line-product");
@@ -327,32 +359,22 @@ document.addEventListener("DOMContentLoaded", () => {
             const unitPrice = Number.parseFloat(price?.value || "0");
             const discountRate = Number.parseFloat(discount?.value || "0");
             const lineTotalTtc = Math.max(0, quantity * unitPrice * (1 - discountRate / 100));
-            const vatRate = Number.parseFloat(vatInput?.value || "20");
-            const divisor = 1 + Math.max(0, vatRate) / 100;
-            const lineTotalHt = divisor > 0 ? lineTotalTtc / divisor : lineTotalTtc;
             totalTtc += lineTotalTtc;
             if (total) {
-                total.textContent = `${lineTotalHt.toFixed(2)} DH`;
+                total.textContent = `${lineTotalTtc.toFixed(2)} DH`;
             }
+            recalculateLinePrice(line);
 
             product?.addEventListener("change", () => {
                 const option = product.selectedOptions[0];
-                if (price && option?.dataset.price) {
-                    price.value = Number.parseFloat(option.dataset.price || "0").toFixed(2);
-                }
                 if (label && option?.dataset.name && !label.value) {
                     label.value = option.dataset.name;
                 }
+                recalculateLinePrice(line, true);
                 syncOperationLines(form);
             }, { once: true });
         });
 
-        const vatRate = Number.parseFloat(vatInput?.value || "20");
-        const divisor = 1 + Math.max(0, vatRate) / 100;
-        const totalHt = divisor > 0 ? totalTtc / divisor : totalTtc;
-        const vat = totalTtc - totalHt;
-        if (totalHtNode) totalHtNode.textContent = `${totalHt.toFixed(2)} DH`;
-        if (totalVatNode) totalVatNode.textContent = `${vat.toFixed(2)} DH`;
         if (totalTtcNode) totalTtcNode.textContent = `${totalTtc.toFixed(2)} DH`;
     };
 
@@ -360,8 +382,30 @@ document.addEventListener("DOMContentLoaded", () => {
         const container = form.querySelector("[data-operation-lines]");
         const addLine = form.querySelector("[data-add-line]");
         const attach = () => {
-            form.querySelectorAll(".line-qty, .line-price, .line-discount, .operation-vat-rate").forEach((input) => {
-                input.oninput = () => syncOperationLines(form);
+            form.querySelectorAll(".line-qty, .line-price, .line-discount").forEach((input) => {
+                input.oninput = () => {
+                    if (input.classList.contains("line-price") && input.dataset.syncingMargin !== "1") {
+                        const margin = input.closest("[data-line]")?.querySelector(".line-margin-mode");
+                        if (margin) margin.value = "manual";
+                    }
+                    syncOperationLines(form);
+                };
+            });
+            form.querySelectorAll(".line-margin-mode").forEach((select) => {
+                select.onchange = () => {
+                    const line = select.closest("[data-line]");
+                    if (!line) return;
+                    const price = line.querySelector(".line-price");
+                    const product = line.querySelector(".line-product");
+                    const option = product?.selectedOptions[0];
+                    const purchasePrice = Number.parseFloat(option?.dataset.purchasePrice || "0");
+                    if (price && ["135", "145", "155"].includes(select.value) && purchasePrice > 0) {
+                        price.dataset.syncingMargin = "1";
+                        price.value = (purchasePrice * (Number.parseFloat(select.value) / 100)).toFixed(2);
+                        delete price.dataset.syncingMargin;
+                    }
+                    syncOperationLines(form);
+                };
             });
             form.querySelectorAll(".line-product").forEach((select) => {
                 select.onchange = () => {
@@ -369,8 +413,22 @@ document.addEventListener("DOMContentLoaded", () => {
                     const option = select.selectedOptions[0];
                     const price = line?.querySelector(".line-price");
                     const label = line?.querySelector(".line-label");
-                    if (price && option?.dataset.price) {
+                    const margin = line?.querySelector(".line-margin-mode");
+                    const purchasePrice = Number.parseFloat(option?.dataset.purchasePrice || "0");
+                    const marginValue = option?.dataset.marginRate || "";
+                    const canUseMargin = Boolean(option?.value) && option?.dataset.productType !== "service" && purchasePrice > 0;
+                    if (margin) {
+                        margin.disabled = !canUseMargin;
+                        margin.value = canUseMargin && ["135", "145", "155"].includes(marginValue) ? marginValue : "manual";
+                    }
+                    if (price && margin && ["135", "145", "155"].includes(margin.value)) {
+                        price.dataset.syncingMargin = "1";
+                        price.value = (purchasePrice * (Number.parseFloat(margin.value) / 100)).toFixed(2);
+                        delete price.dataset.syncingMargin;
+                    } else if (price && option?.dataset.price) {
+                        price.dataset.syncingMargin = "1";
                         price.value = Number.parseFloat(option.dataset.price || "0").toFixed(2);
+                        delete price.dataset.syncingMargin;
                     }
                     if (label && option?.dataset.name && !label.value) {
                         label.value = option.dataset.name;

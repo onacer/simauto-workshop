@@ -1386,6 +1386,7 @@ class AppDatabase
         $lineQuantities = $data['line_quantity'] ?? [];
         $linePrices = $data['line_unit_price'] ?? [];
         $lineDiscounts = $data['line_discount'] ?? [];
+        $lineMarginModes = $data['line_margin_mode'] ?? [];
 
         if (is_array($lineProducts) || is_array($lineLabels)) {
             $count = max(
@@ -1399,6 +1400,7 @@ class AppDatabase
                 $qty = (float) ($lineQuantities[$i] ?? 0);
                 $price = (float) ($linePrices[$i] ?? 0);
                 $discount = (float) ($lineDiscounts[$i] ?? 0);
+                $marginMode = (string) ($lineMarginModes[$i] ?? 'manual');
 
                 if ($productId > 0) {
                     $product = $this->product($productId);
@@ -1406,6 +1408,10 @@ class AppDatabase
                         throw new InvalidArgumentException('Produit invalide');
                     }
                     $label = $label !== '' ? $label : (string) $product['name'];
+                    $canUseMargin = (string) ($product['product_type'] ?? 'stockable') !== 'service' && (float) ($product['purchase_price'] ?? 0) > 0;
+                    if ($canUseMargin && in_array($marginMode, ['135', '145', '155'], true)) {
+                        $price = round((float) $product['purchase_price'] * ((float) $marginMode / 100), 2);
+                    }
                     if ($price <= 0) {
                         $price = (float) $product['sale_price'];
                     }

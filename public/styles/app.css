@@ -804,7 +804,7 @@ select.is-combobox-native {
 
 .operation-line {
     display: grid;
-    grid-template-columns: 1.4fr 1.2fr .55fr .7fr .55fr .8fr;
+    grid-template-columns: 1.4fr 1.2fr .5fr .65fr .7fr .55fr .8fr;
     gap: 10px;
     align-items: center;
 }

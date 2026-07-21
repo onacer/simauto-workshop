@@ -44,9 +44,7 @@
                     </select>
                 </label>
                 <label class="check-field is-hidden">{{ 'operations.check_number'|trans }}<input name="check_number"></label>
-                <label>TVA
-                    <input name="vat_rate" class="operation-vat-rate" type="number" step="0.01" min="0" value="20">
-                </label>
+                <input name="vat_rate" class="operation-vat-rate" type="hidden" value="20">
             </div>
 
             <div class="operation-lines" data-operation-lines>
@@ -54,17 +52,21 @@
                     <span>{{ 'operations.product_service'|trans }}</span>
                     <span>{{ 'operations.label'|trans }}</span>
                     <span>{{ 'operations.quantity'|trans }}</span>
+                    <span>{{ 'operations.margin'|trans }}</span>
                     <span>{{ 'operations.price_ttc'|trans }}</span>
                     <span>{{ 'operations.discount'|trans }}</span>
-                    <span>{{ 'operations.line_total_ht'|trans }}</span>
+                    <span>{{ 'operations.line_total_ttc'|trans }}</span>
                 </div>
                 <div class="operation-line" data-line>
                     <select name="line_product_id[]" class="line-product" data-combobox>
-                        <option value="" data-price="0" data-name="">{{ 'operations.free_line'|trans }}</option>
+                        <option value="" data-price="0" data-name="" data-purchase-price="0" data-margin-rate="" data-product-type="service">{{ 'operations.free_line'|trans }}</option>
                         {% for product in products %}
                             {% set product_ref = product.ref_company ?: (product.ref_universal ?: product.sku) %}
                             <option value="{{ product.id }}"
                                     data-price="{{ product.sale_price }}"
+                                    data-purchase-price="{{ product.purchase_price }}"
+                                    data-margin-rate="{{ product.margin_rate }}"
+                                    data-product-type="{{ product.product_type|default('stockable') }}"
                                     data-name="{{ product.name }}"
                                     data-ref-company="{{ product.ref_company }}"
                                     data-ref-universal="{{ product.ref_universal }}"
@@ -76,6 +78,12 @@
                     </select>
                     <input name="line_label[]" class="line-label" placeholder="{{ 'operations.label'|trans }}">
                     <input name="line_quantity[]" class="line-qty" type="number" step="0.01" min="0" value="1">
+                    <select name="line_margin_mode[]" class="line-margin-mode">
+                        <option value="manual">{{ 'products.manual'|trans }}</option>
+                        <option value="135">35%</option>
+                        <option value="145">45%</option>
+                        <option value="155">55%</option>
+                    </select>
                     <input name="line_unit_price[]" class="line-price" type="number" step="0.01" min="0" value="0">
                     <input name="line_discount[]" class="line-discount" type="number" step="0.01" min="0" max="100" value="0">
                     <strong class="line-total">0.00 DH</strong>
@@ -85,9 +93,7 @@
             <button class="btn btn-dark" type="button" data-add-line>+ {{ 'operations.add_line'|trans }}</button>
 
             <div class="operation-preview">
-                <span>Total HT: <strong data-total-ht>0.00 DH</strong></span>
-                <span>TVA: <strong data-total-vat>0.00 DH</strong></span>
-                <span>TTC: <strong data-total-ttc>0.00 DH</strong></span>
+                <span>{{ 'operations.total_ttc'|trans }}: <strong data-total-ttc>0.00 DH</strong></span>
             </div>
 
             <button class="btn btn-primary" type="submit">{{ 'operations.save_quote'|trans }}</button>
