@@ -229,6 +229,7 @@ Routes principales:
 - `GET /operations`: page de creation d'une operation garage.
 - `GET /operations/history`: historique filtrable des devis, bons de commande et factures.
 - `GET /operations/{id}`: fiche detail lecture seule d'une operation avec lignes, totaux et chaine documentaire.
+- `GET|POST /operations/{id}/edit`: modification admin d'un devis brouillon uniquement.
 - `GET /billing`: page des factures et receipts.
 - `GET /reports/finance`: situation financiere jour, semaine, mois ou periode libre.
 - `GET /reports/finance/operation/{id}`: detail de marge d'une facture.
@@ -622,6 +623,7 @@ La saisie d'operation reprend la meme convention par ligne de produit:
 - si le prix est modifie a la main, la ligne repasse en manuel;
 - les services, lignes libres et produits sans prix d'achat restent en prix manuel;
 - le serveur recalcule toujours le prix final depuis le produit et le mode de marge poste, le JavaScript ne sert qu'a l'apercu.
+- un devis brouillon peut etre modifie par l'admin avec les memes regles; les managers ne modifient pas un document existant.
 
 ### 2. Gestion Stock
 

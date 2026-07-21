@@ -465,6 +465,62 @@ SQL);
         self::assertSame(295.0, (float) $operation['total_ttc']);
     }
 
+    public function testDraftQuoteCanBeEditedWithLineMarginButConfirmedDocumentCannot(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'EDIT-MARGIN',
+            'name' => 'Produit edit marge',
+            'category_id' => $categoryId,
+            'stock_qty' => 3,
+            'min_qty' => 1,
+            'purchase_price' => 100,
+            'sale_price' => 120,
+        ], 1);
+        $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "EDIT-MARGIN"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'line_product_id' => [$productId],
+            'line_label' => [''],
+            'line_quantity' => [1],
+            'line_unit_price' => [120],
+            'line_discount' => [0],
+        ], 1);
+
+        $db->updateDraftOperation($quoteId, [
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'line_product_id' => [$productId],
+            'line_label' => [''],
+            'line_quantity' => [1],
+            'line_margin_mode' => ['155'],
+            'line_unit_price' => [1],
+            'line_discount' => [0],
+        ], 1);
+        $quote = $db->operation($quoteId);
+        self::assertSame(155.0, (float) $quote['items'][0]['unit_price']);
+        self::assertSame(155.0, (float) $quote['total_ttc']);
+
+        $orderId = $db->confirmQuote($quoteId, 1);
+        $this->expectException(InvalidArgumentException::class);
+        $db->updateDraftOperation($orderId, [
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'line_product_id' => [$productId],
+            'line_label' => [''],
+            'line_quantity' => [1],
+            'line_unit_price' => [200],
+            'line_discount' => [0],
+        ], 1);
+    }
+
     public function testBillingShowsReceiptOnlyForInvoices(): void
     {
         $db = $this->database();
@@ -1306,6 +1362,7 @@ SQL);
             'ui.active_record' => 'حالة السجل',
             'ui.confirm_delete' => 'تأكيد الحذف؟',
             'operations.total_ttc' => 'المجموع TTC',
+            'operations.edit_quote' => 'تعديل devis',
             'products.title' => 'المنتجات',
             'products.new' => 'منتج جديد',
             'products.name' => 'اسم المنتج',

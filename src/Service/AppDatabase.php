@@ -660,6 +660,91 @@ class AppDatabase
         }
     }
 
+    public function updateDraftOperation(int $id, array $data, int $userId): void
+    {
+        $operation = $this->operation($id);
+        if (!$operation) {
+            throw new InvalidArgumentException('العملية غير موجودة');
+        }
+        if (($operation['doc_type'] ?? '') !== 'quote' || ($operation['status'] ?? '') !== 'draft') {
+            throw new InvalidArgumentException('يمكن تعديل devis في حالة المسودة فقط');
+        }
+
+        $clientId = (int) ($data['client_id'] ?? 0);
+        $vehicleId = (int) ($data['vehicle_id'] ?? 0);
+        if ($clientId <= 0 || $vehicleId <= 0) {
+            throw new InvalidArgumentException('العميل والسيارة إجباريان');
+        }
+
+        $lines = $this->buildOperationLines($data);
+        $vatRate = (float) ($data['vat_rate'] ?? 20);
+        $vatRate = $vatRate >= 0 ? $vatRate : 20;
+        $totalTtc = round(array_sum(array_column($lines, 'total')), 2);
+        $totals = $this->splitIncludedTax($totalTtc, $vatRate);
+        $paymentMethod = $this->normalizePaymentMethod((string) ($data['payment_method'] ?? 'ESP'));
+        $checkNumber = $paymentMethod === 'CHQ' ? trim((string) ($data['check_number'] ?? '')) : '';
+        $client = $this->client($clientId);
+        $vehicle = $this->vehicle($vehicleId);
+
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare(
+                'UPDATE operations
+                 SET client_id = :client_id, client_name = :client_name, client_address = :client_address,
+                     vehicle_id = :vehicle_id, vehicle_plate = :vehicle_plate, vehicle_brand = :vehicle_brand, vehicle_model = :vehicle_model,
+                     payment_method = :payment_method, check_number = :check_number,
+                     subtotal_ht = :subtotal_ht, vat_rate = :vat_rate, vat_amount = :vat_amount, total_ttc = :total_ttc, total = :total,
+                     created_by = :created_by
+                 WHERE id = :id AND doc_type = "quote" AND status = "draft"'
+            );
+            $stmt->execute([
+                'client_id' => $clientId,
+                'client_name' => $client['name'] ?? '',
+                'client_address' => $client['address'] ?? '',
+                'vehicle_id' => $vehicleId,
+                'vehicle_plate' => $vehicle['plate'] ?? '',
+                'vehicle_brand' => $vehicle['brand_name'] ?? '',
+                'vehicle_model' => $vehicle['model_name'] ?? '',
+                'payment_method' => $paymentMethod,
+                'check_number' => $checkNumber,
+                'subtotal_ht' => $totals['ht'],
+                'vat_rate' => $vatRate,
+                'vat_amount' => $totals['vat'],
+                'total_ttc' => $totalTtc,
+                'total' => $totalTtc,
+                'created_by' => $userId,
+                'id' => $id,
+            ]);
+            if ($stmt->rowCount() === 0) {
+                throw new InvalidArgumentException('يمكن تعديل devis في حالة المسودة فقط');
+            }
+
+            $this->pdo->prepare('DELETE FROM operation_items WHERE operation_id = :id')->execute(['id' => $id]);
+            foreach ($lines as $line) {
+                $insert = $this->pdo->prepare(
+                    'INSERT INTO operation_items (operation_id, product_id, line_type, label, quantity, unit_price, discount_rate, total_ht, total)
+                     VALUES (:operation_id, :product_id, :line_type, :label, :quantity, :unit_price, :discount_rate, :total_ht, :total)'
+                );
+                $insert->execute([
+                    'operation_id' => $id,
+                    'product_id' => $line['product_id'],
+                    'line_type' => $line['line_type'],
+                    'label' => $line['label'],
+                    'quantity' => $line['quantity'],
+                    'unit_price' => $line['unit_price'],
+                    'discount_rate' => $line['discount_rate'],
+                    'total_ht' => $this->splitIncludedTax((float) $line['total'], $vatRate)['ht'],
+                    'total' => $line['total'],
+                ]);
+            }
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
     public function operations(): array
     {
         $operations = $this->pdo->query(

@@ -180,7 +180,10 @@ class DashboardController extends AbstractController
             return $user;
         }
 
-        return $this->render('app/operations.html.twig', $db->dashboardData() + ['user' => $user]);
+        return $this->render('app/operations.html.twig', $db->dashboardData() + [
+            'user' => $user,
+            'operation_token' => $this->csrfToken($request, 'operation_form'),
+        ]);
     }
 
     #[Route('/operations/new', name: 'app_operation_new', methods: ['POST'])]
@@ -195,12 +198,51 @@ class DashboardController extends AbstractController
         }
 
         try {
+            $this->verifyCsrf($request, 'operation_form');
             $id = $db->createOperation($request->request->all(), (int) $user['id']);
             return $this->redirectToRoute('app_invoice', ['id' => $id]);
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
             return $this->redirectToRoute('app_operations');
         }
+    }
+
+    #[Route('/operations/{id}/edit', name: 'app_operation_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    public function operationEdit(int $id, Request $request, AppDatabase $db, AccessControl $access): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_operation_show', ['id' => $id])) {
+            return $denied;
+        }
+
+        $operation = $db->operation($id);
+        if (!$operation) {
+            throw $this->createNotFoundException();
+        }
+        if ($operation['doc_type'] !== 'quote' || $operation['status'] !== 'draft') {
+            $this->addFlash('error', 'operations.edit_draft_only');
+            return $this->redirectToRoute('app_operation_show', ['id' => $id]);
+        }
+
+        if ($request->isMethod('POST')) {
+            try {
+                $this->verifyCsrf($request, 'operation_form');
+                $db->updateDraftOperation($id, $request->request->all(), (int) $user['id']);
+                $this->addFlash('success', 'operations.updated');
+                return $this->redirectToRoute('app_operation_show', ['id' => $id]);
+            } catch (Throwable $e) {
+                $this->addFlash('error', $this->safeMessage($e));
+            }
+        }
+
+        return $this->render('app/operations.html.twig', $db->dashboardData() + [
+            'user' => $user,
+            'operation' => $operation,
+            'operation_token' => $this->csrfToken($request, 'operation_form'),
+        ]);
     }
 
     #[Route('/billing', name: 'app_billing')]

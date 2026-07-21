@@ -18,6 +18,9 @@
     <section class="page-head">
         <h1>{{ operation.document_title }} {{ operation.document_no }}</h1>
         <span class="row-actions">
+            {% if can('edit', user) and operation.doc_type == 'quote' and operation.status == 'draft' %}
+                <a class="btn btn-primary" href="{{ path('app_operation_edit', {id: operation.id}) }}">{{ 'ui.edit'|trans }}</a>
+            {% endif %}
             <a class="btn btn-primary" href="{{ path('app_document', {id: operation.id}) }}" target="_blank" rel="noopener">{{ 'documents.print'|trans }}</a>
             {% if operation.doc_type == 'invoice' %}
                 <a class="btn btn-primary" href="{{ path('app_receipt', {id: operation.id}) }}">{{ 'billing.receipt'|trans }}</a>
