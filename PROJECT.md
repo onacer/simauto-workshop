@@ -615,6 +615,14 @@ Un produit peut etre:
 
 Le formulaire propose une aide de prix par marge affichee `35%`, `45%`, `55%` ou manuel. En interne, les valeurs envoyees restent `135`, `145`, `155` pour conserver le calcul existant: prix de vente = prix d'achat x 1.35, 1.45 ou 1.55. Le prix de vente reste editable.
 
+La saisie d'operation reprend la meme convention par ligne de produit:
+
+- le select de marge affiche `35%`, `45%`, `55%` ou manuel;
+- si un produit stockable possede un `purchase_price`, choisir une marge recalcule le prix unitaire TTC de la ligne (`purchase_price x coefficient`);
+- si le prix est modifie a la main, la ligne repasse en manuel;
+- les services, lignes libres et produits sans prix d'achat restent en prix manuel;
+- le serveur recalcule toujours le prix final depuis le produit et le mode de marge poste, le JavaScript ne sert qu'a l'apercu.
+
 ### 2. Gestion Stock
 
 Page:
@@ -693,7 +701,14 @@ Le document imprime reste en francais LTR et utilise le meme gabarit A4 pour les
 - bon de commande: `BON DE COMMANDE N° {order_no}`;
 - facture: `FACTURE N° {invoice_no}`.
 
-Les trois documents affichent logo, blocs client et vehicule, tableau lignes, `MT HT`, `TVA`, `MT TTC A PAYER`, montant TTC en lettres, filigrane et footer `CompanyProfile`. Le total TTC correspond au montant saisi; le HT et la TVA sont calcules par extraction de la TVA incluse.
+Les montants saisis et visibles dans l'interface sont des TTC directs. L'ecran operation, la fiche detail operation, l'historique, la page facturation et le receipt n'affichent pas de decomposition TVA. Les champs `subtotal_ht`, `vat_rate`, `vat_amount` et `total_ttc` restent stockes pour la facture et le reporting.
+
+Regle d'impression:
+
+- devis: lignes TTC, total TTC, `NET A PAYER`, montant en lettres, sans `MT HT` ni `TVA`;
+- bon de commande: lignes TTC, total TTC, `NET A PAYER`, montant en lettres, sans `MT HT` ni `TVA`;
+- facture: seul document client avec `MT HT`, `TVA`, `MT TTC A PAYER` et montant TTC en lettres;
+- receipt: ticket compact en TTC direct, sans decomposition TVA.
 
 ### 5. Historique Operations
 

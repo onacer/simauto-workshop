@@ -25,7 +25,7 @@
             <div class="ticket-line">
                 <span>{% if item.product_sku %}{{ item.product_sku }} - {% endif %}{{ item.label }}</span>
                 <small>{{ item.quantity }} x {{ item.unit_price|number_format(0, ',', ' ') }}</small>
-                <b>{{ item.total_ht|default(item.total)|number_format(0, ',', ' ') }} DH</b>
+                <b>{{ item.total|number_format(0, ',', ' ') }} DH</b>
             </div>
         {% endfor %}
         <hr>

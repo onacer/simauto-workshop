@@ -47,21 +47,28 @@
                     <td>{% if item.product_sku %}{{ item.product_sku }} - {% endif %}{{ item.label }}</td>
                     <td>{{ item.quantity }}</td>
                     <td>{{ item.unit_price > 0 ? item.unit_price|number_format(2, ',', ' ') ~ ' DH' : '' }}</td>
-                    <td>{{ item.total_ht|default(item.total) > 0 ? item.total_ht|default(item.total)|number_format(2, ',', ' ') ~ ' DH' : 'GRATUIT' }}</td>
+                    {% set line_amount = operation.doc_type == 'invoice' ? item.total_ht|default(item.total) : item.total %}
+                    <td>{{ line_amount > 0 ? line_amount|number_format(2, ',', ' ') ~ ' DH' : 'GRATUIT' }}</td>
                 </tr>
             {% endfor %}
             <tr class="total-row">
                 <td colspan="3">TOTAL</td>
-                <td>{{ operation.subtotal_ht|number_format(2, ',', ' ') }} DH</td>
+                <td>{{ (operation.doc_type == 'invoice' ? operation.subtotal_ht : operation.total_ttc)|number_format(2, ',', ' ') }} DH</td>
             </tr>
         </tbody>
     </table>
 
-    <div class="invoice-totals">
-        <div><span>MT HT</span><strong>{{ operation.subtotal_ht|number_format(2, ',', ' ') }} DH</strong></div>
-        <div><span>TVA {{ operation.vat_rate|number_format(0) }}%</span><strong>{{ operation.vat_amount|number_format(2, ',', ' ') }} DH</strong></div>
-        <div><span>MT TTC A PAYER</span><strong>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</strong></div>
-    </div>
+    {% if operation.doc_type == 'invoice' %}
+        <div class="invoice-totals">
+            <div><span>MT HT</span><strong>{{ operation.subtotal_ht|number_format(2, ',', ' ') }} DH</strong></div>
+            <div><span>TVA {{ operation.vat_rate|number_format(0) }}%</span><strong>{{ operation.vat_amount|number_format(2, ',', ' ') }} DH</strong></div>
+            <div><span>MT TTC A PAYER</span><strong>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</strong></div>
+        </div>
+    {% else %}
+        <div class="invoice-totals invoice-totals-simple">
+            <div><span>NET A PAYER</span><strong>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</strong></div>
+        </div>
+    {% endif %}
 
     <p class="legal-amount">
         {{ operation.amount_intro }}
