@@ -412,11 +412,57 @@ SQL);
 
         self::assertStringContainsString('DEVIS N° ' . $quote['quote_no'], $quoteHtml);
         self::assertStringContainsString('Devis valable 30 jours', $quoteHtml);
+        self::assertStringContainsString('NET A PAYER', $quoteHtml);
+        self::assertStringNotContainsString('MT HT', $quoteHtml);
+        self::assertStringNotContainsString('TVA', $quoteHtml);
         self::assertStringNotContainsString('FACTURE N°', $quoteHtml);
         self::assertStringContainsString('BON DE COMMANDE N° ' . $order['order_no'], $orderHtml);
+        self::assertStringContainsString('NET A PAYER', $orderHtml);
+        self::assertStringNotContainsString('MT HT', $orderHtml);
+        self::assertStringNotContainsString('TVA', $orderHtml);
         self::assertStringContainsString('FACTURE N° ' . $invoice['invoice_no'], $invoiceHtml);
+        self::assertStringContainsString('MT HT', $invoiceHtml);
+        self::assertStringContainsString('TVA', $invoiceHtml);
         self::assertStringContainsString('MT TTC A PAYER', $invoiceHtml);
         self::assertStringContainsString(number_format((float) $invoice['total_ttc'], 2, ',', ' ') . ' DH', $invoiceHtml);
+        self::assertStringContainsString('cent cinquante dirhams TTC', $invoiceHtml);
+    }
+
+    public function testOperationLineMarginSelectorIsRecalculatedServerSideAndManualPriceIsPreserved(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'MARGIN-LINE',
+            'name' => 'Produit marge ligne',
+            'category_id' => $categoryId,
+            'stock_qty' => 3,
+            'min_qty' => 1,
+            'purchase_price' => 100,
+            'sale_price' => 130,
+            'margin_mode' => '145',
+        ], 1);
+        $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "MARGIN-LINE"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'line_product_id' => [$productId, $productId],
+            'line_label' => ['', 'Prix manuel'],
+            'line_quantity' => [1, 1],
+            'line_margin_mode' => ['145', 'manual'],
+            'line_unit_price' => [1, 150],
+            'line_discount' => [0, 0],
+        ], 1);
+        $operation = $db->operation($quoteId);
+
+        self::assertSame(145.0, (float) $operation['items'][0]['unit_price']);
+        self::assertSame(145.0, (float) $operation['items'][0]['total']);
+        self::assertSame(150.0, (float) $operation['items'][1]['unit_price']);
+        self::assertSame(295.0, (float) $operation['total_ttc']);
     }
 
     public function testBillingShowsReceiptOnlyForInvoices(): void
@@ -484,7 +530,18 @@ SQL);
         self::assertStringContainsString('DEVIS N°', $html);
         self::assertStringContainsString('BON DE COMMANDE N°', $html);
         self::assertStringContainsString('Diagnostic', $html);
-        self::assertStringContainsString('MT TTC', $html);
+        self::assertStringContainsString('المجموع TTC', $html);
+        self::assertStringNotContainsString('MT HT', $html);
+        self::assertStringNotContainsString('TVA', $html);
+
+        $quoteHtml = $this->renderTemplate('app/operation_show.html.twig', [
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'operation' => $db->operation($quoteId),
+            'chain' => $db->operationDocumentChain($quoteId),
+            'back_query' => ['doc_type' => 'quote'],
+        ]);
+        self::assertStringNotContainsString('MT HT', $quoteHtml);
+        self::assertStringNotContainsString('TVA', $quoteHtml);
     }
 
     public function testFinancialMarginsForProductsServicesAndEstimatedLines(): void
@@ -1248,6 +1305,7 @@ SQL);
             'ui.code' => 'الكود',
             'ui.active_record' => 'حالة السجل',
             'ui.confirm_delete' => 'تأكيد الحذف؟',
+            'operations.total_ttc' => 'المجموع TTC',
             'products.title' => 'المنتجات',
             'products.new' => 'منتج جديد',
             'products.name' => 'اسم المنتج',
