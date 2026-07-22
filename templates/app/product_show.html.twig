@@ -6,7 +6,13 @@
     <section class="page-head">
         <h1>{{ product.name }}</h1>
         <span class="row-actions">
-            {% if can('edit.reference', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+            {% include 'app/_action_button.html.twig' with {
+                label: 'ui.edit'|trans,
+                url: path('app_product_edit', {id: product.id}),
+                active: can('edit.reference', user),
+                class: 'btn btn-primary',
+                reason: 'access.admin_only'|trans
+            } only %}
             <a class="btn btn-dark" href="{{ path('app_products') }}">{{ 'ui.back'|trans }}</a>
         </span>
     </section>
@@ -27,13 +33,24 @@
     <section class="panel">
         <h2>{{ 'products.movements'|trans }}</h2>
         <div class="data-table">
-            <div class="table-head"><span>{{ 'ui.type'|trans }}</span><span>{{ 'stock.quantity'|trans }}</span><span>{{ 'stock.supplier'|trans }}</span><span>{{ 'ui.date'|trans }}</span></div>
+            <div class="table-head"><span>{{ 'ui.type'|trans }}</span><span>{{ 'stock.quantity'|trans }}</span><span>{{ 'stock.supplier'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for movement in movements %}
                 <div>
                     <strong>{{ movement.movement_type }}</strong>
                     <span>{{ movement.quantity }}</span>
                     <span>{{ movement.supplier_name ?: '—' }}</span>
-                    <span>{{ movement.created_at }}</span>
+                    <span class="row-actions">
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            active: false,
+                            reason: 'access.stock_locked'|trans
+                        } only %}
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.delete'|trans,
+                            active: false,
+                            reason: 'access.stock_locked'|trans
+                        } only %}
+                    </span>
                 </div>
             {% else %}
                 <p class="empty-state">{{ 'ui.empty'|trans }}</p>

@@ -272,6 +272,9 @@ reports.date_from: 'Du'
 reports.date_to: 'Au'
 reports.invalid_dates: "Dates invalides, retour à aujourd'hui."
 reports.access_denied: "Vous n'avez pas le droit de consulter les rapports."
+access.admin_only: "Réservé à l'administrateur"
+access.document_locked: "Document confirmé"
+access.stock_locked: "Stock verrouillé"
 reports.kpi.total_ttc: 'CA TTC'
 reports.kpi.subtotal_ht: 'Total HT'
 reports.kpi.vat: 'TVA'

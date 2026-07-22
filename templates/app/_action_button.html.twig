@@ -1,0 +1,12 @@
+{% set visible = visible|default(true) %}
+{% set is_active = active|default(false) %}
+{% set tag_class = class|default('') %}
+{% set title_text = reason|default('access.admin_only'|trans) %}
+
+{% if visible %}
+    {% if is_active and url|default('') %}
+        <a class="{{ tag_class }}" href="{{ url }}" {% if target|default('') %}target="{{ target }}" rel="noopener"{% endif %}>{{ label }}</a>
+    {% else %}
+        <span class="{{ tag_class }} action-disabled is-disabled" role="button" aria-disabled="true" title="{{ title_text }}">{{ label }}</span>
+    {% endif %}
+{% endif %}

@@ -18,14 +18,25 @@
     <section class="page-head">
         <h1>{{ operation.document_title }} {{ operation.document_no }}</h1>
         <span class="row-actions">
-            {% if can_edit_document(user, operation) %}
-                <a class="btn btn-primary" href="{{ path('app_operation_edit', {id: operation.id}) }}">{{ 'ui.edit'|trans }}</a>
-            {% endif %}
+            {% include 'app/_action_button.html.twig' with {
+                label: 'ui.edit'|trans,
+                url: path('app_operation_edit', {id: operation.id}),
+                active: can_edit_document(user, operation),
+                class: 'btn btn-primary',
+                reason: operation.doc_type == 'quote' and operation.status == 'draft' ? 'access.admin_only'|trans : 'access.document_locked'|trans
+            } only %}
             {% if can('delete', user) and operation.doc_type == 'quote' and operation.status == 'draft' %}
                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'operation', id: operation.id, action: 'delete'}) }}" onsubmit="return confirm('{{ 'ui.confirm_delete'|trans|e('js') }}')">
                     <input type="hidden" name="_token" value="{{ record_token|default('') }}">
                     <button class="btn btn-dark" type="submit">{{ 'ui.delete'|trans }}</button>
                 </form>
+            {% else %}
+                {% include 'app/_action_button.html.twig' with {
+                    label: 'ui.delete'|trans,
+                    active: false,
+                    class: 'btn btn-dark',
+                    reason: operation.doc_type == 'quote' and operation.status == 'draft' ? 'access.admin_only'|trans : 'access.document_locked'|trans
+                } only %}
             {% endif %}
             <a class="btn btn-primary" href="{{ path('app_document', {id: operation.id}) }}" target="_blank" rel="noopener">{{ 'documents.print'|trans }}</a>
             {% if operation.doc_type == 'invoice' %}

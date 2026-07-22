@@ -41,13 +41,24 @@
 
     <section class="panel">
         <div class="data-table">
-            <div class="table-head"><span>{{ 'products.product'|trans }}</span><span>{{ 'stock.current'|trans }}</span><span>{{ 'stock.minimum'|trans }}</span><span>{{ 'ui.status'|trans }}</span></div>
+            <div class="table-head"><span>{{ 'products.product'|trans }}</span><span>{{ 'stock.current'|trans }}</span><span>{{ 'ui.status'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for product in products %}
                 <div>
                     <strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong>
                     <span>{{ product.stock_qty }}</span>
-                    <span>{{ product.min_qty }}</span>
                     <span>{{ product.stock_qty <= 0 ? 'stock.empty'|trans : (product.stock_qty <= product.min_qty ? 'stock.low'|trans : 'stock.available'|trans) }}</span>
+                    <span class="row-actions">
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            active: false,
+                            reason: 'access.stock_locked'|trans
+                        } only %}
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.delete'|trans,
+                            active: false,
+                            reason: 'access.stock_locked'|trans
+                        } only %}
+                    </span>
                 </div>
             {% endfor %}
         </div>

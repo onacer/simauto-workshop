@@ -73,6 +73,12 @@
                     <span>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</span>
                     <span class="row-actions">
                         <a href="{{ path('app_operation_show', filters|merge({id: operation.id})) }}">{{ 'ui.show'|trans }}</a>
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            url: path('app_operation_edit', {id: operation.id}),
+                            active: can_edit_document(user, operation),
+                            reason: operation.doc_type == 'quote' and operation.status == 'draft' ? 'access.admin_only'|trans : 'access.document_locked'|trans
+                        } only %}
                         <a href="{{ path('app_document', {id: operation.id}) }}" target="_blank" rel="noopener">{{ 'documents.print'|trans }}</a>
                         {% if operation.doc_type == 'invoice' %}
                             <a href="{{ path('app_receipt', {id: operation.id}) }}">{{ 'billing.receipt'|trans }}</a>

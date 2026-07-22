@@ -6,7 +6,13 @@
     <section class="page-head">
         <h1>{{ supplier.name }}</h1>
         <span class="row-actions">
-            {% if can('edit.reference', user) %}<a href="{{ path('app_supplier_edit', {id: supplier.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+            {% include 'app/_action_button.html.twig' with {
+                label: 'ui.edit'|trans,
+                url: path('app_supplier_edit', {id: supplier.id}),
+                active: can('edit.reference', user),
+                class: 'btn btn-primary',
+                reason: 'access.admin_only'|trans
+            } only %}
             <a class="btn btn-dark" href="{{ path('app_suppliers') }}">{{ 'ui.back'|trans }}</a>
         </span>
     </section>
@@ -23,13 +29,24 @@
     <section class="panel">
         <h2>{{ 'suppliers.last_stock_entries'|trans }}</h2>
         <div class="data-table">
-            <div class="table-head"><span>{{ 'ui.date'|trans }}</span><span>{{ 'products.product'|trans }}</span><span>{{ 'stock.quantity'|trans }}</span><span>{{ 'stock.unit_cost'|trans }}</span></div>
+            <div class="table-head"><span>{{ 'ui.date'|trans }}</span><span>{{ 'products.product'|trans }}</span><span>{{ 'stock.quantity'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for movement in movements %}
                 <div>
                     <strong>{{ movement.created_at }}</strong>
                     <span>{{ movement.product_name }}<br><small>{{ movement.sku }}</small></span>
                     <span>{{ movement.quantity }}</span>
-                    <span>{{ movement.unit_cost is not empty ? movement.unit_cost ~ ' DH' : '—' }}</span>
+                    <span class="row-actions">
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            active: false,
+                            reason: 'access.stock_locked'|trans
+                        } only %}
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.delete'|trans,
+                            active: false,
+                            reason: 'access.stock_locked'|trans
+                        } only %}
+                    </span>
                 </div>
             {% else %}
                 <p class="empty-state">{{ 'suppliers.no_related_entries'|trans }}</p>
