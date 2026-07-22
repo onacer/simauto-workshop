@@ -1189,7 +1189,10 @@ Restrictions manager:
 - pas d'acces au module utilisateurs `/users/...`;
 - pas de suppression d'un devis brouillon; suppression reservee admin;
 - aucun role ne peut modifier ou supprimer une commande confirmee ou une facture;
-- les boutons interdits sont masques dans Twig avec `can(...)`;
+- les formulaires de creation et boutons de modification des entites de reference sont visibles et actifs pour le manager;
+- les boutons supprimer et activer/desactiver des entites de reference sont absents pour le manager;
+- les actions non disponibles sur le stock, les mouvements et les documents verrouilles sont affichees desactivees avec une raison au survol;
+- les liens imports, utilisateurs et rapports restent masques dans la navigation pour le manager;
 - les actions interdites sont aussi verifiees cote serveur avec `App\Service\AccessControl`.
 
 Permissions centralisees:
@@ -1199,6 +1202,16 @@ Permissions centralisees:
 - manager autorise en action quotidienne: `create`, `progress_document`, `edit.reference`, `edit.quote_draft`;
 - `canEditDocument(user, operation)` refuse toujours si `doc_type != quote` ou `status != draft`, meme pour admin;
 - manager interdit: `edit`, `edit.stock`, `edit.operation`, `delete`, `toggle`, `import`, `imports`, `manage_users`, `reports.view`.
+
+Convention UI des actions:
+
+- actif: lien ou bouton cliquable;
+- desactive: rendu avec `aria-disabled="true"`, classe `action-disabled is-disabled`, et `title` traduit;
+- absent: action volontairement retiree du HTML pour eviter d'encombrer le manager.
+
+Templates d'action:
+
+- `templates/app/_action_button.html.twig`: composant Twig commun pour rendre une action active ou desactivee.
 
 ## Mode Impression
 

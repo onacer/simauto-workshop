@@ -587,17 +587,29 @@ SQL);
         self::assertStringContainsString('BON DE COMMANDE N°', $html);
         self::assertStringContainsString('Diagnostic', $html);
         self::assertStringContainsString('المجموع TTC', $html);
+        self::assertStringContainsString('aria-disabled="true"', $html);
+        self::assertStringContainsString('مستند مؤكد', $html);
         self::assertStringNotContainsString('MT HT', $html);
         self::assertStringNotContainsString('TVA', $html);
 
-        $quoteHtml = $this->renderTemplate('app/operation_show.html.twig', [
+        $lockedQuoteHtml = $this->renderTemplate('app/operation_show.html.twig', [
             'user' => ['role' => 'manager', 'name' => 'Manager'],
             'operation' => $db->operation($quoteId),
             'chain' => $db->operationDocumentChain($quoteId),
             'back_query' => ['doc_type' => 'quote'],
         ]);
-        self::assertStringNotContainsString('MT HT', $quoteHtml);
-        self::assertStringNotContainsString('TVA', $quoteHtml);
+        self::assertStringNotContainsString('/app_operation_edit/' . $quoteId, $lockedQuoteHtml);
+        self::assertStringNotContainsString('MT HT', $lockedQuoteHtml);
+        self::assertStringNotContainsString('TVA', $lockedQuoteHtml);
+
+        $draftQuoteId = $this->operationWithService($db, 'ESP');
+        $draftQuoteHtml = $this->renderTemplate('app/operation_show.html.twig', [
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'operation' => $db->operation($draftQuoteId),
+            'chain' => $db->operationDocumentChain($draftQuoteId),
+            'back_query' => ['doc_type' => 'quote'],
+        ]);
+        self::assertStringContainsString('/app_operation_edit/' . $draftQuoteId, $draftQuoteHtml);
     }
 
     public function testDocumentEditPermissionDependsOnDraftQuoteState(): void
@@ -1514,6 +1526,14 @@ SQL);
                 'record_token' => 'token',
             ],
         ];
+        $expectedEditLinks = [
+            'app/products.html.twig' => '/app_product_edit/',
+            'app/categories.html.twig' => '/app_category_edit/',
+            'app/suppliers.html.twig' => '/app_supplier_edit/',
+            'app/clients.html.twig' => '/app_client_edit/',
+            'app/vehicles.html.twig' => '/app_vehicle_edit/',
+            'app/vehicle_settings.html.twig' => '/app_vehicle_brand_edit/',
+        ];
 
         foreach ($contexts as $template => $context) {
             $managerHtml = $this->renderTemplate($template, $context + [
@@ -1525,6 +1545,8 @@ SQL);
 
             self::assertStringContainsString('عرض', $managerHtml, $template);
             self::assertStringContainsString('تعديل', $managerHtml, $template);
+            self::assertStringContainsString($expectedEditLinks[$template], $managerHtml, $template);
+            self::assertStringContainsString('حفظ', $managerHtml, $template);
             self::assertStringNotContainsString('حذف', $managerHtml, $template);
             self::assertStringNotContainsString('تعطيل', $managerHtml, $template);
             self::assertStringContainsString('تعديل', $adminHtml, $template);
@@ -1534,7 +1556,67 @@ SQL);
         self::assertNotNull($db->vehicle($vehicleId));
     }
 
-    public function testManagerStockPageDoesNotExposeEditActions(): void
+    public function testManagerShowViewsExposeActiveEditButtons(): void
+    {
+        $db = $this->database();
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'SHOW-BTN',
+            'name' => 'Produit fiche',
+            'category_id' => $categoryId,
+            'stock_qty' => 1,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $productId = $this->id($db->pdo(), 'SELECT id FROM products WHERE sku = "SHOW-BTN"');
+        $db->saveSupplier(['name' => 'Supplier fiche']);
+        $supplierId = $this->id($db->pdo(), 'SELECT id FROM suppliers WHERE name = "Supplier fiche"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $db->pdo());
+        $brandId = $this->id($db->pdo(), 'SELECT id FROM vehicle_brands ORDER BY id LIMIT 1');
+        $modelId = $this->id($db->pdo(), 'SELECT id FROM vehicle_models WHERE brand_id = ' . $brandId . ' ORDER BY id LIMIT 1');
+        $manager = ['id' => 2, 'role' => 'manager', 'name' => 'Manager'];
+
+        $views = [
+            'app/product_show.html.twig' => [
+                'context' => ['product' => $db->product($productId), 'movements' => $db->productMovements($productId)],
+                'edit' => '/app_product_edit/' . $productId,
+            ],
+            'app/category_show.html.twig' => [
+                'context' => ['category' => $db->category($categoryId), 'products' => $db->categoryProducts($categoryId)],
+                'edit' => '/app_category_edit/' . $categoryId,
+            ],
+            'app/supplier_show.html.twig' => [
+                'context' => ['supplier' => $db->supplier($supplierId), 'movements' => $db->supplierMovements($supplierId)],
+                'edit' => '/app_supplier_edit/' . $supplierId,
+            ],
+            'app/client_show.html.twig' => [
+                'context' => ['client' => $db->client($clientId), 'vehicles' => $db->clientVehicles($clientId), 'operations' => $db->clientOperations($clientId)],
+                'edit' => '/app_client_edit/' . $clientId,
+            ],
+            'app/vehicle_show.html.twig' => [
+                'context' => ['vehicle' => $db->vehicle($vehicleId), 'operations' => $db->vehicleOperations($vehicleId)],
+                'edit' => '/app_vehicle_edit/' . $vehicleId,
+            ],
+            'app/vehicle_brand_show.html.twig' => [
+                'context' => ['brand' => $db->vehicleBrand($brandId), 'models' => $db->brandModels($brandId)],
+                'edit' => '/app_vehicle_brand_edit/' . $brandId,
+            ],
+            'app/vehicle_model_show.html.twig' => [
+                'context' => ['model' => $db->vehicleModel($modelId)],
+                'edit' => '/app_vehicle_model_edit/' . $modelId,
+            ],
+        ];
+
+        foreach ($views as $template => $data) {
+            $html = $this->renderTemplate($template, $data['context'] + ['user' => $manager]);
+
+            self::assertStringContainsString('تعديل', $html, $template);
+            self::assertStringContainsString($data['edit'], $html, $template);
+        }
+    }
+
+    public function testManagerStockPageShowsDisabledStockActions(): void
     {
         $db = $this->database();
         $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
@@ -1553,9 +1635,26 @@ SQL);
         ]);
 
         self::assertStringContainsString('STOCK-ACL', $html);
-        self::assertStringNotContainsString('تعديل', $html);
-        self::assertStringNotContainsString('حذف', $html);
+        self::assertStringContainsString('تعديل', $html);
+        self::assertStringContainsString('حذف', $html);
+        self::assertStringContainsString('aria-disabled="true"', $html);
+        self::assertStringContainsString('المخزون مؤمن', $html);
         self::assertStringNotContainsString('تعطيل', $html);
+
+        $controller = new DashboardController();
+        $access = new AccessControl();
+        $productId = $this->id($db->pdo(), 'SELECT id FROM products WHERE sku = "STOCK-ACL"');
+        $request = $this->requestWithUser('/records/product/' . $productId . '/delete', 'POST', [], [
+            'id' => 2,
+            'role' => 'manager',
+            'name' => 'Manager',
+            'email' => 'manager@simauto.ma',
+        ]);
+        $controller->setContainer($this->controllerContainer($request));
+        $response = $controller->recordState('product', $productId, 'delete', $request, $db, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertNotNull($db->product($productId));
     }
 
     public function testAdminCanDeleteRecordsButConfirmedDocumentsStayLocked(): void
@@ -1692,6 +1791,9 @@ SQL);
             'ui.code' => 'الكود',
             'ui.active_record' => 'حالة السجل',
             'ui.confirm_delete' => 'تأكيد الحذف؟',
+            'access.admin_only' => 'محجوز للمدير',
+            'access.document_locked' => 'مستند مؤكد',
+            'access.stock_locked' => 'المخزون مؤمن',
             'operations.total_ttc' => 'المجموع TTC',
             'operations.edit_quote' => 'تعديل devis',
             'products.title' => 'المنتجات',
