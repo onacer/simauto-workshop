@@ -1113,6 +1113,13 @@ SQL);
         $admin = ['role' => 'admin'];
 
         self::assertTrue($access->can('view', $manager));
+        self::assertTrue($access->can('view.products', $manager));
+        self::assertTrue($access->can('view.clients', $manager));
+        self::assertTrue($access->can('view.suppliers', $manager));
+        self::assertTrue($access->can('view.vehicles', $manager));
+        self::assertTrue($access->can('view.vehicle_settings', $manager));
+        self::assertTrue($access->can('view.operations', $manager));
+        self::assertTrue($access->can('view.billing', $manager));
         self::assertTrue($access->can('create', $manager));
         self::assertTrue($access->can('progress_document', $manager));
         self::assertTrue($access->can('clients', $manager));
@@ -1122,11 +1129,13 @@ SQL);
         self::assertFalse($access->can('import', $manager));
         self::assertFalse($access->can('imports', $manager));
         self::assertFalse($access->can('manage_users', $manager));
+        self::assertFalse($access->can('reports.view', $manager));
         self::assertFalse($access->can('vehicle_settings', $manager));
         self::assertTrue($access->can('delete', $admin));
         self::assertTrue($access->can('toggle', $admin));
         self::assertTrue($access->can('import', $admin));
         self::assertTrue($access->can('manage_users', $admin));
+        self::assertTrue($access->can('unknown.future.permission', $admin));
     }
 
     public function testManagerForcedEditAndToggleRoutesAreDeniedWithoutChangingData(): void
@@ -1168,6 +1177,41 @@ SQL);
 
         self::assertInstanceOf(RedirectResponse::class, $response);
         self::assertSame(1, (int) $db->product($productId)['active']);
+
+        $deleteRequest = $this->requestWithUser('/records/product/' . $productId . '/delete', 'POST', [], ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager']);
+        $controller->setContainer($this->controllerContainer($deleteRequest));
+        $response = $controller->recordState('product', $productId, 'delete', $deleteRequest, $db, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertNotNull($db->product($productId));
+    }
+
+    public function testManagerCanViewButNotModifyVehicleSettings(): void
+    {
+        $db = $this->database();
+        $access = new AccessControl();
+        $controller = new DashboardController();
+        $manager = ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager'];
+        $db->saveVehicleBrand('TEST-READ');
+
+        $html = $this->renderTemplate('app/vehicle_settings.html.twig', [
+            'user' => $manager,
+            'brands' => $db->vehicleBrands('all'),
+            'models' => $db->vehicleModels(null, 'all'),
+            'record_token' => 'token',
+        ]);
+        self::assertStringContainsString('عرض', $html);
+        self::assertStringNotContainsString('تعديل', $html);
+
+        $post = $this->requestWithUser('/vehicles/settings', 'POST', [
+            'kind' => 'brand',
+            'name' => 'MANAGER-BLOCKED',
+        ], $manager);
+        $controller->setContainer($this->controllerContainer($post));
+        $response = $controller->vehicleSettings($post, $db, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertNull($db->vehicleBrandByName('MANAGER-BLOCKED'));
     }
 
     public function testManagerImportRoutesAreDenied(): void
@@ -1223,7 +1267,31 @@ SQL);
         $controller->clients($clientRequest, $db, $access);
         self::assertGreaterThan(0, $this->id($db->pdo(), 'SELECT id FROM clients WHERE name = "Client Manager"'));
 
+        $supplierRequest = $this->requestWithUser('/suppliers', 'POST', [
+            'name' => 'Fournisseur Manager',
+            'phone' => '0600000002',
+            'email' => '',
+            'address' => 'Agadir',
+        ], $manager);
+        $controller->setContainer($this->controllerContainer($supplierRequest));
+        $controller->suppliers($supplierRequest, $db, $access);
+        self::assertGreaterThan(0, $this->id($db->pdo(), 'SELECT id FROM suppliers WHERE name = "Fournisseur Manager"'));
+
         [$clientId, $vehicleId] = $this->clientAndVehicle($db, $db->pdo());
+        $brandId = $this->id($db->pdo(), 'SELECT id FROM vehicle_brands WHERE name = "VW"');
+        $modelId = $this->id($db->pdo(), 'SELECT id FROM vehicle_models WHERE brand_id = ' . $brandId . ' AND name = "Tiguan"');
+        $vehicleRequest = $this->requestWithUser('/vehicles', 'POST', [
+            'client_id' => $clientId,
+            'plate' => '33333-M-10',
+            'brand_id' => $brandId,
+            'model_id' => $modelId,
+            'year' => 2024,
+            'mileage' => 500,
+        ], $manager);
+        $controller->setContainer($this->controllerContainer($vehicleRequest));
+        $controller->vehicles($vehicleRequest, $db, $access);
+        self::assertGreaterThan(0, $this->id($db->pdo(), 'SELECT id FROM vehicles WHERE plate = "33333-M-10"'));
+
         $quoteId = $db->createOperation([
             'client_id' => $clientId,
             'vehicle_id' => $vehicleId,
@@ -1269,6 +1337,99 @@ SQL);
         self::assertStringContainsString('حذف', $adminHtml);
     }
 
+    public function testBusinessListButtonsMatchAdminAndManagerPermissions(): void
+    {
+        $db = $this->database();
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'BTN-ALL',
+            'name' => 'Produit global',
+            'category_id' => $categoryId,
+            'stock_qty' => 1,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $db->saveSupplier(['name' => 'Supplier buttons']);
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $db->pdo());
+
+        $contexts = [
+            'app/products.html.twig' => $db->dashboardData(['state' => 'all']) + ['filters' => ['state' => 'all'], 'record_token' => 'token'],
+            'app/categories.html.twig' => ['categories' => $db->categories(false), 'record_token' => 'token'],
+            'app/suppliers.html.twig' => ['suppliers' => $db->suppliers(false), 'record_token' => 'token'],
+            'app/clients.html.twig' => ['clients' => $db->clients(), 'record_token' => 'token'],
+            'app/vehicles.html.twig' => [
+                'clients' => $db->clients(),
+                'brands' => $db->vehicleBrands(),
+                'models' => $db->vehicleModels(),
+                'vehicles' => $db->vehicles(),
+                'selected_client_id' => $clientId,
+                'record_token' => 'token',
+            ],
+            'app/vehicle_settings.html.twig' => [
+                'brands' => $db->vehicleBrands('all'),
+                'models' => $db->vehicleModels(null, 'all'),
+                'record_token' => 'token',
+            ],
+        ];
+
+        foreach ($contexts as $template => $context) {
+            $managerHtml = $this->renderTemplate($template, $context + [
+                'user' => ['id' => 2, 'role' => 'manager', 'name' => 'Manager'],
+            ]);
+            $adminHtml = $this->renderTemplate($template, $context + [
+                'user' => ['id' => 1, 'role' => 'admin', 'name' => 'Admin'],
+            ]);
+
+            self::assertStringContainsString('عرض', $managerHtml, $template);
+            self::assertStringNotContainsString('تعديل', $managerHtml, $template);
+            self::assertStringNotContainsString('حذف', $managerHtml, $template);
+            self::assertStringNotContainsString('تعطيل', $managerHtml, $template);
+            self::assertStringContainsString('تعديل', $adminHtml, $template);
+            self::assertStringContainsString('حذف', $adminHtml, $template);
+        }
+
+        self::assertNotNull($db->vehicle($vehicleId));
+    }
+
+    public function testAdminCanDeleteRecordsButConfirmedDocumentsStayLocked(): void
+    {
+        $db = $this->database();
+        $access = new AccessControl();
+        $controller = new DashboardController();
+        $admin = ['id' => 1, 'name' => 'Admin', 'email' => 'admin@simauto.ma', 'role' => 'admin'];
+        $db->saveClient(['type' => 'individual', 'name' => 'Client deletable']);
+        $clientId = $this->id($db->pdo(), 'SELECT id FROM clients WHERE name = "Client deletable"');
+        $request = $this->requestWithUser('/records/client/' . $clientId . '/delete', 'POST', [], $admin);
+        $csrf = new ReflectionMethod($controller, 'csrfToken');
+        $csrf->setAccessible(true);
+        $request->request->set('_token', $csrf->invoke($controller, $request, 'record_state'));
+        $controller->setContainer($this->controllerContainer($request));
+
+        $response = $controller->recordState('client', $clientId, 'delete', $request, $db, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertNull($db->client($clientId));
+
+        $invoiceId = $db->invoiceDocument($this->operationWithService($db, 'ESP'), 1);
+        $invoiceHtml = $this->renderTemplate('app/operation_show.html.twig', [
+            'user' => $admin,
+            'operation' => $db->operation($invoiceId),
+            'chain' => $db->operationDocumentChain($invoiceId),
+            'back_query' => [],
+            'record_token' => 'token',
+        ]);
+
+        try {
+            $db->deleteRecord('operation', $invoiceId);
+            self::fail('Expected confirmed document delete lock.');
+        } catch (InvalidArgumentException $e) {
+            self::assertNotNull($db->operation($invoiceId));
+        }
+        self::assertStringNotContainsString('/app_operation_edit/' . $invoiceId, $invoiceHtml);
+        self::assertStringNotContainsString('/app_record_state/operation/' . $invoiceId . '/delete', $invoiceHtml);
+    }
+
     public function testTopbarDropdownsAreClosedByDefaultAndManagerHasNoUsersEntry(): void
     {
         $template = file_get_contents(__DIR__ . '/../templates/app/_topbar.html.twig');
@@ -1289,8 +1450,10 @@ SQL);
         self::assertStringNotContainsString('is-open', $adminHtml);
         self::assertStringContainsString('/app_users', $adminHtml);
         self::assertStringContainsString('/app_import', $adminHtml);
+        self::assertStringContainsString('/app_vehicle_settings', $adminHtml);
         self::assertStringNotContainsString('/app_users', $managerHtml);
         self::assertStringNotContainsString('/app_import', $managerHtml);
+        self::assertStringContainsString('/app_vehicle_settings', $managerHtml);
         self::assertStringNotContainsString('nav.admin', $managerHtml);
         self::assertMatchesRegularExpression('/\\.dropdown-menu\\s*\\{[^}]*display:\\s*none;/s', $css);
     }
