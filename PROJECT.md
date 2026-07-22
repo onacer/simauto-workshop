@@ -46,7 +46,7 @@ Le service PHP cree automatiquement les dossiers `data` et `var`, ajuste les dro
 Deux roles existent:
 
 - `admin`: acces total sans exception: lecture, creation, modification, suppression, activation/desactivation, imports, rapports, parametres et utilisateurs.
-- `manager`: lecture des vues metier + creation uniquement pour le travail quotidien: produits/clients/fournisseurs/vehicules, entrees de stock, devis, progression devis -> commande -> facture, impression documents/receipts et changement de son mot de passe. Il ne modifie, ne supprime, ne desactive et n'importe pas les enregistrements existants.
+- `manager`: lecture des vues metier, creation quotidienne, et modification des entites de reference: clients, fournisseurs, vehicules, marques, modeles, categories et fiche produit descriptive. Il ne supprime rien, ne desactive rien, n'importe pas, n'accede pas aux finances, et ne modifie pas le stock ni les documents confirmes/factures.
 
 Des comptes initiaux sont crees automatiquement si la table `users` est vide:
 
@@ -229,7 +229,7 @@ Routes principales:
 - `GET /operations`: page de creation d'une operation garage.
 - `GET /operations/history`: historique filtrable des devis, bons de commande et factures.
 - `GET /operations/{id}`: fiche detail lecture seule d'une operation avec lignes, totaux et chaine documentaire.
-- `GET|POST /operations/{id}/edit`: modification admin d'un devis brouillon uniquement.
+- `GET|POST /operations/{id}/edit`: modification d'un devis brouillon uniquement pour admin et manager; refuse les bons de commande et factures.
 - `GET /billing`: page des factures et receipts.
 - `GET /reports/finance`: situation financiere jour, semaine, mois ou periode libre.
 - `GET /reports/finance/operation/{id}`: detail de marge d'une facture.
@@ -623,7 +623,7 @@ La saisie d'operation reprend la meme convention par ligne de produit:
 - si le prix est modifie a la main, la ligne repasse en manuel;
 - les services, lignes libres et produits sans prix d'achat restent en prix manuel;
 - le serveur recalcule toujours le prix final depuis le produit et le mode de marge poste, le JavaScript ne sert qu'a l'apercu.
-- un devis brouillon peut etre modifie par l'admin avec les memes regles; les managers ne modifient pas un document existant.
+- un devis brouillon peut etre modifie par admin et manager avec les memes regles; une commande confirmee ou une facture est verrouillee pour tous.
 
 ### 2. Gestion Stock
 
@@ -1171,21 +1171,23 @@ Manager:
 - lecture de toutes les listes et fiches detail metier;
 - lecture des parametres visibles: categories, marques et modeles;
 - creation de produits, clients, fournisseurs et vehicules;
+- modification des entites de reference: clients, fournisseurs, vehicules, marques, modeles, categories;
+- modification de la fiche produit descriptive: code, nom, references, categorie, type produit/service, seuil minimum, prix achat/vente et mode marge;
 - creation d'entrees de stock;
 - creation de devis et progression du workflow devis -> bon de commande -> facture;
+- modification d'un devis tant qu'il est brouillon;
 - impression documents et receipts;
 - changement de son mot de passe.
 
 Restrictions manager:
 
-- pas de modification d'enregistrements existants (`/edit` et POST associes);
+- pas de modification de stock existant, mouvements ou champ `stock_qty` depuis la fiche produit;
 - pas de suppression;
 - pas d'activation/desactivation;
 - pas d'import en masse;
 - pas de rapports financiers;
-- pas de creation/modification/suppression des parametres: categories, marques et modeles;
 - pas d'acces au module utilisateurs `/users/...`;
-- pas de modification d'un devis brouillon deja cree; l'admin seul peut editer ou supprimer un devis brouillon;
+- pas de suppression d'un devis brouillon; suppression reservee admin;
 - aucun role ne peut modifier ou supprimer une commande confirmee ou une facture;
 - les boutons interdits sont masques dans Twig avec `can(...)`;
 - les actions interdites sont aussi verifiees cote serveur avec `App\Service\AccessControl`.
@@ -1194,8 +1196,9 @@ Permissions centralisees:
 
 - admin: `can(...)` retourne vrai pour toutes les permissions;
 - manager autorise en lecture: `view`, `view.dashboard`, `view.products`, `view.stock`, `view.categories`, `view.suppliers`, `view.clients`, `view.vehicles`, `view.vehicle_settings`, `view.operations`, `view.billing`, `view.documents`;
-- manager autorise en action quotidienne: `create`, `progress_document`;
-- manager interdit: `edit`, `delete`, `toggle`, `import`, `imports`, `manage_users`, `reports.view`.
+- manager autorise en action quotidienne: `create`, `progress_document`, `edit.reference`, `edit.quote_draft`;
+- `canEditDocument(user, operation)` refuse toujours si `doc_type != quote` ou `status != draft`, meme pour admin;
+- manager interdit: `edit`, `edit.stock`, `edit.operation`, `delete`, `toggle`, `import`, `imports`, `manage_users`, `reports.view`.
 
 ## Mode Impression
 
