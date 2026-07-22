@@ -1,4 +1,4 @@
-{% extends 'base.html.twig' %}
+﻿{% extends 'base.html.twig' %}
 {% block title %}{{ 'vehicles.title'|trans }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
@@ -41,7 +41,7 @@
                     <span>{{ vehicle.brand_name }} {{ vehicle.model_name }}</span>
                     <span class="row-actions">
                         <a href="{{ path('app_vehicle_show', {id: vehicle.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit', user) %}
+                        {% if can('edit.reference', user) %}
                             <a href="{{ path('app_vehicle_edit', {id: vehicle.id}) }}">{{ 'ui.edit'|trans }}</a>
                         {% endif %}
                         {% if can('toggle', user) %}

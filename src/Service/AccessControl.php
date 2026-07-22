@@ -33,6 +33,8 @@ class AccessControl
         $managerActionPermissions = [
             'create',
             'progress_document',
+            'edit.reference',
+            'edit.quote_draft',
         ];
 
         $legacyViewAliases = [
@@ -51,5 +53,17 @@ class AccessControl
         return in_array($permission, $managerViewPermissions, true)
             || in_array($permission, $managerActionPermissions, true)
             || in_array($permission, $legacyViewAliases, true);
+    }
+
+    public function canEditDocument(array $user, array $operation): bool
+    {
+        $isDraftQuote = ($operation['doc_type'] ?? '') === 'quote'
+            && ($operation['status'] ?? '') === 'draft';
+
+        if (!$isDraftQuote) {
+            return false;
+        }
+
+        return $this->can('edit.quote_draft', $user);
     }
 }

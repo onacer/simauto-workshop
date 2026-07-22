@@ -1,4 +1,4 @@
-{% extends 'base.html.twig' %}
+﻿{% extends 'base.html.twig' %}
 {% block title %}{{ 'vehicles.settings'|trans }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
@@ -6,7 +6,7 @@
     <section class="page-head"><h1>{{ 'vehicles.settings'|trans }}</h1><a class="btn btn-dark" href="{{ path('app_vehicles') }}">{{ 'ui.back'|trans }}</a></section>
     {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message|trans }}</div>{% endfor %}
     {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
-    {% if can('edit', user) %}
+    {% if can('edit.reference', user) %}
         <section class="work-grid">
             <article class="panel">
                 <h2>{{ 'vehicles.new_brand'|trans }}</h2>
@@ -37,7 +37,7 @@
                     <span></span><span></span>
                     <span class="row-actions">
                         <a href="{{ path('app_vehicle_brand_show', {id: brand.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit', user) %}
+                        {% if can('edit.reference', user) %}
                             <a href="{{ path('app_vehicle_brand_edit', {id: brand.id}) }}">{{ 'ui.edit'|trans }}</a>
                         {% endif %}
                         {% if can('toggle', user) %}
@@ -77,7 +77,7 @@
                     <span></span>
                     <span class="row-actions">
                         <a href="{{ path('app_vehicle_model_show', {id: model.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit', user) %}
+                        {% if can('edit.reference', user) %}
                             <a href="{{ path('app_vehicle_model_edit', {id: model.id}) }}">{{ 'ui.edit'|trans }}</a>
                         {% endif %}
                         {% if can('toggle', user) %}

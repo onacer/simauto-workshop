@@ -1,4 +1,4 @@
-{% extends 'base.html.twig' %}
+﻿{% extends 'base.html.twig' %}
 {% block title %}{{ category.name }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
@@ -6,7 +6,7 @@
     <section class="page-head">
         <h1>{{ category.name }}</h1>
         <span class="row-actions">
-            {% if can('edit', user) %}<a href="{{ path('app_category_edit', {id: category.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+            {% if can('edit.reference', user) %}<a href="{{ path('app_category_edit', {id: category.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
             <a class="btn btn-dark" href="{{ path('app_categories') }}">{{ 'ui.back'|trans }}</a>
         </span>
     </section>

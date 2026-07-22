@@ -1,4 +1,4 @@
-{% extends 'base.html.twig' %}
+﻿{% extends 'base.html.twig' %}
 {% block title %}{{ 'clients.title'|trans }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
@@ -30,7 +30,7 @@
                     <span>{{ client.phone }}</span>
                     <span class="row-actions">
                         <a href="{{ path('app_client_show', {id: client.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+                        {% if can('edit.reference', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
                         {% if can('toggle', user) %}
                             {% if client.active|default(1) == 1 %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'client', id: client.id, action: 'deactivate'}) }}">

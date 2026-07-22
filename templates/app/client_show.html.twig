@@ -1,4 +1,4 @@
-{% extends 'base.html.twig' %}
+﻿{% extends 'base.html.twig' %}
 {% block title %}{{ client.name }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
@@ -6,7 +6,7 @@
     <section class="page-head">
         <h1>{{ client.name }}</h1>
         <span class="row-actions">
-            {% if can('edit', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+            {% if can('edit.reference', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
             <a class="btn btn-primary" href="{{ path('app_vehicles', {client: client.id}) }}">{{ 'clients.add_vehicle'|trans }}</a>
             <a class="btn btn-dark" href="{{ path('app_clients') }}">{{ 'ui.back'|trans }}</a>
         </span>

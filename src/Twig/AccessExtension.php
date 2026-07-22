@@ -16,6 +16,7 @@ class AccessExtension extends AbstractExtension
     {
         return [
             new TwigFunction('can', [$this->access, 'can']),
+            new TwigFunction('can_edit_document', [$this->access, 'canEditDocument']),
         ];
     }
 }

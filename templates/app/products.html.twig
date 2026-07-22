@@ -1,4 +1,4 @@
-{% extends 'base.html.twig' %}
+﻿{% extends 'base.html.twig' %}
 
 {% block title %}{{ 'products.title'|trans }} - SIM Auto{% endblock %}
 
@@ -93,7 +93,7 @@
                     <span>{{ product.product_type|default('stockable') == 'service' ? 'products.service'|trans : product.stock_qty }}</span>
                     <span class="row-actions">
                         <a href="{{ path('app_product_show', {id: product.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+                        {% if can('edit.reference', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
                         {% if can('toggle', user) %}
                             {% if product.active|default(1) == 1 %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'deactivate'}) }}">

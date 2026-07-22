@@ -91,7 +91,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_product_show', ['id' => $id])) {
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit.reference', 'app_product_show', ['id' => $id])) {
             return $denied;
         }
 
@@ -214,15 +214,11 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_operation_show', ['id' => $id])) {
-            return $denied;
-        }
-
         $operation = $db->operation($id);
         if (!$operation) {
             throw $this->createNotFoundException();
         }
-        if ($operation['doc_type'] !== 'quote' || $operation['status'] !== 'draft') {
+        if (!$access->canEditDocument($user, $operation)) {
             $this->addFlash('error', 'operations.edit_draft_only');
             return $this->redirectToRoute('app_operation_show', ['id' => $id]);
         }
@@ -404,7 +400,7 @@ class DashboardController extends AbstractController
         }
 
         if ($request->isMethod('POST')) {
-            if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_categories')) {
+            if ($denied = $this->denyUnlessCan($access, $user, 'edit.reference', 'app_categories')) {
                 return $denied;
             }
             try {
@@ -430,7 +426,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_category_show', ['id' => $id])) {
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit.reference', 'app_category_show', ['id' => $id])) {
             return $denied;
         }
         $category = $db->category($id);
@@ -515,7 +511,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_supplier_show', ['id' => $id])) {
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit.reference', 'app_supplier_show', ['id' => $id])) {
             return $denied;
         }
         $supplier = $db->supplier($id);
@@ -599,7 +595,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_client_show', ['id' => $id])) {
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit.reference', 'app_client_show', ['id' => $id])) {
             return $denied;
         }
         $client = $db->client($id);
@@ -691,7 +687,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_vehicle_show', ['id' => $id])) {
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit.reference', 'app_vehicle_show', ['id' => $id])) {
             return $denied;
         }
         $vehicle = $db->vehicle($id);
@@ -725,7 +721,7 @@ class DashboardController extends AbstractController
             return $user;
         }
         if ($request->isMethod('POST')) {
-            if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_vehicle_settings')) {
+            if ($denied = $this->denyUnlessCan($access, $user, 'edit.reference', 'app_vehicle_settings')) {
                 return $denied;
             }
             try {
@@ -778,7 +774,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_vehicle_brand_show', ['id' => $id])) {
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit.reference', 'app_vehicle_brand_show', ['id' => $id])) {
             return $denied;
         }
         $brand = $db->vehicleBrand($id);
@@ -822,7 +818,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_vehicle_model_show', ['id' => $id])) {
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit.reference', 'app_vehicle_model_show', ['id' => $id])) {
             return $denied;
         }
         $model = $db->vehicleModel($id);

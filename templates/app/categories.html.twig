@@ -1,4 +1,4 @@
-{% extends 'base.html.twig' %}
+﻿{% extends 'base.html.twig' %}
 {% block title %}{{ 'categories.title'|trans }} - SIM Auto{% endblock %}
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
@@ -6,7 +6,7 @@
     <section class="page-head"><h1>{{ 'categories.title'|trans }}</h1><a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a></section>
     {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message|trans }}</div>{% endfor %}
     {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
-    {% if can('edit', user) %}
+    {% if can('edit.reference', user) %}
         <section class="panel">
             <form method="post" class="form-grid">
                 <label>{{ 'categories.name'|trans }}<input name="name" required></label>
@@ -24,7 +24,7 @@
                     <span>{{ category.created_at }}</span>
                     <span class="row-actions">
                         <a href="{{ path('app_category_show', {id: category.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit', user) %}<a href="{{ path('app_category_edit', {id: category.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+                        {% if can('edit.reference', user) %}<a href="{{ path('app_category_edit', {id: category.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
                         {% if can('toggle', user) %}
                             {% if category.active|default(1) == 1 %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'category', id: category.id, action: 'deactivate'}) }}">

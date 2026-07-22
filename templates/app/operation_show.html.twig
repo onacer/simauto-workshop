@@ -18,7 +18,7 @@
     <section class="page-head">
         <h1>{{ operation.document_title }} {{ operation.document_no }}</h1>
         <span class="row-actions">
-            {% if can('edit', user) and operation.doc_type == 'quote' and operation.status == 'draft' %}
+            {% if can_edit_document(user, operation) %}
                 <a class="btn btn-primary" href="{{ path('app_operation_edit', {id: operation.id}) }}">{{ 'ui.edit'|trans }}</a>
             {% endif %}
             {% if can('delete', user) and operation.doc_type == 'quote' and operation.status == 'draft' %}
