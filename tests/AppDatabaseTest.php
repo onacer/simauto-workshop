@@ -600,6 +600,58 @@ SQL);
         self::assertStringNotContainsString('TVA', $quoteHtml);
     }
 
+    public function testDocumentEditPermissionDependsOnDraftQuoteState(): void
+    {
+        $db = $this->database();
+        $access = new AccessControl();
+        $controller = new DashboardController();
+        $manager = ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager'];
+        $admin = ['id' => 1, 'name' => 'Admin', 'email' => 'admin@simauto.ma', 'role' => 'admin'];
+        $quoteId = $this->operationWithService($db, 'ESP');
+        $quote = $db->operation($quoteId);
+
+        self::assertTrue($access->canEditDocument($manager, $quote));
+        self::assertTrue($access->canEditDocument($admin, $quote));
+
+        $draftPost = $this->requestWithUser('/operations/' . $quoteId . '/edit', 'POST', [
+            'client_id' => $quote['client_id'],
+            'vehicle_id' => $quote['vehicle_id'],
+            'payment_method' => 'ESP',
+            'vat_rate' => 20,
+            'line_product_id' => [''],
+            'line_label' => ['Diagnostic modifie'],
+            'line_quantity' => [1],
+            'line_margin_mode' => ['manual'],
+            'line_unit_price' => [250],
+            'line_discount' => [0],
+        ], $manager);
+        $csrf = new ReflectionMethod($controller, 'csrfToken');
+        $csrf->setAccessible(true);
+        $draftPost->request->set('_token', $csrf->invoke($controller, $draftPost, 'operation_form'));
+        $controller->setContainer($this->controllerContainer($draftPost));
+
+        $response = $controller->operationEdit($quoteId, $draftPost, $db, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame('Diagnostic modifie', $db->operation($quoteId)['items'][0]['label']);
+
+        $orderId = $db->confirmQuote($quoteId, 1);
+        $orderPost = $this->requestWithUser('/operations/' . $orderId . '/edit', 'POST', [], $manager);
+        $controller->setContainer($this->controllerContainer($orderPost));
+        $response = $controller->operationEdit($orderId, $orderPost, $db, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertFalse($access->canEditDocument($manager, $db->operation($orderId)));
+
+        $invoiceId = $db->invoiceDocument($orderId, 1);
+        $invoicePost = $this->requestWithUser('/operations/' . $invoiceId . '/edit', 'POST', [], $admin);
+        $controller->setContainer($this->controllerContainer($invoicePost));
+        $response = $controller->operationEdit($invoiceId, $invoicePost, $db, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertFalse($access->canEditDocument($admin, $db->operation($invoiceId)));
+    }
+
     public function testFinancialMarginsForProductsServicesAndEstimatedLines(): void
     {
         $db = $this->database();
@@ -1122,8 +1174,12 @@ SQL);
         self::assertTrue($access->can('view.billing', $manager));
         self::assertTrue($access->can('create', $manager));
         self::assertTrue($access->can('progress_document', $manager));
+        self::assertTrue($access->can('edit.reference', $manager));
+        self::assertTrue($access->can('edit.quote_draft', $manager));
         self::assertTrue($access->can('clients', $manager));
         self::assertFalse($access->can('edit', $manager));
+        self::assertFalse($access->can('edit.stock', $manager));
+        self::assertFalse($access->can('edit.operation', $manager));
         self::assertFalse($access->can('delete', $manager));
         self::assertFalse($access->can('toggle', $manager));
         self::assertFalse($access->can('import', $manager));
@@ -1138,11 +1194,12 @@ SQL);
         self::assertTrue($access->can('unknown.future.permission', $admin));
     }
 
-    public function testManagerForcedEditAndToggleRoutesAreDeniedWithoutChangingData(): void
+    public function testManagerCanEditProductDescriptionButCannotChangeStockOrDeleteOrToggle(): void
     {
         $db = $this->database();
         $access = new AccessControl();
         $controller = new DashboardController();
+        $manager = ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager'];
 
         $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
         $db->saveProduct([
@@ -1155,30 +1212,48 @@ SQL);
             'sale_price' => 20,
         ], 1);
         $productId = $this->id($db->pdo(), 'SELECT id FROM products WHERE sku = "ACL-001"');
+        $beforeQty = (int) $db->product($productId)['stock_qty'];
 
         $editRequest = $this->requestWithUser('/products/' . $productId . '/edit', 'POST', [
             'sku' => 'ACL-001',
             'name' => 'Produit modifie',
+            'ref_universal' => 'OEM-ACL',
+            'ref_company' => 'SIM-ACL',
+            'product_type' => 'stockable',
             'category_id' => $categoryId,
+            'stock_qty' => 999,
             'min_qty' => 1,
             'purchase_price' => 10,
-            'sale_price' => 20,
-        ], ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager']);
+            'margin_mode' => '145',
+            'sale_price' => 14.5,
+        ], $manager);
         $controller->setContainer($this->controllerContainer($editRequest));
 
         $response = $controller->productEdit($productId, $editRequest, $db, $access);
 
         self::assertInstanceOf(RedirectResponse::class, $response);
-        self::assertSame('Produit ACL', $db->product($productId)['name']);
+        $product = $db->product($productId);
+        self::assertSame('Produit modifie', $product['name']);
+        self::assertSame('SIM-ACL', $product['ref_company']);
+        self::assertSame($beforeQty, (int) $product['stock_qty']);
+        self::assertSame(145.0, (float) $product['margin_rate']);
 
-        $toggleRequest = $this->requestWithUser('/records/product/' . $productId . '/deactivate', 'POST', [], ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager']);
+        $editHtml = $this->renderTemplate('app/product_edit.html.twig', [
+            'user' => $manager,
+            'product' => $product,
+            'categories' => $db->categories(false),
+        ]);
+        self::assertStringNotContainsString('name="stock_qty"', $editHtml);
+        self::assertStringContainsString('name="product_type"', $editHtml);
+
+        $toggleRequest = $this->requestWithUser('/records/product/' . $productId . '/deactivate', 'POST', [], $manager);
         $controller->setContainer($this->controllerContainer($toggleRequest));
         $response = $controller->recordState('product', $productId, 'deactivate', $toggleRequest, $db, $access);
 
         self::assertInstanceOf(RedirectResponse::class, $response);
         self::assertSame(1, (int) $db->product($productId)['active']);
 
-        $deleteRequest = $this->requestWithUser('/records/product/' . $productId . '/delete', 'POST', [], ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager']);
+        $deleteRequest = $this->requestWithUser('/records/product/' . $productId . '/delete', 'POST', [], $manager);
         $controller->setContainer($this->controllerContainer($deleteRequest));
         $response = $controller->recordState('product', $productId, 'delete', $deleteRequest, $db, $access);
 
@@ -1186,32 +1261,98 @@ SQL);
         self::assertNotNull($db->product($productId));
     }
 
-    public function testManagerCanViewButNotModifyVehicleSettings(): void
+    public function testManagerCanEditReferenceEntities(): void
     {
         $db = $this->database();
         $access = new AccessControl();
         $controller = new DashboardController();
         $manager = ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager'];
-        $db->saveVehicleBrand('TEST-READ');
-
-        $html = $this->renderTemplate('app/vehicle_settings.html.twig', [
-            'user' => $manager,
-            'brands' => $db->vehicleBrands('all'),
-            'models' => $db->vehicleModels(null, 'all'),
-            'record_token' => 'token',
-        ]);
-        self::assertStringContainsString('عرض', $html);
-        self::assertStringNotContainsString('تعديل', $html);
 
         $post = $this->requestWithUser('/vehicles/settings', 'POST', [
             'kind' => 'brand',
-            'name' => 'MANAGER-BLOCKED',
+            'name' => 'MANAGER-BRAND',
         ], $manager);
         $controller->setContainer($this->controllerContainer($post));
         $response = $controller->vehicleSettings($post, $db, $access);
 
         self::assertInstanceOf(RedirectResponse::class, $response);
-        self::assertNull($db->vehicleBrandByName('MANAGER-BLOCKED'));
+        $brandId = (int) $db->vehicleBrandByName('MANAGER-BRAND')['id'];
+
+        $brandEdit = $this->requestWithUser('/vehicle-brands/' . $brandId . '/edit', 'POST', ['name' => 'MANAGER-BRAND-EDIT'], $manager);
+        $controller->setContainer($this->controllerContainer($brandEdit));
+        $controller->vehicleBrandEdit($brandId, $brandEdit, $db, $access);
+        self::assertNotNull($db->vehicleBrandByName('MANAGER-BRAND-EDIT'));
+
+        $modelCreate = $this->requestWithUser('/vehicles/settings', 'POST', [
+            'kind' => 'model',
+            'brand_id' => $brandId,
+            'name' => 'MODEL-1',
+        ], $manager);
+        $controller->setContainer($this->controllerContainer($modelCreate));
+        $controller->vehicleSettings($modelCreate, $db, $access);
+        $modelId = (int) $db->vehicleModelByName($brandId, 'MODEL-1')['id'];
+
+        $modelEdit = $this->requestWithUser('/vehicle-models/' . $modelId . '/edit', 'POST', [
+            'brand_id' => $brandId,
+            'name' => 'MODEL-EDIT',
+        ], $manager);
+        $controller->setContainer($this->controllerContainer($modelEdit));
+        $controller->vehicleModelEdit($modelId, $modelEdit, $db, $access);
+        self::assertNotNull($db->vehicleModelByName($brandId, 'MODEL-EDIT'));
+
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $categoryEdit = $this->requestWithUser('/categories/' . $categoryId . '/edit', 'POST', ['name' => 'Manager Category'], $manager);
+        $controller->setContainer($this->controllerContainer($categoryEdit));
+        $controller->categoryEdit($categoryId, $categoryEdit, $db, $access);
+        self::assertSame('Manager Category', $db->category($categoryId)['name']);
+
+        $db->saveSupplier(['name' => 'Supplier editable']);
+        $supplierId = $this->id($db->pdo(), 'SELECT id FROM suppliers WHERE name = "Supplier editable"');
+        $supplierEdit = $this->requestWithUser('/suppliers/' . $supplierId . '/edit', 'POST', [
+            'name' => 'Supplier edited',
+            'phone' => '0600000099',
+        ], $manager);
+        $controller->setContainer($this->controllerContainer($supplierEdit));
+        $controller->supplierEdit($supplierId, $supplierEdit, $db, $access);
+        self::assertSame('Supplier edited', $db->supplier($supplierId)['name']);
+
+        $db->saveClient(['type' => 'company', 'name' => 'Client editable', 'ice' => 'OLD']);
+        $clientId = $this->id($db->pdo(), 'SELECT id FROM clients WHERE name = "Client editable"');
+        $clientEdit = $this->requestWithUser('/clients/' . $clientId . '/edit', 'POST', [
+            'type' => 'company',
+            'name' => 'Client edited',
+            'phone' => '0612345678',
+            'email' => '',
+            'address' => 'Agadir',
+            'ice' => 'ICE-NEW',
+            'vat' => 'IF-NEW',
+            'rc' => 'RC-NEW',
+        ], $manager);
+        $controller->setContainer($this->controllerContainer($clientEdit));
+        $controller->clientEdit($clientId, $clientEdit, $db, $access);
+        self::assertSame('ICE-NEW', $db->client($clientId)['ice']);
+
+        $db->saveVehicle([
+            'client_id' => $clientId,
+            'plate' => '11111-A-10',
+            'brand_id' => $brandId,
+            'model_id' => $modelId,
+            'year' => 2020,
+            'mileage' => 100,
+        ]);
+        $vehicleId = $this->id($db->pdo(), 'SELECT id FROM vehicles WHERE plate = "11111-A-10"');
+        $vehicleEdit = $this->requestWithUser('/vehicles/' . $vehicleId . '/edit', 'POST', [
+            'client_id' => $clientId,
+            'plate' => '11111-A-11',
+            'brand_id' => $brandId,
+            'model_id' => $modelId,
+            'year' => 2025,
+            'mileage' => 12345,
+            'notes' => 'Updated by manager',
+        ], $manager);
+        $controller->setContainer($this->controllerContainer($vehicleEdit));
+        $controller->vehicleEdit($vehicleId, $vehicleEdit, $db, $access);
+        self::assertSame('11111-A-11', $db->vehicle($vehicleId)['plate']);
     }
 
     public function testManagerImportRoutesAreDenied(): void
@@ -1306,7 +1447,7 @@ SQL);
         self::assertSame(3, (int) $db->product($productId)['stock_qty']);
     }
 
-    public function testManagerListHtmlHidesEditAndDeleteButtonsWhileAdminKeepsThem(): void
+    public function testManagerProductListShowsEditButHidesDeleteAndToggleButtons(): void
     {
         $db = $this->database();
         $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
@@ -1331,8 +1472,9 @@ SQL);
             'user' => ['role' => 'admin', 'name' => 'Admin'],
         ]);
 
-        self::assertStringNotContainsString('تعديل', $managerHtml);
+        self::assertStringContainsString('تعديل', $managerHtml);
         self::assertStringNotContainsString('حذف', $managerHtml);
+        self::assertStringNotContainsString('تعطيل', $managerHtml);
         self::assertStringContainsString('تعديل', $adminHtml);
         self::assertStringContainsString('حذف', $adminHtml);
     }
@@ -1382,7 +1524,7 @@ SQL);
             ]);
 
             self::assertStringContainsString('عرض', $managerHtml, $template);
-            self::assertStringNotContainsString('تعديل', $managerHtml, $template);
+            self::assertStringContainsString('تعديل', $managerHtml, $template);
             self::assertStringNotContainsString('حذف', $managerHtml, $template);
             self::assertStringNotContainsString('تعطيل', $managerHtml, $template);
             self::assertStringContainsString('تعديل', $adminHtml, $template);
@@ -1390,6 +1532,30 @@ SQL);
         }
 
         self::assertNotNull($db->vehicle($vehicleId));
+    }
+
+    public function testManagerStockPageDoesNotExposeEditActions(): void
+    {
+        $db = $this->database();
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'STOCK-ACL',
+            'name' => 'Stock ACL',
+            'category_id' => $categoryId,
+            'stock_qty' => 4,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+
+        $html = $this->renderTemplate('app/stock.html.twig', $db->dashboardData() + [
+            'user' => ['id' => 2, 'role' => 'manager', 'name' => 'Manager'],
+        ]);
+
+        self::assertStringContainsString('STOCK-ACL', $html);
+        self::assertStringNotContainsString('تعديل', $html);
+        self::assertStringNotContainsString('حذف', $html);
+        self::assertStringNotContainsString('تعطيل', $html);
     }
 
     public function testAdminCanDeleteRecordsButConfirmedDocumentsStayLocked(): void
@@ -1438,6 +1604,7 @@ SQL);
         $twig->addFunction(new TwigFunction('path', fn (string $route, array $params = []) => '/' . $route . (isset($params['locale']) ? '/' . $params['locale'] : '')));
         $twig->addFunction(new TwigFunction('asset', fn (string $path) => '/assets/' . $path));
         $twig->addFunction(new TwigFunction('can', fn (string $permission, array $user) => $access->can($permission, $user)));
+        $twig->addFunction(new TwigFunction('can_edit_document', fn (array $user, array $operation) => $access->canEditDocument($user, $operation)));
         $twig->addFilter(new TwigFilter('trans', fn (string $key, array $params = []): string => $this->testTrans($key, $params)));
 
         $request = Request::create('/');
@@ -1478,6 +1645,7 @@ SQL);
         $access = new AccessControl();
         $twig->addFunction(new TwigFunction('asset', fn (string $path) => '/assets/' . $path));
         $twig->addFunction(new TwigFunction('can', fn (string $permission, array $user) => $access->can($permission, $user)));
+        $twig->addFunction(new TwigFunction('can_edit_document', fn (array $user, array $operation) => $access->canEditDocument($user, $operation)));
         $twig->addFilter(new TwigFilter('trans', fn (string $key, array $params = []): string => $this->testTrans($key, $params)));
         $twig->addFunction(new TwigFunction('path', function (string $route, array $params = []): string {
             $suffix = isset($params['id']) ? '/' . $params['id'] : (isset($params['locale']) ? '/' . $params['locale'] : '');
