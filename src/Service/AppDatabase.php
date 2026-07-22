@@ -277,6 +277,16 @@ class AppDatabase
         $stmt->execute(['name' => $name]);
     }
 
+    public function updateVehicleBrand(int $id, string $name): void
+    {
+        $name = trim($name);
+        if ($id <= 0 || $name === '') {
+            throw new InvalidArgumentException('اسم الماركة إجباري');
+        }
+        $stmt = $this->pdo->prepare('UPDATE vehicle_brands SET name = :name WHERE id = :id');
+        $stmt->execute(['name' => $name, 'id' => $id]);
+    }
+
     public function getOrCreateVehicleBrand(string $name): int
     {
         $name = trim($name);
@@ -299,6 +309,16 @@ class AppDatabase
         }
         $stmt = $this->pdo->prepare('INSERT OR IGNORE INTO vehicle_models (brand_id, name) VALUES (:brand_id, :name)');
         $stmt->execute(['brand_id' => $brandId, 'name' => $name]);
+    }
+
+    public function updateVehicleModel(int $id, int $brandId, string $name): void
+    {
+        $name = trim($name);
+        if ($id <= 0 || $brandId <= 0 || $name === '') {
+            throw new InvalidArgumentException('الماركة والموديل إجباريان');
+        }
+        $stmt = $this->pdo->prepare('UPDATE vehicle_models SET brand_id = :brand_id, name = :name WHERE id = :id');
+        $stmt->execute(['brand_id' => $brandId, 'name' => $name, 'id' => $id]);
     }
 
     public function vehicleModelByName(int $brandId, string $name): ?array
@@ -515,6 +535,15 @@ class AppDatabase
     public function deleteRecord(string $entity, int $id): void
     {
         $table = $this->entityTable($entity);
+        if ($entity === 'operation') {
+            $operation = $this->operation($id);
+            if (!$operation) {
+                throw new InvalidArgumentException('العملية غير موجودة');
+            }
+            if (($operation['doc_type'] ?? '') !== 'quote' || ($operation['status'] ?? '') !== 'draft') {
+                throw new InvalidArgumentException('لا يمكن حذف وثيقة مؤكدة أو مفوترة');
+            }
+        }
         $refs = $this->referenceCounts($entity, $id);
         $blocking = array_filter($refs, fn (int $count): bool => $count > 0);
         if ($blocking) {
@@ -2081,6 +2110,7 @@ SQL);
             'vehicle' => 'vehicles',
             'brand' => 'vehicle_brands',
             'model' => 'vehicle_models',
+            'operation' => 'operations',
             default => throw new InvalidArgumentException('Entite invalide'),
         };
     }
@@ -2101,6 +2131,7 @@ SQL);
             'vehicle' => ['operations' => $this->countWhere('operations', 'vehicle_id', $id)],
             'brand' => ['modeles' => $this->countWhere('vehicle_models', 'brand_id', $id)],
             'model' => ['vehicules' => $this->countWhere('vehicles', 'model_id', $id)],
+            'operation' => ['documents lies' => $this->countWhere('operations', 'parent_id', $id)],
             default => [],
         };
     }

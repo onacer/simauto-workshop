@@ -1,0 +1,22 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ 'vehicles.model'|trans }} - SIM Auto{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head"><h1>{{ model.name }}</h1><a class="btn btn-dark" href="{{ path('app_vehicle_model_show', {id: model.id}) }}">{{ 'ui.back'|trans }}</a></section>
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
+    <section class="panel">
+        <form method="post" class="form-grid">
+            <label>{{ 'vehicles.brand'|trans }}
+                <select name="brand_id" required>
+                    {% for brand in brands %}
+                        <option value="{{ brand.id }}" {{ model.brand_id == brand.id ? 'selected' : '' }}>{{ brand.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>{{ 'vehicles.model'|trans }}<input name="name" value="{{ model.name }}" required></label>
+            <button class="btn btn-primary" type="submit">{{ 'ui.update'|trans }}</button>
+        </form>
+    </section>
+</main>
+{% endblock %}

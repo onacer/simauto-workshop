@@ -5,7 +5,12 @@
 <main class="main-board">
     <section class="page-head">
         <h1>{{ brand.name }}</h1>
-        <a class="btn btn-dark" href="{{ path('app_vehicle_settings') }}">{{ 'ui.back'|trans }}</a>
+        <span class="row-actions">
+            {% if can('edit', user) %}
+                <a href="{{ path('app_vehicle_brand_edit', {id: brand.id}) }}">{{ 'ui.edit'|trans }}</a>
+            {% endif %}
+            <a class="btn btn-dark" href="{{ path('app_vehicle_settings') }}">{{ 'ui.back'|trans }}</a>
+        </span>
     </section>
 
     {% include 'app/_show_info.html.twig' with {rows: [

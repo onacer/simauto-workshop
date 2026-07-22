@@ -6,25 +6,27 @@
     <section class="page-head"><h1>{{ 'vehicles.settings'|trans }}</h1><a class="btn btn-dark" href="{{ path('app_vehicles') }}">{{ 'ui.back'|trans }}</a></section>
     {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message|trans }}</div>{% endfor %}
     {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
-    <section class="work-grid">
-        <article class="panel">
-            <h2>{{ 'vehicles.new_brand'|trans }}</h2>
-            <form method="post" class="form-stack">
-                <input type="hidden" name="kind" value="brand">
-                <label>{{ 'ui.name'|trans }}<input name="name" required></label>
-                <button class="btn btn-primary">{{ 'ui.save'|trans }}</button>
-            </form>
-        </article>
-        <article class="panel">
-            <h2>{{ 'vehicles.new_model'|trans }}</h2>
-            <form method="post" class="form-stack">
-                <input type="hidden" name="kind" value="model">
-                <label>{{ 'vehicles.brand'|trans }}<select name="brand_id">{% for brand in brands %}<option value="{{ brand.id }}">{{ brand.name }}</option>{% endfor %}</select></label>
-                <label>{{ 'vehicles.model'|trans }}<input name="name" required></label>
-                <button class="btn btn-primary">{{ 'ui.save'|trans }}</button>
-            </form>
-        </article>
-    </section>
+    {% if can('edit', user) %}
+        <section class="work-grid">
+            <article class="panel">
+                <h2>{{ 'vehicles.new_brand'|trans }}</h2>
+                <form method="post" class="form-stack">
+                    <input type="hidden" name="kind" value="brand">
+                    <label>{{ 'ui.name'|trans }}<input name="name" required></label>
+                    <button class="btn btn-primary">{{ 'ui.save'|trans }}</button>
+                </form>
+            </article>
+            <article class="panel">
+                <h2>{{ 'vehicles.new_model'|trans }}</h2>
+                <form method="post" class="form-stack">
+                    <input type="hidden" name="kind" value="model">
+                    <label>{{ 'vehicles.brand'|trans }}<select name="brand_id">{% for brand in brands %}<option value="{{ brand.id }}">{{ brand.name }}</option>{% endfor %}</select></label>
+                    <label>{{ 'vehicles.model'|trans }}<input name="name" required></label>
+                    <button class="btn btn-primary">{{ 'ui.save'|trans }}</button>
+                </form>
+            </article>
+        </section>
+    {% endif %}
     <section class="panel">
         <h2>{{ 'vehicles.brands'|trans }}</h2>
         <div class="data-table">
@@ -33,7 +35,31 @@
                 <div>
                     <strong>{{ brand.name }}</strong>
                     <span></span><span></span>
-                    <span class="row-actions"><a href="{{ path('app_vehicle_brand_show', {id: brand.id}) }}">{{ 'ui.show'|trans }}</a></span>
+                    <span class="row-actions">
+                        <a href="{{ path('app_vehicle_brand_show', {id: brand.id}) }}">{{ 'ui.show'|trans }}</a>
+                        {% if can('edit', user) %}
+                            <a href="{{ path('app_vehicle_brand_edit', {id: brand.id}) }}">{{ 'ui.edit'|trans }}</a>
+                        {% endif %}
+                        {% if can('toggle', user) %}
+                            {% if brand.active|default(1) == 1 %}
+                                <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'brand', id: brand.id, action: 'deactivate'}) }}">
+                                    <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                                    <button type="submit">{{ 'ui.deactivate'|trans }}</button>
+                                </form>
+                            {% else %}
+                                <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'brand', id: brand.id, action: 'reactivate'}) }}">
+                                    <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                                    <button type="submit">{{ 'ui.activate'|trans }}</button>
+                                </form>
+                            {% endif %}
+                        {% endif %}
+                        {% if can('delete', user) %}
+                            <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'brand', id: brand.id, action: 'delete'}) }}" onsubmit="return confirm('{{ 'ui.confirm_delete'|trans|e('js') }}')">
+                                <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                                <button type="submit">{{ 'ui.delete'|trans }}</button>
+                            </form>
+                        {% endif %}
+                    </span>
                 </div>
             {% else %}
                 <p class="empty-state">{{ 'vehicles.no_brands'|trans }}</p>
@@ -49,7 +75,31 @@
                     <strong><a href="{{ path('app_vehicle_brand_show', {id: model.brand_id}) }}">{{ model.brand_name }}</a></strong>
                     <span>{{ model.name }}</span>
                     <span></span>
-                    <span class="row-actions"><a href="{{ path('app_vehicle_model_show', {id: model.id}) }}">{{ 'ui.show'|trans }}</a></span>
+                    <span class="row-actions">
+                        <a href="{{ path('app_vehicle_model_show', {id: model.id}) }}">{{ 'ui.show'|trans }}</a>
+                        {% if can('edit', user) %}
+                            <a href="{{ path('app_vehicle_model_edit', {id: model.id}) }}">{{ 'ui.edit'|trans }}</a>
+                        {% endif %}
+                        {% if can('toggle', user) %}
+                            {% if model.active|default(1) == 1 %}
+                                <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'model', id: model.id, action: 'deactivate'}) }}">
+                                    <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                                    <button type="submit">{{ 'ui.deactivate'|trans }}</button>
+                                </form>
+                            {% else %}
+                                <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'model', id: model.id, action: 'reactivate'}) }}">
+                                    <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                                    <button type="submit">{{ 'ui.activate'|trans }}</button>
+                                </form>
+                            {% endif %}
+                        {% endif %}
+                        {% if can('delete', user) %}
+                            <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'model', id: model.id, action: 'delete'}) }}" onsubmit="return confirm('{{ 'ui.confirm_delete'|trans|e('js') }}')">
+                                <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                                <button type="submit">{{ 'ui.delete'|trans }}</button>
+                            </form>
+                        {% endif %}
+                    </span>
                 </div>
             {% else %}
                 <p class="empty-state">{{ 'vehicles.no_models'|trans }}</p>

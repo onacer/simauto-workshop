@@ -21,6 +21,12 @@
             {% if can('edit', user) and operation.doc_type == 'quote' and operation.status == 'draft' %}
                 <a class="btn btn-primary" href="{{ path('app_operation_edit', {id: operation.id}) }}">{{ 'ui.edit'|trans }}</a>
             {% endif %}
+            {% if can('delete', user) and operation.doc_type == 'quote' and operation.status == 'draft' %}
+                <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'operation', id: operation.id, action: 'delete'}) }}" onsubmit="return confirm('{{ 'ui.confirm_delete'|trans|e('js') }}')">
+                    <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                    <button class="btn btn-dark" type="submit">{{ 'ui.delete'|trans }}</button>
+                </form>
+            {% endif %}
             <a class="btn btn-primary" href="{{ path('app_document', {id: operation.id}) }}" target="_blank" rel="noopener">{{ 'documents.print'|trans }}</a>
             {% if operation.doc_type == 'invoice' %}
                 <a class="btn btn-primary" href="{{ path('app_receipt', {id: operation.id}) }}">{{ 'billing.receipt'|trans }}</a>

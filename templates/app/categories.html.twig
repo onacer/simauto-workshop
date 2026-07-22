@@ -26,7 +26,23 @@
                         <a href="{{ path('app_category_show', {id: category.id}) }}">{{ 'ui.show'|trans }}</a>
                         {% if can('edit', user) %}<a href="{{ path('app_category_edit', {id: category.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
                         {% if can('toggle', user) %}
-                            <form method="post" action="{{ path('app_category_deactivate', {id: category.id}) }}"><button class="link-button">{{ 'ui.deactivate'|trans }}</button></form>
+                            {% if category.active|default(1) == 1 %}
+                                <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'category', id: category.id, action: 'deactivate'}) }}">
+                                    <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                                    <button type="submit">{{ 'ui.deactivate'|trans }}</button>
+                                </form>
+                            {% else %}
+                                <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'category', id: category.id, action: 'reactivate'}) }}">
+                                    <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                                    <button type="submit">{{ 'ui.activate'|trans }}</button>
+                                </form>
+                            {% endif %}
+                        {% endif %}
+                        {% if can('delete', user) %}
+                            <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'category', id: category.id, action: 'delete'}) }}" onsubmit="return confirm('{{ 'ui.confirm_delete'|trans|e('js') }}')">
+                                <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                                <button type="submit">{{ 'ui.delete'|trans }}</button>
+                            </form>
                         {% endif %}
                     </span>
                 </div>

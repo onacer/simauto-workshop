@@ -29,7 +29,7 @@
             <a class="topbar-item dropdown-toggle" href="{{ path('app_vehicles') }}" aria-expanded="false">{{ 'nav.vehicles'|trans }}</a>
             <div class="dropdown-menu">
                 <a href="{{ path('app_vehicles') }}">{{ 'nav.vehicles'|trans }}</a>
-                {% if can('edit', user) %}
+                {% if can('view.vehicle_settings', user) %}
                     <a href="{{ path('app_vehicle_settings') }}">{{ 'nav.vehicle_settings'|trans }}</a>
                 {% endif %}
             </div>

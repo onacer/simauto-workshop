@@ -6,6 +6,9 @@
     <section class="page-head">
         <h1>{{ vehicle.plate }}</h1>
         <span class="row-actions">
+            {% if can('edit', user) %}
+                <a href="{{ path('app_vehicle_edit', {id: vehicle.id}) }}">{{ 'ui.edit'|trans }}</a>
+            {% endif %}
             <a class="btn btn-dark" href="{{ path('app_vehicles') }}">{{ 'ui.back'|trans }}</a>
         </span>
     </section>

@@ -16,11 +16,28 @@ class AccessControl
             return false;
         }
 
-        $managerPermissions = [
-            'dashboard',
-            'view',
+        $managerViewPermissions = [
+            'view.dashboard',
+            'view.products',
+            'view.stock',
+            'view.categories',
+            'view.suppliers',
+            'view.clients',
+            'view.vehicles',
+            'view.vehicle_settings',
+            'view.operations',
+            'view.billing',
+            'view.documents',
+        ];
+
+        $managerActionPermissions = [
             'create',
             'progress_document',
+        ];
+
+        $legacyViewAliases = [
+            'dashboard',
+            'view',
             'products',
             'stock',
             'categories',
@@ -31,6 +48,8 @@ class AccessControl
             'billing',
         ];
 
-        return in_array($permission, $managerPermissions, true);
+        return in_array($permission, $managerViewPermissions, true)
+            || in_array($permission, $managerActionPermissions, true)
+            || in_array($permission, $legacyViewAliases, true);
     }
 }

@@ -263,7 +263,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if (!$access->can('operations', $user)) {
+        if (!$access->can('view.operations', $user)) {
             $this->addFlash('error', 'access.denied');
             return $this->redirectToRoute('app_dashboard');
         }
@@ -306,7 +306,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if (!$access->can('operations', $user)) {
+        if (!$access->can('view.operations', $user)) {
             $this->addFlash('error', 'access.denied');
             return $this->redirectToRoute('app_dashboard');
         }
@@ -321,6 +321,7 @@ class DashboardController extends AbstractController
             'operation' => $operation,
             'chain' => $db->operationDocumentChain($id),
             'back_query' => $request->query->all(),
+            'record_token' => $this->csrfToken($request, 'record_state'),
         ]);
     }
 
@@ -415,7 +416,11 @@ class DashboardController extends AbstractController
             return $this->redirectToRoute('app_categories');
         }
 
-        return $this->render('app/categories.html.twig', ['user' => $user, 'categories' => $db->categories(false)]);
+        return $this->render('app/categories.html.twig', [
+            'user' => $user,
+            'categories' => $db->categories(false),
+            'record_token' => $this->csrfToken($request, 'record_state'),
+        ]);
     }
 
     #[Route('/categories/{id}/edit', name: 'app_category_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
@@ -496,7 +501,11 @@ class DashboardController extends AbstractController
             }
             return $this->redirectToRoute('app_suppliers');
         }
-        return $this->render('app/suppliers.html.twig', ['user' => $user, 'suppliers' => $db->suppliers(false)]);
+        return $this->render('app/suppliers.html.twig', [
+            'user' => $user,
+            'suppliers' => $db->suppliers(false),
+            'record_token' => $this->csrfToken($request, 'record_state'),
+        ]);
     }
 
     #[Route('/suppliers/{id}/edit', name: 'app_supplier_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
@@ -576,7 +585,11 @@ class DashboardController extends AbstractController
             }
             return $this->redirectToRoute('app_clients');
         }
-        return $this->render('app/clients.html.twig', ['user' => $user, 'clients' => $db->clients()]);
+        return $this->render('app/clients.html.twig', [
+            'user' => $user,
+            'clients' => $db->clients(),
+            'record_token' => $this->csrfToken($request, 'record_state'),
+        ]);
     }
 
     #[Route('/clients/{id}/edit', name: 'app_client_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
@@ -649,6 +662,7 @@ class DashboardController extends AbstractController
             'models' => $db->vehicleModels(),
             'vehicles' => $db->vehicles(),
             'selected_client_id' => (int) $request->query->get('client', 0),
+            'record_token' => $this->csrfToken($request, 'record_state'),
         ]);
     }
 
@@ -670,6 +684,39 @@ class DashboardController extends AbstractController
         ]);
     }
 
+    #[Route('/vehicles/{id}/edit', name: 'app_vehicle_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    public function vehicleEdit(int $id, Request $request, AppDatabase $db, AccessControl $access): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_vehicle_show', ['id' => $id])) {
+            return $denied;
+        }
+        $vehicle = $db->vehicle($id);
+        if (!$vehicle) {
+            throw $this->createNotFoundException();
+        }
+        if ($request->isMethod('POST')) {
+            try {
+                $db->saveVehicle($request->request->all(), $id);
+                $this->addFlash('success', 'تم حفظ السيارة');
+                return $this->redirectToRoute('app_vehicle_show', ['id' => $id]);
+            } catch (Throwable $e) {
+                $this->addFlash('error', $this->safeMessage($e));
+            }
+        }
+
+        return $this->render('app/vehicle_edit.html.twig', [
+            'user' => $user,
+            'vehicle' => $vehicle,
+            'clients' => $db->clients(),
+            'brands' => $db->vehicleBrands(),
+            'models' => $db->vehicleModels(),
+        ]);
+    }
+
     #[Route('/vehicles/settings', name: 'app_vehicle_settings', methods: ['GET', 'POST'])]
     public function vehicleSettings(Request $request, AppDatabase $db, AccessControl $access): Response
     {
@@ -677,10 +724,10 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_vehicles')) {
-            return $denied;
-        }
         if ($request->isMethod('POST')) {
+            if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_vehicle_settings')) {
+                return $denied;
+            }
             try {
                 if ($request->request->get('kind') === 'brand') {
                     $db->saveVehicleBrand((string) $request->request->get('name'));
@@ -693,7 +740,17 @@ class DashboardController extends AbstractController
             }
             return $this->redirectToRoute('app_vehicle_settings');
         }
-        return $this->render('app/vehicle_settings.html.twig', ['user' => $user, 'brands' => $db->vehicleBrands(), 'models' => $db->vehicleModels()]);
+        if (!$access->can('view.vehicle_settings', $user)) {
+            $this->addFlash('error', 'access.denied');
+            return $this->redirectToRoute('app_dashboard');
+        }
+
+        return $this->render('app/vehicle_settings.html.twig', [
+            'user' => $user,
+            'brands' => $db->vehicleBrands('all'),
+            'models' => $db->vehicleModels(null, 'all'),
+            'record_token' => $this->csrfToken($request, 'record_state'),
+        ]);
     }
 
     #[Route('/vehicle-brands/{id}', name: 'app_vehicle_brand_show', methods: ['GET'], requirements: ['id' => '\d+'])]
@@ -714,6 +771,33 @@ class DashboardController extends AbstractController
         ]);
     }
 
+    #[Route('/vehicle-brands/{id}/edit', name: 'app_vehicle_brand_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    public function vehicleBrandEdit(int $id, Request $request, AppDatabase $db, AccessControl $access): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_vehicle_brand_show', ['id' => $id])) {
+            return $denied;
+        }
+        $brand = $db->vehicleBrand($id);
+        if (!$brand) {
+            throw $this->createNotFoundException();
+        }
+        if ($request->isMethod('POST')) {
+            try {
+                $db->updateVehicleBrand($id, (string) $request->request->get('name'));
+                $this->addFlash('success', 'تم الحفظ');
+                return $this->redirectToRoute('app_vehicle_brand_show', ['id' => $id]);
+            } catch (Throwable $e) {
+                $this->addFlash('error', $this->safeMessage($e));
+            }
+        }
+
+        return $this->render('app/vehicle_brand_edit.html.twig', ['user' => $user, 'brand' => $brand]);
+    }
+
     #[Route('/vehicle-models/{id}', name: 'app_vehicle_model_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function vehicleModelShow(int $id, Request $request, AppDatabase $db): Response
     {
@@ -731,6 +815,37 @@ class DashboardController extends AbstractController
         ]);
     }
 
+    #[Route('/vehicle-models/{id}/edit', name: 'app_vehicle_model_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    public function vehicleModelEdit(int $id, Request $request, AppDatabase $db, AccessControl $access): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'edit', 'app_vehicle_model_show', ['id' => $id])) {
+            return $denied;
+        }
+        $model = $db->vehicleModel($id);
+        if (!$model) {
+            throw $this->createNotFoundException();
+        }
+        if ($request->isMethod('POST')) {
+            try {
+                $db->updateVehicleModel($id, (int) $request->request->get('brand_id'), (string) $request->request->get('name'));
+                $this->addFlash('success', 'تم الحفظ');
+                return $this->redirectToRoute('app_vehicle_model_show', ['id' => $id]);
+            } catch (Throwable $e) {
+                $this->addFlash('error', $this->safeMessage($e));
+            }
+        }
+
+        return $this->render('app/vehicle_model_edit.html.twig', [
+            'user' => $user,
+            'model' => $model,
+            'brands' => $db->vehicleBrands(),
+        ]);
+    }
+
     #[Route('/document/{id}', name: 'app_document', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function document(int $id, Request $request, AppDatabase $db, CompanyProfile $company, FrenchNumberFormatter $formatter, AccessControl $access): Response
     {
@@ -738,7 +853,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if (!$access->can('billing', $user)) {
+        if (!$access->can('view.billing', $user)) {
             $this->addFlash('error', 'access.denied');
             return $this->redirectToRoute('app_dashboard');
         }
@@ -767,7 +882,7 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if (!$access->can('billing', $user)) {
+        if (!$access->can('view.billing', $user)) {
             $this->addFlash('error', 'access.denied');
             return $this->redirectToRoute('app_dashboard');
         }
