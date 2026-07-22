@@ -27,7 +27,12 @@
                     <span>{{ supplier.ice }}</span>
                     <span class="row-actions">
                         <a href="{{ path('app_supplier_show', {id: supplier.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit.reference', user) %}<a href="{{ path('app_supplier_edit', {id: supplier.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            url: path('app_supplier_edit', {id: supplier.id}),
+                            active: can('edit.reference', user),
+                            reason: 'access.admin_only'|trans
+                        } only %}
                         {% if can('toggle', user) %}
                             {% if supplier.active|default(1) == 1 %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'supplier', id: supplier.id, action: 'deactivate'}) }}">

@@ -30,7 +30,12 @@
                     <span>{{ client.phone }}</span>
                     <span class="row-actions">
                         <a href="{{ path('app_client_show', {id: client.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit.reference', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            url: path('app_client_edit', {id: client.id}),
+                            active: can('edit.reference', user),
+                            reason: 'access.admin_only'|trans
+                        } only %}
                         {% if can('toggle', user) %}
                             {% if client.active|default(1) == 1 %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'client', id: client.id, action: 'deactivate'}) }}">

@@ -41,9 +41,12 @@
                     <span>{{ vehicle.brand_name }} {{ vehicle.model_name }}</span>
                     <span class="row-actions">
                         <a href="{{ path('app_vehicle_show', {id: vehicle.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit.reference', user) %}
-                            <a href="{{ path('app_vehicle_edit', {id: vehicle.id}) }}">{{ 'ui.edit'|trans }}</a>
-                        {% endif %}
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            url: path('app_vehicle_edit', {id: vehicle.id}),
+                            active: can('edit.reference', user),
+                            reason: 'access.admin_only'|trans
+                        } only %}
                         {% if can('toggle', user) %}
                             {% if vehicle.active|default(1) == 1 %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'vehicle', id: vehicle.id, action: 'deactivate'}) }}">

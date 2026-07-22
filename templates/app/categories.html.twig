@@ -24,7 +24,12 @@
                     <span>{{ category.created_at }}</span>
                     <span class="row-actions">
                         <a href="{{ path('app_category_show', {id: category.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit.reference', user) %}<a href="{{ path('app_category_edit', {id: category.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            url: path('app_category_edit', {id: category.id}),
+                            active: can('edit.reference', user),
+                            reason: 'access.admin_only'|trans
+                        } only %}
                         {% if can('toggle', user) %}
                             {% if category.active|default(1) == 1 %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'category', id: category.id, action: 'deactivate'}) }}">

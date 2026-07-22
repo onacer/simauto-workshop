@@ -93,7 +93,12 @@
                     <span>{{ product.product_type|default('stockable') == 'service' ? 'products.service'|trans : product.stock_qty }}</span>
                     <span class="row-actions">
                         <a href="{{ path('app_product_show', {id: product.id}) }}">{{ 'ui.show'|trans }}</a>
-                        {% if can('edit.reference', user) %}<a href="{{ path('app_product_edit', {id: product.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            url: path('app_product_edit', {id: product.id}),
+                            active: can('edit.reference', user),
+                            reason: 'access.admin_only'|trans
+                        } only %}
                         {% if can('toggle', user) %}
                             {% if product.active|default(1) == 1 %}
                                 <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'product', id: product.id, action: 'deactivate'}) }}">

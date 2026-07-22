@@ -6,7 +6,13 @@
     <section class="page-head">
         <h1>{{ client.name }}</h1>
         <span class="row-actions">
-            {% if can('edit.reference', user) %}<a href="{{ path('app_client_edit', {id: client.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+            {% include 'app/_action_button.html.twig' with {
+                label: 'ui.edit'|trans,
+                url: path('app_client_edit', {id: client.id}),
+                active: can('edit.reference', user),
+                class: 'btn btn-primary',
+                reason: 'access.admin_only'|trans
+            } only %}
             <a class="btn btn-primary" href="{{ path('app_vehicles', {client: client.id}) }}">{{ 'clients.add_vehicle'|trans }}</a>
             <a class="btn btn-dark" href="{{ path('app_clients') }}">{{ 'ui.back'|trans }}</a>
         </span>
@@ -32,7 +38,15 @@
                     <strong>{{ vehicle.plate }}</strong>
                     <span>{{ vehicle.brand_name }} {{ vehicle.model_name }}</span>
                     <span>{{ vehicle.year ?: '—' }} / {{ vehicle.mileage ?: '—' }}</span>
-                    <span class="row-actions"><a href="{{ path('app_vehicle_show', {id: vehicle.id}) }}">{{ 'ui.show'|trans }}</a></span>
+                    <span class="row-actions">
+                        <a href="{{ path('app_vehicle_show', {id: vehicle.id}) }}">{{ 'ui.show'|trans }}</a>
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            url: path('app_vehicle_edit', {id: vehicle.id}),
+                            active: can('edit.reference', user),
+                            reason: 'access.admin_only'|trans
+                        } only %}
+                    </span>
                 </div>
             {% else %}
                 <p class="empty-state">{{ 'clients.no_vehicles'|trans }}</p>

@@ -6,9 +6,13 @@
     <section class="page-head">
         <h1>{{ vehicle.plate }}</h1>
         <span class="row-actions">
-            {% if can('edit.reference', user) %}
-                <a href="{{ path('app_vehicle_edit', {id: vehicle.id}) }}">{{ 'ui.edit'|trans }}</a>
-            {% endif %}
+            {% include 'app/_action_button.html.twig' with {
+                label: 'ui.edit'|trans,
+                url: path('app_vehicle_edit', {id: vehicle.id}),
+                active: can('edit.reference', user),
+                class: 'btn btn-primary',
+                reason: 'access.admin_only'|trans
+            } only %}
             <a class="btn btn-dark" href="{{ path('app_vehicles') }}">{{ 'ui.back'|trans }}</a>
         </span>
     </section>

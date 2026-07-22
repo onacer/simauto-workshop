@@ -6,7 +6,13 @@
     <section class="page-head">
         <h1>{{ category.name }}</h1>
         <span class="row-actions">
-            {% if can('edit.reference', user) %}<a href="{{ path('app_category_edit', {id: category.id}) }}">{{ 'ui.edit'|trans }}</a>{% endif %}
+            {% include 'app/_action_button.html.twig' with {
+                label: 'ui.edit'|trans,
+                url: path('app_category_edit', {id: category.id}),
+                active: can('edit.reference', user),
+                class: 'btn btn-primary',
+                reason: 'access.admin_only'|trans
+            } only %}
             <a class="btn btn-dark" href="{{ path('app_categories') }}">{{ 'ui.back'|trans }}</a>
         </span>
     </section>
@@ -25,7 +31,15 @@
                     <strong>{{ product.name }}</strong>
                     <span>{{ product.sku }}</span>
                     <span>{{ product.stock_qty }}</span>
-                    <span class="row-actions"><a href="{{ path('app_product_show', {id: product.id}) }}">{{ 'ui.show'|trans }}</a></span>
+                    <span class="row-actions">
+                        <a href="{{ path('app_product_show', {id: product.id}) }}">{{ 'ui.show'|trans }}</a>
+                        {% include 'app/_action_button.html.twig' with {
+                            label: 'ui.edit'|trans,
+                            url: path('app_product_edit', {id: product.id}),
+                            active: can('edit.reference', user),
+                            reason: 'access.admin_only'|trans
+                        } only %}
+                    </span>
                 </div>
             {% else %}
                 <p class="empty-state">{{ 'products.no_category_products'|trans }}</p>
