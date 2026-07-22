@@ -46,7 +46,7 @@ Le service PHP cree automatiquement les dossiers `data` et `var`, ajuste les dro
 Deux roles existent:
 
 - `admin`: acces total sans exception: lecture, creation, modification, suppression, activation/desactivation, imports, rapports, parametres et utilisateurs.
-- `manager`: lecture + creation uniquement pour le travail quotidien: listes, fiches detail, creation produits/clients/fournisseurs/vehicules, entrees de stock, devis, progression devis -> commande -> facture, impression documents/receipts et changement de son mot de passe.
+- `manager`: lecture des vues metier + creation uniquement pour le travail quotidien: produits/clients/fournisseurs/vehicules, entrees de stock, devis, progression devis -> commande -> facture, impression documents/receipts et changement de son mot de passe. Il ne modifie, ne supprime, ne desactive et n'importe pas les enregistrements existants.
 
 Des comptes initiaux sont crees automatiquement si la table `users` est vide:
 
@@ -488,7 +488,7 @@ Le module de situation financiere est accessible depuis:
 /reports/finance
 ```
 
-Il est accessible aux roles `admin` et `manager` via la capacite:
+Il est reserve au role `admin` via la capacite:
 
 ```text
 reports.view
@@ -779,8 +779,8 @@ Barre de navigation commune:
 - logo SIM Auto dans la zone marque de la barre,
 - lien dashboard toujours visible,
 - menus deroulants par groupes: stock, vehicules, clients, operations, administration,
-- administration affiche l'import pour admin et manager,
-- administration affiche les utilisateurs pour admin seulement,
+- le menu administration est reserve a l'admin,
+- les vues marques/modeles restent visibles via le groupe vehicules pour admin et manager,
 - selecteur langue `AR | FR` visible dans la topbar,
 - profil utilisateur en menu dedie avec changement de mot de passe et logout,
 - fermeture des menus au clic exterieur et avec la touche Escape via JS vanilla,
@@ -1169,6 +1169,7 @@ Admin:
 Manager:
 
 - lecture de toutes les listes et fiches detail metier;
+- lecture des parametres visibles: categories, marques et modeles;
 - creation de produits, clients, fournisseurs et vehicules;
 - creation d'entrees de stock;
 - creation de devis et progression du workflow devis -> bon de commande -> facture;
@@ -1182,16 +1183,19 @@ Restrictions manager:
 - pas d'activation/desactivation;
 - pas d'import en masse;
 - pas de rapports financiers;
-- pas d'acces aux parametres de marques/modeles;
+- pas de creation/modification/suppression des parametres: categories, marques et modeles;
 - pas d'acces au module utilisateurs `/users/...`;
+- pas de modification d'un devis brouillon deja cree; l'admin seul peut editer ou supprimer un devis brouillon;
+- aucun role ne peut modifier ou supprimer une commande confirmee ou une facture;
 - les boutons interdits sont masques dans Twig avec `can(...)`;
 - les actions interdites sont aussi verifiees cote serveur avec `App\Service\AccessControl`.
 
 Permissions centralisees:
 
 - admin: `can(...)` retourne vrai pour toutes les permissions;
-- manager autorise: `view`, `create`, `progress_document`, `dashboard`, `products`, `stock`, `categories`, `suppliers`, `clients`, `vehicles`, `operations`, `billing`;
-- manager interdit: `edit`, `delete`, `toggle`, `import`, `imports`, `manage_users`, `reports.view`, `vehicle_settings`.
+- manager autorise en lecture: `view`, `view.dashboard`, `view.products`, `view.stock`, `view.categories`, `view.suppliers`, `view.clients`, `view.vehicles`, `view.vehicle_settings`, `view.operations`, `view.billing`, `view.documents`;
+- manager autorise en action quotidienne: `create`, `progress_document`;
+- manager interdit: `edit`, `delete`, `toggle`, `import`, `imports`, `manage_users`, `reports.view`.
 
 ## Mode Impression
 
@@ -1349,7 +1353,7 @@ Tests couverts:
 - fallback sur aujourd'hui en cas de dates inversees,
 - ventilation par mode de paiement,
 - protection division par zero du taux de marge,
-- acces reporting admin et manager,
+- acces reporting reserve admin,
 - rendu ticket de cloture,
 - rendu document devis/commande/facture via le partiel commun,
 - recherche historique par texte, type, paiement et dates inclusives,
