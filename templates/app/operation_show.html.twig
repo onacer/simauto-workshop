@@ -22,6 +22,8 @@
                 label: 'ui.edit'|trans,
                 url: path('app_operation_edit', {id: operation.id}),
                 active: can_edit_document(user, operation),
+                user: user,
+                force_disabled: not can_edit_document(user, operation),
                 class: 'btn btn-primary',
                 reason: operation.doc_type == 'quote' and operation.status == 'draft' ? 'access.admin_only'|trans : 'access.document_locked'|trans
             } only %}
@@ -34,6 +36,8 @@
                 {% include 'app/_action_button.html.twig' with {
                     label: 'ui.delete'|trans,
                     active: false,
+                    user: user,
+                    force_disabled: true,
                     class: 'btn btn-dark',
                     reason: operation.doc_type == 'quote' and operation.status == 'draft' ? 'access.admin_only'|trans : 'access.document_locked'|trans
                 } only %}

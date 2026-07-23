@@ -1,5 +1,8 @@
 {% set visible = visible|default(true) %}
 {% set is_active = active|default(false) %}
+{% if user|default(null) and user.role|default('') == 'admin' and not force_disabled|default(false) and url|default('') %}
+    {% set is_active = true %}
+{% endif %}
 {% set tag_class = class|default('') %}
 {% set title_text = reason|default('access.admin_only'|trans) %}
 
