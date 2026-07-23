@@ -466,14 +466,27 @@ class AppDatabase
     public function productMovements(int $productId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT sm.*, s.name AS supplier_name
+            'SELECT sm.*, s.name AS supplier_name, u.name AS created_by_name
              FROM stock_movements sm
              LEFT JOIN suppliers s ON s.id = sm.supplier_id
+             LEFT JOIN users u ON u.id = sm.created_by
              WHERE sm.product_id = :product_id
              ORDER BY sm.id DESC'
         );
         $stmt->execute(['product_id' => $productId]);
         return $stmt->fetchAll();
+    }
+
+    public function stockMovement(int $id): ?array
+    {
+        return $this->row(
+            'SELECT sm.*, p.name AS product_name, p.sku, p.stock_qty, s.name AS supplier_name
+             FROM stock_movements sm
+             JOIN products p ON p.id = sm.product_id
+             LEFT JOIN suppliers s ON s.id = sm.supplier_id
+             WHERE sm.id = :id',
+            ['id' => $id]
+        );
     }
 
     public function saveProduct(array $data, int $userId, ?int $id = null): void
@@ -582,6 +595,119 @@ class AppDatabase
                 throw new RuntimeException('المنتج غير موجود');
             }
             $this->addMovement($productId, 'in', $quantity, $note ?: 'إدخال مخزون', $userId, $supplierId, $unitCost);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    public function adjustStock(int $productId, int $realQuantity, string $reason, int $userId): int
+    {
+        $reason = trim($reason);
+        if ($productId <= 0) {
+            throw new InvalidArgumentException('المنتج إجباري');
+        }
+        if ($realQuantity < 0) {
+            throw new InvalidArgumentException('الكمية يجب أن تكون 0 أو أكثر');
+        }
+        if ($reason === '') {
+            throw new InvalidArgumentException('سبب التعديل إجباري');
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $product = $this->row("SELECT id, stock_qty FROM products WHERE id = :id AND active = 1 AND product_type = 'stockable'", ['id' => $productId]);
+            if (!$product) {
+                throw new RuntimeException('المنتج غير موجود');
+            }
+            $current = (int) $product['stock_qty'];
+            $delta = $realQuantity - $current;
+            if ($delta === 0) {
+                $this->pdo->commit();
+                return 0;
+            }
+
+            $stmt = $this->pdo->prepare('UPDATE products SET stock_qty = :qty WHERE id = :id');
+            $stmt->execute(['qty' => $realQuantity, 'id' => $productId]);
+            $this->addMovement($productId, 'adjustment', $delta, $reason, $userId);
+            $this->pdo->commit();
+            return $delta;
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    public function updateStockMovement(int $id, array $data, int $userId): void
+    {
+        $movement = $this->stockMovement($id);
+        if (!$movement) {
+            throw new InvalidArgumentException('حركة المخزون غير موجودة');
+        }
+        $payload = $this->validateStockMovementPayload($data, (int) $movement['product_id']);
+        $oldEffect = $this->movementEffect((string) $movement['movement_type'], (int) $movement['quantity']);
+        $newEffect = $this->movementEffect($payload['movement_type'], $payload['quantity']);
+
+        $this->pdo->beginTransaction();
+        try {
+            $product = $this->row("SELECT stock_qty FROM products WHERE id = :id AND product_type = 'stockable'", ['id' => $movement['product_id']]);
+            if (!$product) {
+                throw new RuntimeException('المنتج غير موجود');
+            }
+            $newStock = (int) $product['stock_qty'] - $oldEffect + $newEffect;
+            if ($newStock < 0) {
+                throw new InvalidArgumentException('المخزون لا يمكن أن يكون سالبا');
+            }
+
+            $this->pdo->prepare('UPDATE products SET stock_qty = :qty WHERE id = :id')->execute([
+                'qty' => $newStock,
+                'id' => $movement['product_id'],
+            ]);
+            $stmt = $this->pdo->prepare(
+                'UPDATE stock_movements
+                 SET movement_type = :movement_type, quantity = :quantity, note = :note, supplier_id = :supplier_id, unit_cost = :unit_cost, created_by = :created_by
+                 WHERE id = :id'
+            );
+            $stmt->execute([
+                'movement_type' => $payload['movement_type'],
+                'quantity' => $payload['quantity'],
+                'note' => $payload['note'],
+                'supplier_id' => $payload['supplier_id'],
+                'unit_cost' => $payload['unit_cost'],
+                'created_by' => $userId,
+                'id' => $id,
+            ]);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    public function deleteStockMovement(int $id): void
+    {
+        $movement = $this->stockMovement($id);
+        if (!$movement) {
+            throw new InvalidArgumentException('حركة المخزون غير موجودة');
+        }
+        $effect = $this->movementEffect((string) $movement['movement_type'], (int) $movement['quantity']);
+
+        $this->pdo->beginTransaction();
+        try {
+            $product = $this->row("SELECT stock_qty FROM products WHERE id = :id AND product_type = 'stockable'", ['id' => $movement['product_id']]);
+            if (!$product) {
+                throw new RuntimeException('المنتج غير موجود');
+            }
+            $newStock = (int) $product['stock_qty'] - $effect;
+            if ($newStock < 0) {
+                throw new InvalidArgumentException('المخزون لا يمكن أن يكون سالبا');
+            }
+            $this->pdo->prepare('UPDATE products SET stock_qty = :qty WHERE id = :id')->execute([
+                'qty' => $newStock,
+                'id' => $movement['product_id'],
+            ]);
+            $this->pdo->prepare('DELETE FROM stock_movements WHERE id = :id')->execute(['id' => $id]);
             $this->pdo->commit();
         } catch (Throwable $e) {
             $this->pdo->rollBack();
@@ -1776,6 +1902,55 @@ class AppDatabase
             'supplier_id' => $supplierId,
             'unit_cost' => $unitCost,
         ]);
+    }
+
+    private function validateStockMovementPayload(array $data, int $productId): array
+    {
+        $type = (string) ($data['movement_type'] ?? 'in');
+        if (!in_array($type, ['in', 'out', 'adjustment'], true)) {
+            throw new InvalidArgumentException('نوع الحركة غير صحيح');
+        }
+        $quantity = (int) ($data['quantity'] ?? 0);
+        if ($type === 'adjustment') {
+            if ($quantity === 0) {
+                throw new InvalidArgumentException('كمية التعديل لا يمكن أن تكون 0');
+            }
+        } elseif ($quantity <= 0) {
+            throw new InvalidArgumentException('الكمية يجب أن تكون أكبر من 0');
+        }
+        $note = trim((string) ($data['note'] ?? ''));
+        if ($note === '') {
+            throw new InvalidArgumentException('سبب التعديل إجباري');
+        }
+        $supplierId = (int) ($data['supplier_id'] ?? 0);
+        $unitCost = ($data['unit_cost'] ?? '') !== '' ? (float) $data['unit_cost'] : null;
+        if ($unitCost !== null && $unitCost < 0) {
+            throw new InvalidArgumentException('ثمن الشراء يجب أن يكون 0 أو أكثر');
+        }
+        if ($supplierId > 0 && !$this->supplier($supplierId)) {
+            throw new InvalidArgumentException('المورد غير موجود');
+        }
+        if (!$this->product($productId)) {
+            throw new InvalidArgumentException('المنتج غير موجود');
+        }
+
+        return [
+            'movement_type' => $type,
+            'quantity' => $quantity,
+            'note' => $note,
+            'supplier_id' => $supplierId ?: null,
+            'unit_cost' => $unitCost,
+        ];
+    }
+
+    private function movementEffect(string $type, int $quantity): int
+    {
+        return match ($type) {
+            'in' => abs($quantity),
+            'out' => -abs($quantity),
+            'adjustment' => $quantity,
+            default => 0,
+        };
     }
 
     private function migrate(): void

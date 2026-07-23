@@ -424,7 +424,7 @@ Champs:
 
 - `id`
 - `product_id`
-- `movement_type`: `in` ou `out`
+- `movement_type`: `in`, `out` ou `adjustment`
 - `quantity`
 - `note`
 - `created_by`
@@ -641,6 +641,35 @@ L'application:
 2. Cree un mouvement `in` dans `stock_movements`.
 
 Chaque entree de stock peut etre liee a un fournisseur et a un prix d'achat reel. Les sorties de stock sont faites uniquement au moment de la facturation, dans la meme transaction que la facture.
+
+### Ajustement de Stock
+
+L'ajustement de stock est reserve au role `admin` via la permission:
+
+```text
+stock.adjust
+```
+
+Il est accessible depuis:
+
+- `/stock`: encart `Ajustement de stock` avec produit, quantite reelle et motif.
+- `/products/{id}`: encart `Ajustement de stock` pour le produit courant.
+
+Regles:
+
+- le champ `stock_qty` n'est pas editable directement dans le formulaire produit, meme pour l'admin;
+- l'admin saisit la quantite reelle constatee et un motif obligatoire;
+- l'application calcule l'ecart, met a jour `products.stock_qty` et cree un mouvement `adjustment` dans la meme transaction PDO;
+- ecart positif: mouvement `adjustment` avec quantite positive;
+- ecart negatif: mouvement `adjustment` avec quantite negative;
+- ecart nul: aucune ecriture, message informatif;
+- quantite reelle negative: refus sans ecriture;
+- les mouvements d'ajustement ne sont pas des ventes et ne sont jamais comptes dans `/reports/finance`.
+
+Edition et suppression de mouvements:
+
+- admin: peut modifier ou supprimer un mouvement existant; le stock est recalcule dans la meme transaction;
+- manager: voit les actions stock desactivees avec raison au survol; toute URL forcee est refusee cote serveur.
 
 ### 3. Operation Garage
 
@@ -1194,6 +1223,7 @@ Restrictions manager:
 - les actions non disponibles sur le stock, les mouvements et les documents verrouilles sont affichees desactivees avec une raison au survol;
 - les liens imports, utilisateurs et rapports restent masques dans la navigation pour le manager;
 - les actions interdites sont aussi verifiees cote serveur avec `App\Service\AccessControl`.
+- aucun bouton/champ/section n'est desactive pour l'admin, sauf verrouillage documentaire via `document_locked`.
 
 Permissions centralisees:
 
@@ -1201,7 +1231,7 @@ Permissions centralisees:
 - manager autorise en lecture: `view`, `view.dashboard`, `view.products`, `view.stock`, `view.categories`, `view.suppliers`, `view.clients`, `view.vehicles`, `view.vehicle_settings`, `view.operations`, `view.billing`, `view.documents`;
 - manager autorise en action quotidienne: `create`, `progress_document`, `edit.reference`, `edit.quote_draft`;
 - `canEditDocument(user, operation)` refuse toujours si `doc_type != quote` ou `status != draft`, meme pour admin;
-- manager interdit: `edit`, `edit.stock`, `edit.operation`, `delete`, `toggle`, `import`, `imports`, `manage_users`, `reports.view`.
+- manager interdit: `edit`, `edit.stock`, `edit.operation`, `stock.adjust`, `delete`, `toggle`, `import`, `imports`, `manage_users`, `reports.view`.
 
 Convention UI des actions:
 

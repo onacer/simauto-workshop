@@ -1,0 +1,44 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ 'stock.movement_edit'|trans }} - SIM Auto{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head">
+        <h1>{{ 'stock.movement_edit'|trans }}</h1>
+        <a class="btn btn-dark" href="{{ path('app_product_show', {id: movement.product_id}) }}">{{ 'ui.back'|trans }}</a>
+    </section>
+
+    {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
+
+    {% include 'app/_show_info.html.twig' with {rows: [
+        {label: 'products.product'|trans, value: movement.product_name ~ ' - ' ~ movement.sku},
+        {label: 'stock.current'|trans, value: movement.stock_qty},
+        {label: 'ui.date'|trans, value: movement.created_at}
+    ]} %}
+
+    <section class="panel">
+        <form method="post" class="form-grid">
+            <input type="hidden" name="_token" value="{{ token }}">
+            <label>{{ 'ui.type'|trans }}
+                <select name="movement_type">
+                    {% for type in ['in', 'out', 'adjustment'] %}
+                        <option value="{{ type }}" {{ movement.movement_type == type ? 'selected' : '' }}>{{ ('stock.movement.' ~ type)|trans }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>{{ 'stock.quantity'|trans }}<input name="quantity" type="number" step="1" value="{{ movement.quantity }}" required></label>
+            <label>{{ 'stock.supplier'|trans }}
+                <select name="supplier_id" data-combobox data-combobox-min="10">
+                    <option value="">{{ 'ui.none'|trans }}</option>
+                    {% for supplier in suppliers %}
+                        <option value="{{ supplier.id }}" {{ movement.supplier_id == supplier.id ? 'selected' : '' }}>{{ supplier.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>{{ 'stock.unit_cost'|trans }}<input name="unit_cost" type="number" step="0.01" min="0" value="{{ movement.unit_cost }}"></label>
+            <label>{{ 'stock.note'|trans }}<input name="note" value="{{ movement.note }}" required></label>
+            <button class="btn btn-primary" type="submit">{{ 'ui.update'|trans }}</button>
+        </form>
+    </section>
+</main>
+{% endblock %}

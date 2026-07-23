@@ -81,6 +81,9 @@ class DashboardController extends AbstractController
             'user' => $user,
             'product' => $product,
             'movements' => $db->productMovements($id),
+            'suppliers' => $db->suppliers(false),
+            'stock_adjust_token' => $this->csrfToken($request, 'stock_adjust'),
+            'stock_movement_token' => $this->csrfToken($request, 'stock_movement'),
         ]);
     }
 
@@ -141,7 +144,11 @@ class DashboardController extends AbstractController
             return $user;
         }
 
-        return $this->render('app/stock.html.twig', $db->dashboardData() + ['user' => $user]);
+        return $this->render('app/stock.html.twig', $db->dashboardData() + [
+            'user' => $user,
+            'stock_adjust_token' => $this->csrfToken($request, 'stock_adjust'),
+            'stock_movement_token' => $this->csrfToken($request, 'stock_movement'),
+        ]);
     }
 
     #[Route('/stock/in', name: 'app_stock_in', methods: ['POST'])]
@@ -170,6 +177,96 @@ class DashboardController extends AbstractController
         }
 
         return $this->redirectToRoute('app_stock');
+    }
+
+    #[Route('/stock/adjust', name: 'app_stock_adjust', methods: ['POST'])]
+    public function stockAdjust(Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'stock.adjust', 'app_stock')) {
+            return $denied;
+        }
+
+        try {
+            $this->verifyCsrf($request, 'stock_adjust');
+            $delta = $db->adjustStock(
+                (int) $request->request->get('product_id'),
+                (int) $request->request->get('real_quantity'),
+                (string) $request->request->get('reason'),
+                (int) $user['id']
+            );
+            $this->addFlash('success', $delta === 0 ? 'stock.adjust_no_change' : 'stock.adjusted');
+        } catch (Throwable $e) {
+            $this->addFlash('error', $this->safeMessage($e));
+        }
+
+        return $this->redirect($request->headers->get('referer') ?: $this->generateUrl('app_stock'));
+    }
+
+    #[Route('/stock/movements/{id}/edit', name: 'app_stock_movement_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    public function stockMovementEdit(int $id, Request $request, AppDatabase $db, AccessControl $access): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'stock.adjust', 'app_stock')) {
+            return $denied;
+        }
+
+        $movement = $db->stockMovement($id);
+        if (!$movement) {
+            throw $this->createNotFoundException();
+        }
+
+        if ($request->isMethod('POST')) {
+            try {
+                $this->verifyCsrf($request, 'stock_movement');
+                $db->updateStockMovement($id, $request->request->all(), (int) $user['id']);
+                $this->addFlash('success', 'stock.movement_updated');
+                return $this->redirectToRoute('app_product_show', ['id' => $movement['product_id']]);
+            } catch (Throwable $e) {
+                $this->addFlash('error', $this->safeMessage($e));
+                $movement = array_merge($movement, $request->request->all());
+            }
+        }
+
+        return $this->render('app/stock_movement_edit.html.twig', [
+            'user' => $user,
+            'movement' => $movement,
+            'suppliers' => $db->suppliers(false),
+            'token' => $this->csrfToken($request, 'stock_movement'),
+        ]);
+    }
+
+    #[Route('/stock/movements/{id}/delete', name: 'app_stock_movement_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function stockMovementDelete(int $id, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'stock.adjust', 'app_stock')) {
+            return $denied;
+        }
+
+        $movement = $db->stockMovement($id);
+        if (!$movement) {
+            throw $this->createNotFoundException();
+        }
+
+        try {
+            $this->verifyCsrf($request, 'stock_movement');
+            $db->deleteStockMovement($id);
+            $this->addFlash('success', 'stock.movement_deleted');
+        } catch (Throwable $e) {
+            $this->addFlash('error', $this->safeMessage($e));
+        }
+
+        return $this->redirectToRoute('app_product_show', ['id' => $movement['product_id']]);
     }
 
     #[Route('/operations', name: 'app_operations')]

@@ -30,26 +30,52 @@
         {label: 'ui.created_at'|trans, value: product.created_at}
     ]} %}
 
+    {% if can('stock.adjust', user) %}
+        <section class="panel">
+            <h2>{{ 'stock.adjust_title'|trans }}</h2>
+            <form action="{{ path('app_stock_adjust') }}" method="post" class="form-grid">
+                <input type="hidden" name="_token" value="{{ stock_adjust_token }}">
+                <input type="hidden" name="product_id" value="{{ product.id }}">
+                <label>{{ 'stock.real_quantity'|trans }}<input name="real_quantity" type="number" min="0" step="1" value="{{ product.stock_qty }}" required></label>
+                <label>{{ 'stock.adjust_reason'|trans }}<input name="reason" required placeholder="{{ 'stock.adjust_reason_placeholder'|trans }}"></label>
+                <button class="btn btn-primary" type="submit">{{ 'stock.adjust_submit'|trans }}</button>
+            </form>
+        </section>
+    {% endif %}
+
     <section class="panel">
         <h2>{{ 'products.movements'|trans }}</h2>
         <div class="data-table">
-            <div class="table-head"><span>{{ 'ui.type'|trans }}</span><span>{{ 'stock.quantity'|trans }}</span><span>{{ 'stock.supplier'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
+            <div class="table-head"><span>{{ 'ui.type'|trans }}</span><span>{{ 'stock.quantity'|trans }}</span><span>{{ 'stock.note'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for movement in movements %}
                 <div>
-                    <strong>{{ movement.movement_type }}</strong>
+                    <strong>
+                        <span class="badge badge-movement badge-movement-{{ movement.movement_type }}">{{ ('stock.movement.' ~ movement.movement_type)|trans }}</span>
+                        <br><small>{{ movement.created_at }}</small>
+                    </strong>
                     <span>{{ movement.quantity }}</span>
-                    <span>{{ movement.supplier_name ?: '—' }}</span>
+                    <span>{{ movement.note ?: '—' }}{% if movement.supplier_name %}<br><small>{{ movement.supplier_name }}</small>{% endif %}</span>
                     <span class="row-actions">
                         {% include 'app/_action_button.html.twig' with {
                             label: 'ui.edit'|trans,
-                            active: false,
+                            url: path('app_stock_movement_edit', {id: movement.id}),
+                            active: can('stock.adjust', user),
+                            user: user,
                             reason: 'access.stock_locked'|trans
                         } only %}
-                        {% include 'app/_action_button.html.twig' with {
-                            label: 'ui.delete'|trans,
-                            active: false,
-                            reason: 'access.stock_locked'|trans
-                        } only %}
+                        {% if can('stock.adjust', user) %}
+                            <form class="inline-form" method="post" action="{{ path('app_stock_movement_delete', {id: movement.id}) }}" onsubmit="return confirm('{{ 'ui.confirm_delete'|trans|e('js') }}')">
+                                <input type="hidden" name="_token" value="{{ stock_movement_token }}">
+                                <button type="submit">{{ 'ui.delete'|trans }}</button>
+                            </form>
+                        {% else %}
+                            {% include 'app/_action_button.html.twig' with {
+                                label: 'ui.delete'|trans,
+                                active: false,
+                                user: user,
+                                reason: 'access.stock_locked'|trans
+                            } only %}
+                        {% endif %}
                     </span>
                 </div>
             {% else %}

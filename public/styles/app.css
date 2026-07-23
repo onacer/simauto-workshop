@@ -770,6 +770,21 @@ select.is-combobox-native {
     background: var(--red);
 }
 
+.badge-movement {
+    color: #080808;
+    background: rgba(241, 205, 53, .42);
+}
+
+.badge-movement-out {
+    color: #fff;
+    background: rgba(185, 34, 34, .82);
+}
+
+.badge-movement-adjustment {
+    color: #fff;
+    background: #2f2f29;
+}
+
 .row-actions {
     display: flex;
     align-items: center;
