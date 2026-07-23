@@ -1189,9 +1189,12 @@ SQL);
         self::assertTrue($access->can('edit.reference', $manager));
         self::assertTrue($access->can('edit.quote_draft', $manager));
         self::assertTrue($access->can('clients', $manager));
+        self::assertTrue($access->can('stock.adjust', $admin));
+        self::assertTrue($access->can('unknown.future.permission', $admin));
         self::assertFalse($access->can('edit', $manager));
         self::assertFalse($access->can('edit.stock', $manager));
         self::assertFalse($access->can('edit.operation', $manager));
+        self::assertFalse($access->can('stock.adjust', $manager));
         self::assertFalse($access->can('delete', $manager));
         self::assertFalse($access->can('toggle', $manager));
         self::assertFalse($access->can('import', $manager));
@@ -1203,7 +1206,6 @@ SQL);
         self::assertTrue($access->can('toggle', $admin));
         self::assertTrue($access->can('import', $admin));
         self::assertTrue($access->can('manage_users', $admin));
-        self::assertTrue($access->can('unknown.future.permission', $admin));
     }
 
     public function testManagerCanEditProductDescriptionButCannotChangeStockOrDeleteOrToggle(): void
@@ -1616,6 +1618,147 @@ SQL);
         }
     }
 
+    public function testAdminStockScreensExposeAdjustmentAndActiveButtons(): void
+    {
+        $db = $this->database();
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'ADMIN-STOCK',
+            'name' => 'Admin stock',
+            'category_id' => $categoryId,
+            'stock_qty' => 12,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $productId = $this->id($db->pdo(), 'SELECT id FROM products WHERE sku = "ADMIN-STOCK"');
+        $admin = ['id' => 1, 'role' => 'admin', 'name' => 'Admin'];
+        $context = [
+            'user' => $admin,
+            'product' => $db->product($productId),
+            'movements' => $db->productMovements($productId),
+            'suppliers' => $db->suppliers(false),
+            'stock_adjust_token' => 'token',
+            'stock_movement_token' => 'token',
+        ];
+
+        $productHtml = $this->renderTemplate('app/product_show.html.twig', $context);
+        $stockHtml = $this->renderTemplate('app/stock.html.twig', $db->dashboardData() + [
+            'user' => $admin,
+            'stock_adjust_token' => 'token',
+            'stock_movement_token' => 'token',
+        ]);
+        $editHtml = $this->renderTemplate('app/product_edit.html.twig', [
+            'user' => $admin,
+            'product' => $db->product($productId),
+            'categories' => $db->categories(false),
+        ]);
+
+        self::assertStringContainsString('ضبط المخزون', $productHtml);
+        self::assertStringContainsString('/app_stock_movement_edit/', $productHtml);
+        self::assertStringNotContainsString('aria-disabled="true"', $productHtml);
+        self::assertStringContainsString('ضبط المخزون', $stockHtml);
+        self::assertStringNotContainsString('aria-disabled="true"', $stockHtml);
+        self::assertStringNotContainsString('name="stock_qty"', $editHtml);
+    }
+
+    public function testAdminStockAdjustmentCreatesTracedMovements(): void
+    {
+        $db = $this->database();
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'ADJUST-001',
+            'name' => 'Produit ajustement',
+            'category_id' => $categoryId,
+            'stock_qty' => 12,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $productId = $this->id($db->pdo(), 'SELECT id FROM products WHERE sku = "ADJUST-001"');
+        $beforeSummary = $db->getFinancialSummary(date('Y-m-d'), date('Y-m-d'));
+
+        $delta = $db->adjustStock($productId, 15, 'inventaire', 1);
+        self::assertSame(3, $delta);
+        self::assertSame(15, (int) $db->product($productId)['stock_qty']);
+        $movement = $db->pdo()->query('SELECT * FROM stock_movements WHERE product_id = ' . $productId . ' ORDER BY id DESC LIMIT 1')->fetch();
+        self::assertSame('adjustment', $movement['movement_type']);
+        self::assertSame(3, (int) $movement['quantity']);
+        self::assertSame('inventaire', $movement['note']);
+        self::assertSame(1, (int) $movement['created_by']);
+
+        $delta = $db->adjustStock($productId, 10, 'casse', 1);
+        self::assertSame(-5, $delta);
+        self::assertSame(10, (int) $db->product($productId)['stock_qty']);
+
+        $countBeforeNoChange = (int) $db->pdo()->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId)->fetchColumn();
+        self::assertSame(0, $db->adjustStock($productId, 10, 'inventaire final', 1));
+        self::assertSame($countBeforeNoChange, (int) $db->pdo()->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId)->fetchColumn());
+
+        try {
+            $db->adjustStock($productId, -1, 'invalid', 1);
+            self::fail('Expected negative stock adjustment rejection.');
+        } catch (InvalidArgumentException) {
+            self::assertSame(10, (int) $db->product($productId)['stock_qty']);
+        }
+
+        $afterSummary = $db->getFinancialSummary(date('Y-m-d'), date('Y-m-d'));
+        self::assertSame($beforeSummary['total_ttc'], $afterSummary['total_ttc']);
+        self::assertSame($beforeSummary['total_margin'], $afterSummary['total_margin']);
+    }
+
+    public function testAdminCanEditAndDeleteStockMovementWithStockRecalculation(): void
+    {
+        $db = $this->database();
+        $categoryId = $this->id($db->pdo(), 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'MOVE-EDIT',
+            'name' => 'Movement edit',
+            'category_id' => $categoryId,
+            'stock_qty' => 12,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $productId = $this->id($db->pdo(), 'SELECT id FROM products WHERE sku = "MOVE-EDIT"');
+        $movementId = $this->id($db->pdo(), 'SELECT id FROM stock_movements WHERE product_id = ' . $productId . ' ORDER BY id DESC LIMIT 1');
+
+        $db->updateStockMovement($movementId, [
+            'movement_type' => 'in',
+            'quantity' => 15,
+            'note' => 'correction inventaire',
+            'supplier_id' => '',
+            'unit_cost' => '',
+        ], 1);
+        self::assertSame(15, (int) $db->product($productId)['stock_qty']);
+
+        try {
+            $db->updateStockMovement($movementId, [
+                'movement_type' => 'adjustment',
+                'quantity' => -5,
+                'note' => 'casse',
+                'supplier_id' => '',
+                'unit_cost' => '',
+            ], 1);
+            self::fail('Expected movement edit that makes stock negative to be rejected.');
+        } catch (InvalidArgumentException) {
+            self::assertNotNull($db->stockMovement($movementId));
+            self::assertSame(15, (int) $db->product($productId)['stock_qty']);
+        }
+
+        $db->updateStockMovement($movementId, [
+            'movement_type' => 'in',
+            'quantity' => 5,
+            'note' => 'retour inventaire',
+            'supplier_id' => '',
+            'unit_cost' => '',
+        ], 1);
+        self::assertSame(5, (int) $db->product($productId)['stock_qty']);
+        $db->deleteStockMovement($movementId);
+        self::assertSame(0, (int) $db->product($productId)['stock_qty']);
+        self::assertNull($db->stockMovement($movementId));
+    }
+
     public function testManagerStockPageShowsDisabledStockActions(): void
     {
         $db = $this->database();
@@ -1635,26 +1778,33 @@ SQL);
         ]);
 
         self::assertStringContainsString('STOCK-ACL', $html);
-        self::assertStringContainsString('تعديل', $html);
-        self::assertStringContainsString('حذف', $html);
+        self::assertStringContainsString('ضبط', $html);
         self::assertStringContainsString('aria-disabled="true"', $html);
         self::assertStringContainsString('المخزون مؤمن', $html);
+        self::assertStringNotContainsString('ضبط المخزون', $html);
         self::assertStringNotContainsString('تعطيل', $html);
 
         $controller = new DashboardController();
         $access = new AccessControl();
         $productId = $this->id($db->pdo(), 'SELECT id FROM products WHERE sku = "STOCK-ACL"');
-        $request = $this->requestWithUser('/records/product/' . $productId . '/delete', 'POST', [], [
+        $request = $this->requestWithUser('/stock/adjust', 'POST', [
+            'product_id' => $productId,
+            'real_quantity' => 99,
+            'reason' => 'force',
+        ], [
             'id' => 2,
             'role' => 'manager',
             'name' => 'Manager',
             'email' => 'manager@simauto.ma',
         ]);
         $controller->setContainer($this->controllerContainer($request));
-        $response = $controller->recordState('product', $productId, 'delete', $request, $db, $access);
+        $response = $controller->stockAdjust($request, $db, $access);
 
         self::assertInstanceOf(RedirectResponse::class, $response);
-        self::assertNotNull($db->product($productId));
+        self::assertSame(4, (int) $db->product($productId)['stock_qty']);
+
+        $db->addStock($productId, 2, 'daily stock entry', 2);
+        self::assertSame(6, (int) $db->product($productId)['stock_qty']);
     }
 
     public function testAdminCanDeleteRecordsButConfirmedDocumentsStayLocked(): void
@@ -1816,6 +1966,16 @@ SQL);
             'products.low' => 'تحت الحد',
             'products.empty_stock' => 'نفد',
             'products.no_products' => 'لا توجد منتجات.',
+            'products.movements' => 'حركات المخزون',
+            'stock.adjust_title' => 'ضبط المخزون',
+            'stock.adjust_short' => 'ضبط',
+            'stock.adjust_submit' => 'تسجيل الضبط',
+            'stock.real_quantity' => 'الكمية الحقيقية',
+            'stock.adjust_reason' => 'سبب الضبط',
+            'stock.adjust_reason_placeholder' => 'مثال: inventaire، casse، erreur de saisie',
+            'stock.movement.in' => 'إدخال',
+            'stock.movement.out' => 'خروج',
+            'stock.movement.adjustment' => 'ضبط',
             'state.active' => 'نشط',
             'state.inactive' => 'غير نشط',
         ];
