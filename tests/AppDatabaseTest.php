@@ -130,8 +130,10 @@ final class AppDatabaseTest extends TestCase
         self::assertSame(0, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
 
         $orderId = $db->confirmQuote($quoteId, 1);
-        self::assertSame(15, (int) $db->product($productId)['stock_qty']);
-        self::assertSame(0, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+        $order = $db->operation($orderId);
+        self::assertSame(12, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(1, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+        self::assertSame('Bon de commande ' . $order['order_no'], $pdo->query("SELECT note FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
 
         $operationId = $db->invoiceDocument($orderId, 1);
 
@@ -141,7 +143,7 @@ final class AppDatabaseTest extends TestCase
 
         self::assertSame(12, (int) $product['stock_qty']);
         self::assertSame(3, (int) $outMovement['quantity']);
-        self::assertSame('Facture ' . $operation['invoice_no'], $outMovement['note']);
+        self::assertSame('Bon de commande ' . $order['order_no'], $outMovement['note']);
         self::assertSame('invoice', $operation['doc_type']);
         self::assertStringStartsWith('INV/' . date('Ym') . '/', $operation['invoice_no']);
         self::assertSame('003151412000082', $operation['client_ice']);

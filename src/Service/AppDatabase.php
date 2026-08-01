@@ -1142,7 +1142,7 @@ class AppDatabase
 
     public function confirmQuote(int $id, int $userId): int
     {
-        return $this->copyDocument($id, 'order', $userId, false);
+        return $this->copyDocument($id, 'order', $userId, true);
     }
 
     public function invoiceDocument(int $id, int $userId): int
@@ -1158,7 +1158,7 @@ class AppDatabase
                 $orderId = $this->copyDocument($id, 'order', $userId, false, true);
                 $invoiceId = $this->copyDocument($orderId, 'invoice', $userId, true, true);
             } else {
-                $invoiceId = $this->copyDocument($id, 'invoice', $userId, true, true);
+                $invoiceId = $this->copyDocument($id, 'invoice', $userId, !$this->hasStockDecrement($source), true);
             }
             $this->pdo->commit();
             return $invoiceId;
@@ -1234,8 +1234,8 @@ class AppDatabase
 
             $stmt = $this->pdo->prepare(
                 'INSERT INTO operations
-                (invoice_no, receipt_no, doc_type, quote_no, order_no, parent_id, client_id, client_name, client_address, vehicle_id, vehicle_plate, vehicle_brand, vehicle_model, payment_method, check_number, subtotal_ht, vat_rate, vat_amount, total_ttc, total, status, created_by, created_at)
-                VALUES (:invoice_no, :receipt_no, :doc_type, :quote_no, :order_no, :parent_id, :client_id, :client_name, :client_address, :vehicle_id, :vehicle_plate, :vehicle_brand, :vehicle_model, :payment_method, :check_number, :subtotal_ht, :vat_rate, :vat_amount, :total_ttc, :total, :status, :created_by, datetime("now"))'
+                (invoice_no, receipt_no, doc_type, quote_no, order_no, parent_id, client_id, client_name, client_address, vehicle_id, vehicle_plate, vehicle_brand, vehicle_model, payment_method, check_number, subtotal_ht, vat_rate, vat_amount, total_ttc, total, status, stock_decremented_at, created_by, created_at)
+                VALUES (:invoice_no, :receipt_no, :doc_type, :quote_no, :order_no, :parent_id, :client_id, :client_name, :client_address, :vehicle_id, :vehicle_plate, :vehicle_brand, :vehicle_model, :payment_method, :check_number, :subtotal_ht, :vat_rate, :vat_amount, :total_ttc, :total, :status, :stock_decremented_at, :created_by, datetime("now"))'
             );
             $stmt->execute([
                 'invoice_no' => $documentNo,
@@ -1259,6 +1259,7 @@ class AppDatabase
                 'total_ttc' => $source['total_ttc'],
                 'total' => $source['total_ttc'],
                 'status' => $targetType === 'invoice' ? 'issued' : 'confirmed',
+                'stock_decremented_at' => $decrementStock ? date('Y-m-d H:i:s') : null,
                 'created_by' => $userId,
             ]);
 
@@ -1288,7 +1289,7 @@ class AppDatabase
                         if ($update->rowCount() !== 1) {
                             throw new InvalidArgumentException('Stock insuffisant pour: ' . $line['label']);
                         }
-                        $this->addMovement((int) $line['product_id'], 'out', $quantity, 'Facture ' . $documentNo, $userId);
+                        $this->addMovement((int) $line['product_id'], 'out', $quantity, $this->stockOutNote($targetType, $documentNo), $userId);
                     }
                 }
             }
@@ -1306,6 +1307,16 @@ class AppDatabase
             }
             throw $e;
         }
+    }
+
+    private function hasStockDecrement(array $operation): bool
+    {
+        return trim((string) ($operation['stock_decremented_at'] ?? '')) !== '';
+    }
+
+    private function stockOutNote(string $documentType, string $documentNo): string
+    {
+        return ($documentType === 'order' ? 'Bon de commande ' : 'Facture ') . $documentNo;
     }
 
     public function operation(int $id): ?array
@@ -2176,6 +2187,7 @@ SQL);
         $this->addColumnIfMissing('operations', 'vat_amount', 'REAL');
         $this->addColumnIfMissing('operations', 'total_ttc', 'REAL');
         $this->addColumnIfMissing('operations', 'parent_id', 'INTEGER');
+        $this->addColumnIfMissing('operations', 'stock_decremented_at', 'TEXT');
         $this->addColumnIfMissing('operation_items', 'discount_rate', 'REAL NOT NULL DEFAULT 0');
         $this->addColumnIfMissing('operation_items', 'total_ht', 'REAL');
         $this->pdo->exec("UPDATE operations SET doc_type = 'invoice' WHERE doc_type IS NULL OR doc_type = ''");

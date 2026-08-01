@@ -640,7 +640,7 @@ L'application:
 1. Augmente `products.stock_qty`.
 2. Cree un mouvement `in` dans `stock_movements`.
 
-Chaque entree de stock peut etre liee a un fournisseur et a un prix d'achat reel. Les sorties de stock sont faites uniquement au moment de la facturation, dans la meme transaction que la facture.
+Chaque entree de stock peut etre liee a un fournisseur et a un prix d'achat reel. Les sorties de stock sont faites au moment de la confirmation du bon de commande ou, si aucun bon n'a encore applique le stock, au moment de la facturation.
 
 Controle de coherence:
 
@@ -714,17 +714,19 @@ Exemple avec TVA 20%:
 Cycle:
 
 1. Devis `quote`: numero `DEV/YYYYMM/1`, aucun mouvement de stock.
-2. Bon de commande `order`: numero `BC/YYYYMM/1`, cree depuis le devis, aucun mouvement de stock.
-3. Facture `invoice`: numero `INV/YYYYMM/1`, verification du stock, sortie de stock et mouvements `out` dans la meme transaction.
+2. Bon de commande `order`: numero `BC/YYYYMM/1`, cree depuis le devis, verification du stock, sortie de stock et mouvements `out` dans la meme transaction.
+3. Facture `invoice`: numero `INV/YYYYMM/1`; si le bon de commande source a deja applique le stock, la facture ne decremente pas une deuxieme fois.
 
-Un devis peut etre facture directement: l'application cree la commande intermediaire puis la facture. Si le stock est insuffisant au moment de facturer, rien n'est ecrit.
+Un devis peut etre facture directement: l'application cree la commande intermediaire puis la facture. Dans ce flux direct, si le stock n'a pas encore ete applique par un bon de commande explicite, le decrement est fait une seule fois pendant la facturation. Si le stock est insuffisant, rien n'est ecrit.
 
-Regles de stock a la facturation:
+Regles de stock dans le cycle documentaire:
 
-- seul le passage vers `doc_type = invoice` decremente le stock; un devis et un bon de commande ne bougent jamais les quantites;
-- avant de creer la facture, l'application agrege les quantites par produit stockable et refuse toute la transaction si au moins un stock est insuffisant;
-- pour chaque ligne stockable facturee, `products.stock_qty` est decremente et un mouvement `out` est cree avec la note `Facture {numero}`;
+- le devis ne decremente jamais le stock;
+- le bon de commande decremente le stock par produit stockable et cree un mouvement `out` avec la note `Bon de commande {numero}`;
+- la facture decremente le stock seulement si le document source n'a pas deja applique le stock, avec un mouvement `out` note `Facture {numero}`;
+- avant tout decrement, l'application agrege les quantites par produit stockable et refuse toute la transaction si au moins un stock est insuffisant;
 - les lignes de type service, les produits `service` et les lignes libres ne creent aucun mouvement;
+- `operations.stock_decremented_at` sert de garde-fou pour ne jamais retirer le stock deux fois sur la meme chaine documentaire;
 - garde-fou anti double decrement: un devis deja confirme, un bon de commande deja facture ou une facture deja emise ne peuvent pas etre refactures.
 
 ### 4. Factures et Receipts
