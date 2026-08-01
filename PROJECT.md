@@ -642,6 +642,13 @@ L'application:
 
 Chaque entree de stock peut etre liee a un fournisseur et a un prix d'achat reel. Les sorties de stock sont faites uniquement au moment de la facturation, dans la meme transaction que la facture.
 
+Controle de coherence:
+
+- pour un produit stockable, `products.stock_qty` doit toujours correspondre a la somme des mouvements: `in` ajoute, `out` retire, `adjustment` applique son ecart signe;
+- les anciennes bases sont alignees une seule fois par une migration idempotente qui ajoute un mouvement `adjustment` de baseline sans modifier `stock_qty`;
+- la commande `php bin/console app:stock:check` liste les produits dont `stock_qty` diverge de cette somme;
+- cette commande est un outil de diagnostic: elle ne modifie jamais les donnees.
+
 ### Ajustement de Stock
 
 L'ajustement de stock est reserve au role `admin` via la permission:
@@ -711,6 +718,14 @@ Cycle:
 3. Facture `invoice`: numero `INV/YYYYMM/1`, verification du stock, sortie de stock et mouvements `out` dans la meme transaction.
 
 Un devis peut etre facture directement: l'application cree la commande intermediaire puis la facture. Si le stock est insuffisant au moment de facturer, rien n'est ecrit.
+
+Regles de stock a la facturation:
+
+- seul le passage vers `doc_type = invoice` decremente le stock; un devis et un bon de commande ne bougent jamais les quantites;
+- avant de creer la facture, l'application agrege les quantites par produit stockable et refuse toute la transaction si au moins un stock est insuffisant;
+- pour chaque ligne stockable facturee, `products.stock_qty` est decremente et un mouvement `out` est cree avec la note `Facture {numero}`;
+- les lignes de type service, les produits `service` et les lignes libres ne creent aucun mouvement;
+- garde-fou anti double decrement: un devis deja confirme, un bon de commande deja facture ou une facture deja emise ne peuvent pas etre refactures.
 
 ### 4. Factures et Receipts
 
@@ -827,6 +842,14 @@ Affiche quatre cartes:
 - factures et receipts.
 
 Chaque carte ouvre une page dediee.
+
+En haut du dashboard, les roles admin et manager voient aussi l'etat critique du stock:
+
+- si des produits stockables actifs ont `min_qty > 0` et `stock_qty <= min_qty`, une alerte les liste avec nom, reference interne ou SKU, stock actuel et seuil;
+- les ruptures (`stock_qty <= 0`) sont affichees avant les produits simplement sous seuil;
+- chaque ligne propose un lien vers la fiche produit et un lien vers `/stock` pour le reapprovisionnement;
+- si aucun produit n'est critique, le dashboard affiche un message vert `Stock sain`;
+- la carte `Stock` affiche un badge avec le nombre de produits critiques.
 
 ### `templates/app/products.html.twig`
 
@@ -1473,6 +1496,12 @@ Lancer les tests:
 docker-compose exec -T php php bin/phpunit
 ```
 
+Verifier la coherence stock / mouvements:
+
+```powershell
+docker-compose exec -T php php bin/console app:stock:check
+```
+
 Verifier les conteneurs:
 
 ```powershell
@@ -1517,6 +1546,7 @@ L'application est fonctionnelle avec:
 - limitation simple des tentatives login,
 - CSRF simple sur le module utilisateurs,
 - dashboard simple,
+- alerte stock critique sur le dashboard avec badge sur la carte stock,
 - pages dediees,
 - stockage SQLite,
 - CRUD categories,
