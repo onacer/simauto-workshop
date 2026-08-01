@@ -25,6 +25,7 @@ class AppDatabase
 
         $this->migrate();
         $this->seed();
+        $this->migrateStockMovementBaseline();
     }
 
     public function pdo(): PDO
@@ -68,12 +69,15 @@ class AppDatabase
         $products = $this->products($filters);
         $operations = $this->operations();
         $todayTotal = (float) $this->pdo->query("SELECT COALESCE(SUM(total_ttc), 0) FROM operations WHERE doc_type = 'invoice' AND date(created_at) = date('now')")->fetchColumn();
-        $lowStock = (int) $this->pdo->query("SELECT COUNT(*) FROM products WHERE active = 1 AND product_type = 'stockable' AND stock_qty <= min_qty")->fetchColumn();
+        $criticalStock = $this->criticalStockProducts();
+        $lowStock = count($criticalStock);
         $operationCount = (int) $this->pdo->query("SELECT COUNT(*) FROM operations WHERE doc_type IN ('quote', 'order', 'invoice')")->fetchColumn();
 
         return [
             'products' => $products,
             'operations' => $operations,
+            'critical_stock_products' => $criticalStock,
+            'critical_stock_count' => $lowStock,
             'categories' => $this->categories(false),
             'suppliers' => $this->suppliers(false),
             'clients' => $this->clients(),
@@ -425,16 +429,53 @@ class AppDatabase
             $params['category_id'] = (int) $filters['category_id'];
         }
         if (($filters['stock_state'] ?? '') === 'low') {
-            $where[] = 'p.stock_qty <= p.min_qty AND p.stock_qty > 0';
+            $where[] = "p.product_type = 'stockable' AND p.min_qty > 0 AND p.stock_qty <= p.min_qty AND p.stock_qty > 0";
         }
         if (($filters['stock_state'] ?? '') === 'empty') {
-            $where[] = 'p.stock_qty <= 0';
+            $where[] = "p.product_type = 'stockable' AND p.stock_qty <= 0";
         }
 
         $sql = 'SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE ' . implode(' AND ', $where) . ' ORDER BY ' . $order;
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
+    }
+
+    public function criticalStockProducts(): array
+    {
+        return $this->pdo->query(
+            "SELECT p.*, c.name AS category_name,
+                    CASE WHEN p.stock_qty <= 0 THEN 'empty' ELSE 'low' END AS stock_severity
+             FROM products p
+             LEFT JOIN categories c ON c.id = p.category_id
+             WHERE p.active = 1
+               AND p.product_type = 'stockable'
+               AND p.min_qty > 0
+               AND p.stock_qty <= p.min_qty
+             ORDER BY CASE WHEN p.stock_qty <= 0 THEN 0 ELSE 1 END, p.stock_qty ASC, p.name ASC"
+        )->fetchAll();
+    }
+
+    public function stockConsistencyIssues(): array
+    {
+        return $this->pdo->query(
+            "SELECT *
+             FROM (
+                SELECT p.id, p.sku, p.ref_company, p.name, p.stock_qty,
+                       COALESCE(SUM(CASE
+                           WHEN sm.movement_type = 'in' THEN ABS(sm.quantity)
+                           WHEN sm.movement_type = 'out' THEN -ABS(sm.quantity)
+                           WHEN sm.movement_type = 'adjustment' THEN sm.quantity
+                           ELSE 0
+                       END), 0) AS movement_qty
+                FROM products p
+                LEFT JOIN stock_movements sm ON sm.product_id = p.id
+                WHERE p.product_type = 'stockable'
+                GROUP BY p.id
+             ) checked
+             WHERE checked.stock_qty != checked.movement_qty
+             ORDER BY checked.name"
+        )->fetchAll();
     }
 
     public function product(int $id): ?array
@@ -1142,22 +1183,43 @@ class AppDatabase
         if ($targetType === 'invoice' && !in_array($source['doc_type'], ['quote', 'order'], true)) {
             throw new InvalidArgumentException('Ce document ne peut pas etre facture');
         }
+        if ($targetType === 'order' && (string) ($source['status'] ?? '') !== 'draft') {
+            throw new InvalidArgumentException('Ce devis a deja ete confirme');
+        }
+        if ($targetType === 'invoice' && $source['doc_type'] === 'quote' && (string) ($source['status'] ?? '') !== 'draft') {
+            throw new InvalidArgumentException('Ce devis a deja ete traite');
+        }
+        if ($targetType === 'invoice' && $source['doc_type'] === 'order' && (string) ($source['status'] ?? '') !== 'confirmed') {
+            throw new InvalidArgumentException('Ce bon de commande a deja ete facture');
+        }
 
         if (!$insideTransaction) {
             $this->pdo->beginTransaction();
         }
         try {
+            $stockableLineIndexes = [];
             if ($decrementStock) {
-                foreach ($source['items'] as $line) {
+                $requirements = [];
+                foreach ($source['items'] as $index => $line) {
                     if ((int) ($line['product_id'] ?? 0) <= 0) {
                         continue;
                     }
                     $product = $this->product((int) $line['product_id']);
-                    if (!$product || (string) ($product['product_type'] ?? 'stockable') === 'service') {
+                    if (!$product) {
+                        throw new InvalidArgumentException('Produit introuvable: ' . $line['label']);
+                    }
+                    if ((string) ($product['product_type'] ?? 'stockable') === 'service') {
                         continue;
                     }
-                    if ((int) $product['stock_qty'] < (int) $line['quantity']) {
-                        throw new InvalidArgumentException('Stock insuffisant pour: ' . $line['label']);
+                    $quantity = (int) $line['quantity'];
+                    $stockableLineIndexes[$index] = true;
+                    $requirements[(int) $line['product_id']] = ($requirements[(int) $line['product_id']] ?? 0) + $quantity;
+                }
+
+                foreach ($requirements as $productId => $quantity) {
+                    $product = $this->product((int) $productId);
+                    if (!$product || (int) $product['stock_qty'] < $quantity) {
+                        throw new InvalidArgumentException('Stock insuffisant pour: ' . ($product['name'] ?? ('#' . $productId)));
                     }
                 }
             }
@@ -1196,12 +1258,12 @@ class AppDatabase
                 'vat_amount' => $source['vat_amount'],
                 'total_ttc' => $source['total_ttc'],
                 'total' => $source['total_ttc'],
-                'status' => $targetType === 'invoice' ? 'issued' : 'draft',
+                'status' => $targetType === 'invoice' ? 'issued' : 'confirmed',
                 'created_by' => $userId,
             ]);
 
             $newId = (int) $this->pdo->lastInsertId();
-            foreach ($source['items'] as $line) {
+            foreach ($source['items'] as $index => $line) {
                 $insert = $this->pdo->prepare(
                     'INSERT INTO operation_items (operation_id, product_id, line_type, label, quantity, unit_price, discount_rate, total_ht, total)
                      VALUES (:operation_id, :product_id, :line_type, :label, :quantity, :unit_price, :discount_rate, :total_ht, :total)'
@@ -1218,12 +1280,15 @@ class AppDatabase
                     'total' => $line['total'] ?? $line['total_ht'],
                 ]);
 
-                if ($decrementStock && (int) ($line['product_id'] ?? 0) > 0) {
-                    $product = $this->product((int) $line['product_id']);
-                    if ($product && (string) ($product['product_type'] ?? 'stockable') !== 'service') {
-                        $update = $this->pdo->prepare('UPDATE products SET stock_qty = stock_qty - :qty WHERE id = :id');
-                        $update->execute(['qty' => (int) $line['quantity'], 'id' => (int) $line['product_id']]);
-                        $this->addMovement((int) $line['product_id'], 'out', (int) $line['quantity'], 'Facture ' . $documentNo, $userId);
+                if ($decrementStock && isset($stockableLineIndexes[$index])) {
+                    $quantity = (int) $line['quantity'];
+                    if ($quantity > 0) {
+                        $update = $this->pdo->prepare("UPDATE products SET stock_qty = stock_qty - :qty WHERE id = :id AND product_type = 'stockable' AND stock_qty >= :qty");
+                        $update->execute(['qty' => $quantity, 'id' => (int) $line['product_id']]);
+                        if ($update->rowCount() !== 1) {
+                            throw new InvalidArgumentException('Stock insuffisant pour: ' . $line['label']);
+                        }
+                        $this->addMovement((int) $line['product_id'], 'out', $quantity, 'Facture ' . $documentNo, $userId);
                     }
                 }
             }
@@ -2080,6 +2145,10 @@ CREATE TABLE IF NOT EXISTS operation_items (
     FOREIGN KEY(operation_id) REFERENCES operations(id) ON DELETE CASCADE,
     FOREIGN KEY(product_id) REFERENCES products(id)
 );
+CREATE TABLE IF NOT EXISTS app_migrations (
+    name TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
+);
 SQL);
 
         $this->addColumnIfMissing('users', 'created_at', 'TEXT');
@@ -2120,6 +2189,33 @@ SQL);
 
         $this->migrateCategories();
         $this->migrateClientsAndVehicles();
+    }
+
+    private function migrateStockMovementBaseline(): void
+    {
+        $migration = 'stock_movement_baseline_20260801';
+        if ($this->row('SELECT name FROM app_migrations WHERE name = :name', ['name' => $migration])) {
+            return;
+        }
+
+        $userId = (int) $this->pdo->query('SELECT id FROM users ORDER BY id LIMIT 1')->fetchColumn();
+        $issues = $this->stockConsistencyIssues();
+
+        $this->pdo->beginTransaction();
+        try {
+            foreach ($issues as $issue) {
+                $delta = (int) $issue['stock_qty'] - (int) $issue['movement_qty'];
+                if ($delta !== 0) {
+                    $this->addMovement((int) $issue['id'], 'adjustment', $delta, 'Migration coherence stock', $userId);
+                }
+            }
+            $stmt = $this->pdo->prepare('INSERT INTO app_migrations (name, applied_at) VALUES (:name, datetime("now"))');
+            $stmt->execute(['name' => $migration]);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
     }
 
     private function migrateCategories(): void
