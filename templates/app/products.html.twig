@@ -64,7 +64,7 @@
                 </select>
             </label>
             <label class="stock-field">{{ 'products.quantity'|trans }}<input name="stock_qty" type="number" step="1" min="0" value="0" required></label>
-            <label>{{ 'products.min_qty'|trans }}<input name="min_qty" type="number" step="1" min="0" value="1"></label>
+            <label>{{ 'products.min_qty'|trans }}<input name="min_qty" type="number" step="1" min="0" value="0"></label>
             <label>{{ 'products.purchase_price_ht'|trans }}<input name="purchase_price" class="purchase-price" type="number" step="0.01" min="0" value="0"></label>
             <label>{{ 'products.margin'|trans }}
                 <select name="margin_mode" class="margin-mode">
@@ -83,14 +83,28 @@
         <div class="data-table products-table" id="products-table">
             <div class="table-head"><span>{{ 'products.product'|trans }}</span><span>{{ 'products.reference'|trans }}</span><span>{{ 'products.category'|trans }}</span><span>{{ 'products.stock'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for product in products %}
-                <div data-live-row data-search="{{ (product.sku ~ ' ' ~ product.ref_company|default('') ~ ' ' ~ product.ref_universal|default('') ~ ' ' ~ product.name ~ ' ' ~ (product.category_name ?: product.category))|lower }}">
+                {% set is_stockable = product.product_type|default('stockable') == 'stockable' %}
+                {% set is_empty = is_stockable and product.stock_qty <= 0 %}
+                {% set is_low = is_stockable and product.min_qty > 0 and product.stock_qty <= product.min_qty and product.stock_qty > 0 %}
+                <div class="{{ is_empty ? 'row-stock-empty' : (is_low ? 'row-stock-low' : '') }}" data-live-row data-search="{{ (product.sku ~ ' ' ~ product.ref_company|default('') ~ ' ' ~ product.ref_universal|default('') ~ ' ' ~ product.name ~ ' ' ~ (product.category_name ?: product.category))|lower }}">
                     <strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong>
                     <span>
                         <strong>{{ product.ref_company ?: '—' }}</strong>
                         {% if product.ref_universal %}<br><small>{{ product.ref_universal }}</small>{% endif %}
                     </span>
                     <span>{{ product.category_name ?: product.category }}</span>
-                    <span>{{ product.product_type|default('stockable') == 'service' ? 'products.service'|trans : product.stock_qty }}</span>
+                    <span>
+                        {% if not is_stockable %}
+                            {{ 'products.service'|trans }}
+                        {% else %}
+                            {{ product.stock_qty }}
+                            {% if is_empty %}
+                                <span class="badge badge-stock-empty">{{ 'stock.empty'|trans }}</span>
+                            {% elseif is_low %}
+                                <span class="badge badge-stock-low">{{ 'stock.low'|trans }}</span>
+                            {% endif %}
+                        {% endif %}
+                    </span>
                     <span class="row-actions">
                         <a href="{{ path('app_product_show', {id: product.id}) }}">{{ 'ui.show'|trans }}</a>
                         {% include 'app/_action_button.html.twig' with {

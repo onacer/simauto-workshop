@@ -126,6 +126,48 @@ a {
     border: 1px solid #e8c948;
 }
 
+.stock-alert {
+    display: grid;
+    gap: 12px;
+    margin: 0 0 18px;
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, .92);
+    box-shadow: var(--shadow);
+}
+
+.stock-alert-danger {
+    border-color: rgba(185, 34, 34, .35);
+    background: #fff4f2;
+}
+
+.stock-alert-ok {
+    color: #164620;
+    border-color: rgba(45, 126, 63, .35);
+    background: #eef9f0;
+}
+
+.stock-alert-head,
+.stock-alert-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.stock-alert-list {
+    display: grid;
+    gap: 8px;
+}
+
+.stock-alert-row {
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .76);
+    border: 1px solid rgba(7, 7, 7, .06);
+}
+
 .login-screen {
     position: relative;
     z-index: 1;
@@ -503,6 +545,10 @@ html[dir="ltr"] .profile-menu {
     z-index: 1;
     font-size: 28px;
     line-height: 1.25;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .home-card small {
@@ -783,6 +829,39 @@ select.is-combobox-native {
 .badge-movement-adjustment {
     color: #fff;
     background: #2f2f29;
+}
+
+.dashboard-badge,
+.badge-stock-low,
+.badge-stock-empty {
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 900;
+}
+
+.dashboard-badge {
+    color: #fff;
+    background: var(--red);
+}
+
+.badge-stock-low {
+    color: #4d3900;
+    background: #ffe28a;
+}
+
+.badge-stock-empty {
+    color: #fff;
+    background: var(--red);
+}
+
+.row-stock-low {
+    background: rgba(255, 244, 190, .56);
+}
+
+.row-stock-empty {
+    background: rgba(185, 34, 34, .08);
 }
 
 .row-actions {

@@ -10,6 +10,34 @@
         <div class="alert alert-success">{{ message|trans }}</div>
     {% endfor %}
 
+    {% set critical_count = critical_stock_count|default(critical_stock_products|default([])|length) %}
+    <section class="{{ critical_count > 0 ? 'stock-alert stock-alert-danger' : 'stock-alert stock-alert-ok' }}">
+        {% if critical_count > 0 %}
+            <div class="stock-alert-head">
+                <strong>{{ 'dashboard.stock_alert_title'|trans({'%count%': critical_count}) }}</strong>
+            </div>
+            <div class="stock-alert-list">
+                {% for product in critical_stock_products %}
+                    <div class="stock-alert-row">
+                        <span class="badge {{ product.stock_qty <= 0 ? 'badge-stock-empty' : 'badge-stock-low' }}">
+                            {{ product.stock_qty <= 0 ? 'stock.empty'|trans : 'stock.low'|trans }}
+                        </span>
+                        <strong>{{ product.name }}</strong>
+                        <span>{{ product.ref_company ?: product.sku }}</span>
+                        <span>{{ 'stock.current'|trans }}: {{ product.stock_qty }}</span>
+                        <span>{{ 'stock.minimum'|trans }}: {{ product.min_qty }}</span>
+                        <span class="row-actions">
+                            <a href="{{ path('app_product_show', {id: product.id}) }}">{{ 'dashboard.stock_alert_product_link'|trans }}</a>
+                            <a href="{{ path('app_stock') }}">{{ 'dashboard.stock_alert_restock_link'|trans }}</a>
+                        </span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <strong>{{ 'dashboard.stock_healthy'|trans }}</strong>
+        {% endif %}
+    </section>
+
     <section class="home-grid">
         <a class="home-card tone-yellow" href="{{ path('app_products') }}">
             <span>01</span>
@@ -18,7 +46,10 @@
         </a>
         <a class="home-card tone-black" href="{{ path('app_stock') }}">
             <span>02</span>
-            <strong>{{ 'dashboard.stock'|trans }}</strong>
+            <strong>
+                {{ 'dashboard.stock'|trans }}
+                {% if critical_count > 0 %}<em class="dashboard-badge">{{ critical_count }}</em>{% endif %}
+            </strong>
             <small>{{ 'dashboard.stock_hint'|trans }}</small>
         </a>
         <a class="home-card tone-red" href="{{ path('app_operations') }}">

@@ -68,7 +68,7 @@
                 <div>
                     <strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong>
                     <span>{{ product.stock_qty }}</span>
-                    <span>{{ product.stock_qty <= 0 ? 'stock.empty'|trans : (product.stock_qty <= product.min_qty ? 'stock.low'|trans : 'stock.available'|trans) }}</span>
+                    <span>{{ product.stock_qty <= 0 ? 'stock.empty'|trans : (product.min_qty > 0 and product.stock_qty <= product.min_qty ? 'stock.low'|trans : 'stock.available'|trans) }}</span>
                     <span class="row-actions">
                         {% include 'app/_action_button.html.twig' with {
                             label: 'stock.adjust_short'|trans,
