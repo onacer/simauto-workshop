@@ -6,6 +6,7 @@ use App\Controller\DashboardController;
 use App\Controller\ImportController;
 use App\Controller\ReportController;
 use App\Kernel;
+use App\Command\StockCheckCommand;
 use App\Service\AccessControl;
 use App\Service\AppDatabase;
 use App\Service\DesktopPaths;
@@ -21,6 +22,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
+use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RequestContext;
 use Twig\Environment;
@@ -125,16 +127,21 @@ final class AppDatabaseTest extends TestCase
             'service_price_1' => 150,
         ], 1);
         self::assertSame(15, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(0, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
 
         $orderId = $db->confirmQuote($quoteId, 1);
         self::assertSame(15, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(0, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
 
         $operationId = $db->invoiceDocument($orderId, 1);
 
         $product = $db->product($productId);
         $operation = $db->operation($operationId);
+        $outMovement = $pdo->query("SELECT * FROM stock_movements WHERE product_id = $productId AND movement_type = 'out' ORDER BY id DESC LIMIT 1")->fetch();
 
         self::assertSame(12, (int) $product['stock_qty']);
+        self::assertSame(3, (int) $outMovement['quantity']);
+        self::assertSame('Facture ' . $operation['invoice_no'], $outMovement['note']);
         self::assertSame('invoice', $operation['doc_type']);
         self::assertStringStartsWith('INV/' . date('Ym') . '/', $operation['invoice_no']);
         self::assertSame('003151412000082', $operation['client_ice']);
@@ -147,6 +154,207 @@ final class AppDatabaseTest extends TestCase
         self::assertCount(2, $operation['items']);
         self::assertSame('FLT-AIR-001', $operation['items'][0]['product_sku']);
         self::assertSame(3, (int) $pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId)->fetchColumn());
+    }
+
+    public function testDirectQuoteInvoicingDecrementsStockExactlyOnce(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'DIRECT-001',
+            'name' => 'Direct invoice product',
+            'category_id' => $categoryId,
+            'stock_qty' => 10,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "DIRECT-001"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'product_1' => $productId,
+            'product_qty_1' => 4,
+        ], 1);
+        $invoiceId = $db->invoiceDocument($quoteId, 1);
+        $invoice = $db->operation($invoiceId);
+
+        self::assertSame(6, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(1, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+        self::assertSame(4, (int) $pdo->query("SELECT quantity FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+        self::assertSame('Facture ' . $invoice['invoice_no'], $pdo->query("SELECT note FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+    }
+
+    public function testInvoiceRejectsInsufficientStockWithoutPartialWrites(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct([
+            'sku' => 'SHORT-001',
+            'name' => 'Short product',
+            'category_id' => $categoryId,
+            'stock_qty' => 2,
+            'min_qty' => 1,
+            'purchase_price' => 10,
+            'sale_price' => 20,
+        ], 1);
+        $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "SHORT-001"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'product_1' => $productId,
+            'product_qty_1' => 5,
+        ], 1);
+
+        try {
+            $db->invoiceDocument($quoteId, 1);
+            self::fail('Expected insufficient stock exception.');
+        } catch (InvalidArgumentException) {
+            self::assertSame(2, (int) $db->product($productId)['stock_qty']);
+            self::assertSame(1, (int) $pdo->query('SELECT COUNT(*) FROM operations')->fetchColumn());
+            self::assertSame(0, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+        }
+    }
+
+    public function testMultiLineInvoiceMovesOnlyStockableProducts(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct(['sku' => 'MULTI-A', 'name' => 'Product A', 'category_id' => $categoryId, 'stock_qty' => 10, 'min_qty' => 1, 'purchase_price' => 10, 'sale_price' => 20], 1);
+        $db->saveProduct(['sku' => 'MULTI-B', 'name' => 'Product B', 'category_id' => $categoryId, 'stock_qty' => 5, 'min_qty' => 1, 'purchase_price' => 10, 'sale_price' => 30], 1);
+        $db->saveProduct(['sku' => 'MULTI-SVC', 'name' => 'Service line', 'category_id' => $categoryId, 'stock_qty' => 0, 'min_qty' => 0, 'purchase_price' => 0, 'sale_price' => 100, 'product_type' => 'service'], 1);
+        $productA = $this->id($pdo, 'SELECT id FROM products WHERE sku = "MULTI-A"');
+        $productB = $this->id($pdo, 'SELECT id FROM products WHERE sku = "MULTI-B"');
+        $service = $this->id($pdo, 'SELECT id FROM products WHERE sku = "MULTI-SVC"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'line_product_id' => [$productA, $productB, $service],
+            'line_label' => ['', '', ''],
+            'line_quantity' => [3, 2, 1],
+            'line_unit_price' => [20, 30, 100],
+            'line_discount' => [0, 0, 0],
+        ], 1);
+        $db->invoiceDocument($quoteId, 1);
+
+        self::assertSame(7, (int) $db->product($productA)['stock_qty']);
+        self::assertSame(3, (int) $db->product($productB)['stock_qty']);
+        self::assertSame(0, (int) $db->product($service)['stock_qty']);
+        self::assertSame(2, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE movement_type = 'out' AND product_id IN ($productA, $productB, $service)")->fetchColumn());
+    }
+
+    public function testDocumentProgressionDoesNotDoubleDecrementStock(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct(['sku' => 'DOUBLE-001', 'name' => 'Double guard', 'category_id' => $categoryId, 'stock_qty' => 10, 'min_qty' => 1, 'purchase_price' => 10, 'sale_price' => 20], 1);
+        $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "DOUBLE-001"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'product_1' => $productId,
+            'product_qty_1' => 3,
+        ], 1);
+        $invoiceId = $db->invoiceDocument($quoteId, 1);
+
+        foreach ([$quoteId, $invoiceId] as $documentId) {
+            try {
+                $db->invoiceDocument($documentId, 1);
+                self::fail('Expected already processed document to be rejected.');
+            } catch (InvalidArgumentException) {
+                self::assertSame(7, (int) $db->product($productId)['stock_qty']);
+            }
+        }
+        self::assertSame(1, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+    }
+
+    public function testStockConsistencyCheckCommandReportsCleanDatabase(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct(['sku' => 'CHECK-001', 'name' => 'Check product', 'category_id' => $categoryId, 'stock_qty' => 10, 'min_qty' => 1, 'purchase_price' => 10, 'sale_price' => 20], 1);
+        $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "CHECK-001"');
+        $db->addStock($productId, 2, 'purchase', 1);
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+        $quoteId = $db->createOperation(['client_id' => $clientId, 'vehicle_id' => $vehicleId, 'payment_method' => 'ESP', 'product_1' => $productId, 'product_qty_1' => 4], 1);
+        $db->invoiceDocument($quoteId, 1);
+        $db->adjustStock($productId, 9, 'inventory', 1);
+
+        self::assertSame([], $db->stockConsistencyIssues());
+        $tester = new CommandTester(new StockCheckCommand($db));
+        self::assertSame(0, $tester->execute([]));
+        self::assertStringContainsString('Stock is consistent.', $tester->getDisplay());
+    }
+
+    public function testServiceProductInvoicesWithoutStockMovement(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct(['sku' => 'SVC-ONLY', 'name' => 'Service only', 'category_id' => $categoryId, 'stock_qty' => 0, 'min_qty' => 0, 'purchase_price' => 0, 'sale_price' => 120, 'product_type' => 'service'], 1);
+        $serviceId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "SVC-ONLY"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'line_product_id' => [$serviceId],
+            'line_label' => [''],
+            'line_quantity' => [1],
+            'line_unit_price' => [120],
+        ], 1);
+        $invoiceId = $db->invoiceDocument($quoteId, 1);
+
+        self::assertSame('invoice', $db->operation($invoiceId)['doc_type']);
+        self::assertSame(0, (int) $db->product($serviceId)['stock_qty']);
+        self::assertSame(0, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $serviceId")->fetchColumn());
+    }
+
+    public function testMinimumQuantityAndDashboardCriticalStockAlerts(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct(['sku' => 'MIN-DEFAULT', 'name' => 'Default minimum', 'category_id' => $categoryId, 'stock_qty' => 8, 'purchase_price' => 10, 'sale_price' => 20], 1);
+        $db->saveProduct(['sku' => 'MIN-LOW', 'name' => 'Low threshold product', 'category_id' => $categoryId, 'stock_qty' => 2, 'min_qty' => 5, 'purchase_price' => 10, 'sale_price' => 20], 1);
+        $db->saveProduct(['sku' => 'MIN-EMPTY', 'name' => 'Empty threshold product', 'category_id' => $categoryId, 'stock_qty' => 0, 'min_qty' => 5, 'purchase_price' => 10, 'sale_price' => 20], 1);
+        $db->saveProduct(['sku' => 'MIN-OK', 'name' => 'Healthy threshold product', 'category_id' => $categoryId, 'stock_qty' => 8, 'min_qty' => 5, 'purchase_price' => 10, 'sale_price' => 20], 1);
+
+        self::assertSame(0, (int) $db->product($this->id($pdo, 'SELECT id FROM products WHERE sku = "MIN-DEFAULT"'))['min_qty']);
+        $critical = $db->criticalStockProducts();
+        self::assertSame(['Empty threshold product', 'Low threshold product'], array_column($critical, 'name'));
+        self::assertSame('empty', $critical[0]['stock_severity']);
+        self::assertSame('low', $critical[1]['stock_severity']);
+
+        $context = $db->dashboardData();
+        foreach (['admin', 'manager'] as $role) {
+            $html = $this->renderTemplate('app/index.html.twig', $context + ['user' => ['role' => $role, 'name' => $role]]);
+            self::assertStringContainsString('Low threshold product', $html);
+            self::assertStringContainsString('2 produit(s) a reapprovisionner', $html);
+            self::assertStringContainsString('dashboard-badge', $html);
+        }
+
+        $healthyDb = $this->database();
+        $healthyHtml = $this->renderTemplate('app/index.html.twig', $healthyDb->dashboardData() + ['user' => ['role' => 'admin', 'name' => 'Admin']]);
+        self::assertStringContainsString('Stock sain', $healthyHtml);
+        self::assertStringNotContainsString('stock-alert-danger', $healthyHtml);
     }
 
     public function testProductValidationRejectsDuplicateSkuAndNegativePrices(): void
@@ -1926,6 +2134,22 @@ SQL);
     private function testTrans(string $key, array $params = []): string
     {
         $translations = [
+            'dashboard.stock_alert_title' => '%count% produit(s) a reapprovisionner',
+            'dashboard.stock_alert_product_link' => 'Fiche',
+            'dashboard.stock_alert_restock_link' => 'Reappro',
+            'dashboard.stock_healthy' => 'Stock sain',
+            'dashboard.products' => 'Produits',
+            'dashboard.products_count' => '%count% produit(s)',
+            'dashboard.stock' => 'Stock',
+            'dashboard.stock_hint' => 'Suivi stock',
+            'dashboard.operations' => 'Operations',
+            'dashboard.operations_hint' => 'Operations',
+            'dashboard.billing' => 'Factures',
+            'dashboard.operations_count' => '%count% operation(s)',
+            'stock.current' => 'Actuel',
+            'stock.minimum' => 'Minimum',
+            'stock.low' => 'Faible',
+            'stock.empty' => 'Rupture',
             'clients.no_vehicles' => 'لا توجد سيارات لهذا العميل.',
             'ui.edit' => 'تعديل',
             'ui.delete' => 'حذف',
