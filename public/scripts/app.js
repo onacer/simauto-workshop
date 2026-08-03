@@ -136,6 +136,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     syncReportFilters();
 
+    document.querySelectorAll("[data-critical-stock-toggle]").forEach((button) => {
+        const panelId = button.getAttribute("aria-controls");
+        const panel = panelId ? document.getElementById(panelId) : document.querySelector("[data-critical-stock-panel]");
+        if (!panel) return;
+
+        button.addEventListener("click", () => {
+            const isOpen = button.getAttribute("aria-expanded") === "true";
+            button.setAttribute("aria-expanded", isOpen ? "false" : "true");
+            panel.hidden = isOpen;
+        });
+    });
+
     const normalize = (value) => (value || "").toString().toLowerCase().trim().replace(/\s+/g, " ");
 
     const enhanceCombobox = (root = document) => {

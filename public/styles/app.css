@@ -482,7 +482,7 @@ html[dir="ltr"] .profile-menu {
 
 .home-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 18px;
 }
 
@@ -498,6 +498,13 @@ html[dir="ltr"] .profile-menu {
     text-decoration: none;
     box-shadow: 0 26px 70px rgba(6, 6, 6, .14);
     transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.home-card-button {
+    border: 0;
+    text-align: inherit;
+    font: inherit;
+    cursor: pointer;
 }
 
 .home-card:hover {
@@ -564,6 +571,20 @@ html[dir="ltr"] .profile-menu {
     color: #090909;
     background:
         linear-gradient(145deg, #ffe263 0%, var(--yellow) 48%, #c89c17 100%);
+}
+
+.tone-critical {
+    color: #fff;
+    background:
+        linear-gradient(135deg, rgba(185, 34, 34, .96), rgba(7, 7, 7, .96)),
+        #b92222;
+}
+
+.tone-healthy {
+    color: #090909;
+    background:
+        linear-gradient(135deg, rgba(241, 205, 53, .92), rgba(255, 255, 255, .22)),
+        #f1cd35;
 }
 
 .tone-black {
@@ -846,6 +867,63 @@ select.is-combobox-native {
     background: var(--red);
 }
 
+.dashboard-badge-danger {
+    color: #fff;
+    background: rgba(185, 34, 34, .78);
+}
+
+.dashboard-badge-ok {
+    color: #164620;
+    background: rgba(255, 255, 255, .55);
+}
+
+.critical-stock-panel {
+    margin-top: 18px;
+    padding: 16px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .78);
+    border: 1px solid rgba(7, 7, 7, .08);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+}
+
+.critical-stock-list {
+    display: grid;
+    gap: 10px;
+}
+
+.critical-stock-row {
+    display: grid;
+    grid-template-columns: auto minmax(220px, 1fr) auto auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .72);
+    border: 1px solid rgba(7, 7, 7, .06);
+}
+
+.critical-stock-product {
+    display: grid;
+    gap: 2px;
+    color: var(--black);
+    text-decoration: none;
+}
+
+.critical-stock-product small {
+    color: var(--muted);
+    font-weight: 800;
+}
+
+.critical-stock-restock {
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: #090909;
+    background: var(--yellow);
+    text-decoration: none;
+    font-weight: 900;
+}
+
 .badge-stock-low {
     color: #4d3900;
     background: #ffe28a;
@@ -920,6 +998,21 @@ select.is-combobox-native {
     font: inherit;
     font-weight: 900;
     cursor: pointer;
+}
+
+.row-actions button.btn,
+.row-actions .action-link-button {
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: #080808;
+    background: var(--yellow);
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.row-actions button.btn-dark {
+    color: #fff;
+    background: var(--black);
 }
 
 .operation-lines {
@@ -1579,7 +1672,8 @@ select.is-combobox-native {
     .stock-form,
     .lines-grid,
     .data-table > div,
-    .data-table .table-head {
+    .data-table .table-head,
+    .critical-stock-row {
         grid-template-columns: 1fr;
     }
 

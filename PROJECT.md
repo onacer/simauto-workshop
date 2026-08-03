@@ -252,12 +252,16 @@ Routes d'action:
 - `POST /products/new`: ajoute un produit.
 - `POST /stock/in`: ajoute une entree de stock.
 - `POST /operations/new`: cree une operation garage et redirige vers la facture.
+- `POST /operations/{id}/confirm`: confirme un devis brouillon en bon de commande, avec CSRF, sans mouvement de stock.
+- `POST /operations/{id}/invoice`: transforme un bon de commande confirme en facture, avec CSRF, controle et sortie de stock transactionnels.
+- `POST /operations/{id}/invoice-direct`: transforme directement un devis brouillon en bon de commande puis facture, avec un seul decrement de stock.
 
 Routes documentaires:
 
 - `GET /document/{id}`: affiche le document imprimable universel selon son type: devis, bon de commande ou facture.
 - `GET /invoice/{id}`: alias historique de `/document/{id}` conserve pour compatibilite.
 - `GET /receipt/{id}`: affiche un ticket receipt imprimable, uniquement pour les factures.
+- `POST /documents/{id}/confirm` et `POST /documents/{id}/invoice`: anciens endpoints conserves pour compatibilite, proteges par le meme token CSRF `operation_action`.
 
 Chaque route verifie la session avec la methode privee:
 
@@ -640,7 +644,7 @@ L'application:
 1. Augmente `products.stock_qty`.
 2. Cree un mouvement `in` dans `stock_movements`.
 
-Chaque entree de stock peut etre liee a un fournisseur et a un prix d'achat reel. Les sorties de stock sont faites au moment de la confirmation du bon de commande ou, si aucun bon n'a encore applique le stock, au moment de la facturation.
+Chaque entree de stock peut etre liee a un fournisseur et a un prix d'achat reel. Les sorties de stock sont faites uniquement au moment de la facturation. La confirmation du devis en bon de commande ne touche pas au stock.
 
 Controle de coherence:
 
@@ -714,16 +718,16 @@ Exemple avec TVA 20%:
 Cycle:
 
 1. Devis `quote`: numero `DEV/YYYYMM/1`, aucun mouvement de stock.
-2. Bon de commande `order`: numero `BC/YYYYMM/1`, cree depuis le devis, verification du stock, sortie de stock et mouvements `out` dans la meme transaction.
-3. Facture `invoice`: numero `INV/YYYYMM/1`; si le bon de commande source a deja applique le stock, la facture ne decremente pas une deuxieme fois.
+2. Bon de commande `order`: numero `BC/YYYYMM/1`, cree depuis le devis, aucun mouvement de stock.
+3. Facture `invoice`: numero `INV/YYYYMM/1`, verification du stock, sortie de stock et mouvements `out` dans la meme transaction.
 
-Un devis peut etre facture directement: l'application cree la commande intermediaire puis la facture. Dans ce flux direct, si le stock n'a pas encore ete applique par un bon de commande explicite, le decrement est fait une seule fois pendant la facturation. Si le stock est insuffisant, rien n'est ecrit.
+Un devis peut etre facture directement: l'application cree la commande intermediaire puis la facture. Dans ce flux direct, le decrement est fait une seule fois pendant la facturation. Si le stock est insuffisant, rien n'est ecrit.
 
 Regles de stock dans le cycle documentaire:
 
 - le devis ne decremente jamais le stock;
-- le bon de commande decremente le stock par produit stockable et cree un mouvement `out` avec la note `Bon de commande {numero}`;
-- la facture decremente le stock seulement si le document source n'a pas deja applique le stock, avec un mouvement `out` note `Facture {numero}`;
+- le bon de commande ne decremente jamais le stock;
+- la facture decremente le stock par produit stockable et cree un mouvement `out` avec la note `Facture {numero}`;
 - avant tout decrement, l'application agrege les quantites par produit stockable et refuse toute la transaction si au moins un stock est insuffisant;
 - les lignes de type service, les produits `service` et les lignes libres ne creent aucun mouvement;
 - `operations.stock_decremented_at` sert de garde-fou pour ne jamais retirer le stock deux fois sur la meme chaine documentaire;
@@ -836,7 +840,7 @@ Barre de navigation commune:
 
 Dashboard principal.
 
-Affiche quatre cartes:
+Affiche cinq cartes:
 
 - produits,
 - stock,
@@ -845,13 +849,14 @@ Affiche quatre cartes:
 
 Chaque carte ouvre une page dediee.
 
-En haut du dashboard, les roles admin et manager voient aussi l'etat critique du stock:
+Le dashboard inclut une 5e carte KPI cliquable `Stock critique` visible par admin et manager:
 
-- si des produits stockables actifs ont `min_qty > 0` et `stock_qty <= min_qty`, une alerte les liste avec nom, reference interne ou SKU, stock actuel et seuil;
+- si des produits stockables actifs ont `min_qty > 0` et `stock_qty <= min_qty`, la carte affiche leur nombre;
+- au clic, un collapse ferme par defaut liste nom, reference interne ou SKU, stock actuel et seuil;
 - les ruptures (`stock_qty <= 0`) sont affichees avant les produits simplement sous seuil;
 - chaque ligne propose un lien vers la fiche produit et un lien vers `/stock` pour le reapprovisionnement;
-- si aucun produit n'est critique, le dashboard affiche un message vert `Stock sain`;
-- la carte `Stock` affiche un badge avec le nombre de produits critiques.
+- si aucun produit n'est critique, la carte affiche `0` et le collapse indique `Stock sain`;
+- l'ancien bandeau rouge pleine largeur a ete retire.
 
 ### `templates/app/products.html.twig`
 
@@ -908,12 +913,13 @@ Historique filtrable des documents:
 - barre de recherche,
 - filtres type, dates et paiement,
 - tableau avec badges de type,
-- actions afficher, imprimer et receipt pour factures.
+- actions partagees via `_operation_actions.html.twig`: afficher, modifier si devis brouillon, confirmer, facturer, imprimer et receipt pour factures.
 
 ### `templates/app/operation_show.html.twig`
 
 Fiche detail lecture seule d'une operation:
 
+- barre d'actions partagee via `_operation_actions.html.twig`,
 - informations principales,
 - lignes,
 - totaux,
@@ -925,8 +931,7 @@ Fiche detail lecture seule d'une operation:
 Page facturation:
 
 - liste des operations,
-- lien facture,
-- lien receipt.
+- actions partagees via `_operation_actions.html.twig`: afficher, modifier si devis brouillon, confirmer/facturer selon l'etat, imprimer, receipt.
 
 ### `templates/app/report_finance.html.twig`
 
@@ -1267,6 +1272,7 @@ Convention UI des actions:
 Templates d'action:
 
 - `templates/app/_action_button.html.twig`: composant Twig commun pour rendre une action active ou desactivee.
+- `templates/app/_operation_actions.html.twig`: barre d'actions documentaire commune a la fiche operation, l'historique et la page facturation. Les progressions sont des formulaires POST avec token CSRF `operation_action`; les actions contextuellement impossibles restent visibles mais desactivees avec un motif au survol.
 
 ## Mode Impression
 
