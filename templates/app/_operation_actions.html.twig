@@ -1,0 +1,107 @@
+{% set token = operation_action_token|default('') %}
+{% set compact = compact|default(false) %}
+{% set show_view = show_view|default(false) %}
+{% set show_edit = show_edit|default(true) %}
+{% set show_print = show_print|default(true) %}
+{% set show_receipt = show_receipt|default(true) %}
+{% set show_back = show_back|default(false) %}
+{% set include_delete = include_delete|default(false) %}
+{% set can_progress = can('progress_document', user) %}
+{% set can_edit = can_edit_document(user, operation) %}
+{% set is_draft_quote = operation.doc_type == 'quote' and operation.status == 'draft' %}
+{% set is_ready_order = operation.doc_type == 'order' and operation.status == 'confirmed' %}
+{% set disabled_reason = operation.doc_type == 'quote' and operation.status == 'draft' ? 'access.admin_only'|trans : 'access.document_locked'|trans %}
+
+<span class="row-actions operation-actions {{ compact ? 'operation-actions-compact' : '' }}">
+    {% if show_view %}
+        <a href="{{ path('app_operation_show', (back_query|default({}))|merge({id: operation.id})) }}">{{ 'ui.show'|trans }}</a>
+    {% endif %}
+
+    {% if show_edit %}
+        {% include 'app/_action_button.html.twig' with {
+            label: 'ui.edit'|trans,
+            url: path('app_operation_edit', {id: operation.id}),
+            active: can_edit,
+            user: user,
+            force_disabled: not can_edit,
+            class: compact ? '' : 'btn btn-primary',
+            reason: disabled_reason
+        } only %}
+    {% endif %}
+
+    {% if operation.doc_type == 'quote' %}
+        {% if is_draft_quote and can_progress %}
+            <form class="inline-form operation-action-form" method="post" action="{{ path('app_operation_confirm', {id: operation.id}) }}">
+                <input type="hidden" name="_token" value="{{ token }}">
+                <button class="{{ compact ? 'link-button action-link-button' : 'btn btn-primary' }}" type="submit">{{ 'operations.workflow.confirm'|trans }}</button>
+            </form>
+            <form class="inline-form operation-action-form" method="post" action="{{ path('app_operation_invoice_direct', {id: operation.id}) }}">
+                <input type="hidden" name="_token" value="{{ token }}">
+                <button class="{{ compact ? 'link-button action-link-button' : 'btn btn-primary' }}" type="submit">{{ 'operations.workflow.invoice_direct'|trans }}</button>
+            </form>
+        {% else %}
+            {% include 'app/_action_button.html.twig' with {
+                label: 'operations.workflow.confirm'|trans,
+                active: false,
+                user: user,
+                force_disabled: true,
+                class: compact ? '' : 'btn btn-primary',
+                reason: is_draft_quote ? 'access.denied'|trans : 'access.document_locked'|trans
+            } only %}
+            {% include 'app/_action_button.html.twig' with {
+                label: 'operations.workflow.invoice_direct'|trans,
+                active: false,
+                user: user,
+                force_disabled: true,
+                class: compact ? '' : 'btn btn-primary',
+                reason: is_draft_quote ? 'access.denied'|trans : 'access.document_locked'|trans
+            } only %}
+        {% endif %}
+    {% elseif operation.doc_type == 'order' %}
+        {% if is_ready_order and can_progress %}
+            <form class="inline-form operation-action-form" method="post" action="{{ path('app_operation_invoice', {id: operation.id}) }}">
+                <input type="hidden" name="_token" value="{{ token }}">
+                <button class="{{ compact ? 'link-button action-link-button' : 'btn btn-primary' }}" type="submit">{{ 'operations.workflow.invoice'|trans }}</button>
+            </form>
+        {% else %}
+            {% include 'app/_action_button.html.twig' with {
+                label: 'operations.workflow.invoice'|trans,
+                active: false,
+                user: user,
+                force_disabled: true,
+                class: compact ? '' : 'btn btn-primary',
+                reason: 'access.document_locked'|trans
+            } only %}
+        {% endif %}
+    {% endif %}
+
+    {% if show_print %}
+        <a class="{{ compact ? '' : 'btn btn-primary' }}" href="{{ path('app_document', {id: operation.id}) }}" target="_blank" rel="noopener">{{ 'documents.print'|trans }}</a>
+    {% endif %}
+
+    {% if show_receipt and operation.doc_type == 'invoice' %}
+        <a class="{{ compact ? '' : 'btn btn-primary' }}" href="{{ path('app_receipt', {id: operation.id}) }}">{{ 'billing.receipt'|trans }}</a>
+    {% endif %}
+
+    {% if include_delete %}
+        {% if can('delete', user) and is_draft_quote %}
+            <form class="inline-form" method="post" action="{{ path('app_record_state', {entity: 'operation', id: operation.id, action: 'delete'}) }}" onsubmit="return confirm('{{ 'ui.confirm_delete'|trans|e('js') }}')">
+                <input type="hidden" name="_token" value="{{ record_token|default('') }}">
+                <button class="btn btn-dark" type="submit">{{ 'ui.delete'|trans }}</button>
+            </form>
+        {% else %}
+            {% include 'app/_action_button.html.twig' with {
+                label: 'ui.delete'|trans,
+                active: false,
+                user: user,
+                force_disabled: true,
+                class: compact ? '' : 'btn btn-dark',
+                reason: is_draft_quote ? 'access.admin_only'|trans : 'access.document_locked'|trans
+            } only %}
+        {% endif %}
+    {% endif %}
+
+    {% if show_back %}
+        <a class="btn btn-dark" href="{{ path('app_operations_history', back_query|default({})) }}">{{ 'ui.back'|trans }}</a>
+    {% endif %}
+</span>
