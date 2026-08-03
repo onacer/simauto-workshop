@@ -130,10 +130,8 @@ final class AppDatabaseTest extends TestCase
         self::assertSame(0, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
 
         $orderId = $db->confirmQuote($quoteId, 1);
-        $order = $db->operation($orderId);
-        self::assertSame(12, (int) $db->product($productId)['stock_qty']);
-        self::assertSame(1, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
-        self::assertSame('Bon de commande ' . $order['order_no'], $pdo->query("SELECT note FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+        self::assertSame(15, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(0, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
 
         $operationId = $db->invoiceDocument($orderId, 1);
 
@@ -143,7 +141,7 @@ final class AppDatabaseTest extends TestCase
 
         self::assertSame(12, (int) $product['stock_qty']);
         self::assertSame(3, (int) $outMovement['quantity']);
-        self::assertSame('Bon de commande ' . $order['order_no'], $outMovement['note']);
+        self::assertSame('Facture ' . $operation['invoice_no'], $outMovement['note']);
         self::assertSame('invoice', $operation['doc_type']);
         self::assertStringStartsWith('INV/' . date('Ym') . '/', $operation['invoice_no']);
         self::assertSame('003151412000082', $operation['client_ice']);
@@ -350,13 +348,18 @@ final class AppDatabaseTest extends TestCase
             $html = $this->renderTemplate('app/index.html.twig', $context + ['user' => ['role' => $role, 'name' => $role]]);
             self::assertStringContainsString('Low threshold product', $html);
             self::assertStringContainsString('2 produit(s) a reapprovisionner', $html);
+            self::assertStringContainsString('Stock critique', $html);
+            self::assertStringContainsString('data-critical-stock-toggle', $html);
+            self::assertStringContainsString('data-critical-stock-panel hidden', $html);
             self::assertStringContainsString('dashboard-badge', $html);
+            self::assertStringNotContainsString('stock-alert-danger', $html);
         }
 
         $healthyDb = $this->database();
         $healthyHtml = $this->renderTemplate('app/index.html.twig', $healthyDb->dashboardData() + ['user' => ['role' => 'admin', 'name' => 'Admin']]);
         self::assertStringContainsString('Stock sain', $healthyHtml);
-        self::assertStringNotContainsString('stock-alert-danger', $healthyHtml);
+        self::assertStringContainsString('dashboard-badge-ok', $healthyHtml);
+        self::assertStringNotContainsString('stock-alert', $healthyHtml);
     }
 
     public function testProductValidationRejectsDuplicateSkuAndNegativePrices(): void
@@ -820,6 +823,20 @@ SQL);
             'back_query' => ['doc_type' => 'quote'],
         ]);
         self::assertStringContainsString('/app_operation_edit/' . $draftQuoteId, $draftQuoteHtml);
+        self::assertStringContainsString('method="post"', $draftQuoteHtml);
+        self::assertStringContainsString('/app_operation_confirm/' . $draftQuoteId, $draftQuoteHtml);
+        self::assertStringContainsString('/app_operation_invoice_direct/' . $draftQuoteId, $draftQuoteHtml);
+
+        $historyHtml = $this->renderTemplate('app/operations_history.html.twig', [
+            'user' => ['role' => 'manager', 'name' => 'Manager'],
+            'operations' => [$db->operation($draftQuoteId)],
+            'result_total' => 1,
+            'is_limited' => false,
+            'operation_action_token' => 'token',
+            'filters' => ['q' => '', 'doc_type' => '', 'from' => '', 'to' => '', 'payment' => ''],
+        ]);
+        self::assertStringContainsString('/app_operation_confirm/' . $draftQuoteId, $historyHtml);
+        self::assertStringContainsString('/app_operation_invoice_direct/' . $draftQuoteId, $historyHtml);
     }
 
     public function testDocumentEditPermissionDependsOnDraftQuoteState(): void
@@ -872,6 +889,100 @@ SQL);
 
         self::assertInstanceOf(RedirectResponse::class, $response);
         self::assertFalse($access->canEditDocument($admin, $db->operation($invoiceId)));
+    }
+
+    public function testOperationProgressPostRoutesUseCsrfAndMoveStockOnInvoiceOnly(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $access = new AccessControl();
+        $controller = new DashboardController();
+        $manager = ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager'];
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct(['sku' => 'FLOW-001', 'name' => 'Workflow product', 'category_id' => $categoryId, 'stock_qty' => 10, 'min_qty' => 1, 'purchase_price' => 10, 'sale_price' => 20], 1);
+        $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "FLOW-001"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'product_1' => $productId,
+            'product_qty_1' => 2,
+        ], 2);
+
+        $missingToken = $this->requestWithUser('/operations/' . $quoteId . '/confirm', 'POST', [], $manager);
+        $controller->setContainer($this->controllerContainer($missingToken));
+        $response = $controller->confirmOperation($quoteId, $missingToken, $db, $access);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame(1, (int) $pdo->query('SELECT COUNT(*) FROM operations')->fetchColumn());
+        self::assertSame(10, (int) $db->product($productId)['stock_qty']);
+
+        $csrf = new ReflectionMethod($controller, 'csrfToken');
+        $csrf->setAccessible(true);
+        $confirmRequest = $this->requestWithUser('/operations/' . $quoteId . '/confirm', 'POST', [], $manager);
+        $confirmRequest->request->set('_token', $csrf->invoke($controller, $confirmRequest, 'operation_action'));
+        $controller->setContainer($this->controllerContainer($confirmRequest));
+        $response = $controller->confirmOperation($quoteId, $confirmRequest, $db, $access);
+
+        $orderId = $this->id($pdo, 'SELECT id FROM operations WHERE parent_id = ' . $quoteId . ' AND doc_type = "order"');
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame($quoteId, (int) $db->operation($orderId)['parent_id']);
+        self::assertSame(10, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(0, (int) $pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId . ' AND movement_type = "out"')->fetchColumn());
+
+        $invoiceRequest = $this->requestWithUser('/operations/' . $orderId . '/invoice', 'POST', [], $manager);
+        $invoiceRequest->request->set('_token', $csrf->invoke($controller, $invoiceRequest, 'operation_action'));
+        $controller->setContainer($this->controllerContainer($invoiceRequest));
+        $response = $controller->invoiceOperation($orderId, $invoiceRequest, $db, $access);
+
+        $invoiceId = $this->id($pdo, 'SELECT id FROM operations WHERE parent_id = ' . $orderId . ' AND doc_type = "invoice"');
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame('invoice', $db->operation($invoiceId)['doc_type']);
+        self::assertSame(8, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(1, (int) $pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId . ' AND movement_type = "out"')->fetchColumn());
+        self::assertSame([], $db->stockConsistencyIssues());
+    }
+
+    public function testDirectInvoiceRouteBuildsFullChainAndRejectsDoubleActions(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $access = new AccessControl();
+        $controller = new DashboardController();
+        $manager = ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager'];
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        $db->saveProduct(['sku' => 'DIRECT-ROUTE', 'name' => 'Direct route product', 'category_id' => $categoryId, 'stock_qty' => 5, 'min_qty' => 1, 'purchase_price' => 10, 'sale_price' => 20], 1);
+        $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "DIRECT-ROUTE"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId,
+            'vehicle_id' => $vehicleId,
+            'payment_method' => 'ESP',
+            'product_1' => $productId,
+            'product_qty_1' => 3,
+        ], 2);
+        $csrf = new ReflectionMethod($controller, 'csrfToken');
+        $csrf->setAccessible(true);
+
+        $request = $this->requestWithUser('/operations/' . $quoteId . '/invoice-direct', 'POST', [], $manager);
+        $request->request->set('_token', $csrf->invoke($controller, $request, 'operation_action'));
+        $controller->setContainer($this->controllerContainer($request));
+        $response = $controller->invoiceDirectOperation($quoteId, $request, $db, $access);
+
+        $orderId = $this->id($pdo, 'SELECT id FROM operations WHERE parent_id = ' . $quoteId . ' AND doc_type = "order"');
+        $invoiceId = $this->id($pdo, 'SELECT id FROM operations WHERE parent_id = ' . $orderId . ' AND doc_type = "invoice"');
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame(2, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(1, (int) $pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId . ' AND movement_type = "out"')->fetchColumn());
+
+        $repeat = $this->requestWithUser('/operations/' . $invoiceId . '/invoice', 'POST', [], $manager);
+        $repeat->request->set('_token', $csrf->invoke($controller, $repeat, 'operation_action'));
+        $controller->setContainer($this->controllerContainer($repeat));
+        $controller->invoiceOperation($invoiceId, $repeat, $db, $access);
+
+        self::assertSame(2, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(1, (int) $pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId . ' AND movement_type = "out"')->fetchColumn());
     }
 
     public function testFinancialMarginsForProductsServicesAndEstimatedLines(): void
@@ -2140,6 +2251,7 @@ SQL);
             'dashboard.stock_alert_product_link' => 'Fiche',
             'dashboard.stock_alert_restock_link' => 'Reappro',
             'dashboard.stock_healthy' => 'Stock sain',
+            'dashboard.critical_stock' => 'Stock critique',
             'dashboard.products' => 'Produits',
             'dashboard.products_count' => '%count% produit(s)',
             'dashboard.stock' => 'Stock',
