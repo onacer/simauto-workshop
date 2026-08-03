@@ -130,8 +130,10 @@ final class AppDatabaseTest extends TestCase
         self::assertSame(0, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
 
         $orderId = $db->confirmQuote($quoteId, 1);
-        self::assertSame(15, (int) $db->product($productId)['stock_qty']);
-        self::assertSame(0, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+        $order = $db->operation($orderId);
+        self::assertSame(12, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(1, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+        self::assertSame('Bon de commande ' . $order['order_no'], $pdo->query("SELECT note FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
 
         $operationId = $db->invoiceDocument($orderId, 1);
 
@@ -141,7 +143,7 @@ final class AppDatabaseTest extends TestCase
 
         self::assertSame(12, (int) $product['stock_qty']);
         self::assertSame(3, (int) $outMovement['quantity']);
-        self::assertSame('Facture ' . $operation['invoice_no'], $outMovement['note']);
+        self::assertSame('Bon de commande ' . $order['order_no'], $outMovement['note']);
         self::assertSame('invoice', $operation['doc_type']);
         self::assertStringStartsWith('INV/' . date('Ym') . '/', $operation['invoice_no']);
         self::assertSame('003151412000082', $operation['client_ice']);
@@ -182,11 +184,12 @@ final class AppDatabaseTest extends TestCase
         ], 1);
         $invoiceId = $db->invoiceDocument($quoteId, 1);
         $invoice = $db->operation($invoiceId);
+        $order = $db->operation((int) $invoice['parent_id']);
 
         self::assertSame(6, (int) $db->product($productId)['stock_qty']);
         self::assertSame(1, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
         self::assertSame(4, (int) $pdo->query("SELECT quantity FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
-        self::assertSame('Facture ' . $invoice['invoice_no'], $pdo->query("SELECT note FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
+        self::assertSame('Bon de commande ' . $order['order_no'], $pdo->query("SELECT note FROM stock_movements WHERE product_id = $productId AND movement_type = 'out'")->fetchColumn());
     }
 
     public function testInvoiceRejectsInsufficientStockWithoutPartialWrites(): void
@@ -891,7 +894,7 @@ SQL);
         self::assertFalse($access->canEditDocument($admin, $db->operation($invoiceId)));
     }
 
-    public function testOperationProgressPostRoutesUseCsrfAndMoveStockOnInvoiceOnly(): void
+    public function testOperationProgressPostRoutesUseCsrfAndMoveStockOnOrderOnly(): void
     {
         $db = $this->database();
         $pdo = $db->pdo();
@@ -928,8 +931,8 @@ SQL);
         $orderId = $this->id($pdo, 'SELECT id FROM operations WHERE parent_id = ' . $quoteId . ' AND doc_type = "order"');
         self::assertInstanceOf(RedirectResponse::class, $response);
         self::assertSame($quoteId, (int) $db->operation($orderId)['parent_id']);
-        self::assertSame(10, (int) $db->product($productId)['stock_qty']);
-        self::assertSame(0, (int) $pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId . ' AND movement_type = "out"')->fetchColumn());
+        self::assertSame(8, (int) $db->product($productId)['stock_qty']);
+        self::assertSame(1, (int) $pdo->query('SELECT COUNT(*) FROM stock_movements WHERE product_id = ' . $productId . ' AND movement_type = "out"')->fetchColumn());
 
         $invoiceRequest = $this->requestWithUser('/operations/' . $orderId . '/invoice', 'POST', [], $manager);
         $invoiceRequest->request->set('_token', $csrf->invoke($controller, $invoiceRequest, 'operation_action'));

@@ -1142,7 +1142,7 @@ class AppDatabase
 
     public function confirmQuote(int $id, int $userId): int
     {
-        return $this->copyDocument($id, 'order', $userId, false);
+        return $this->copyDocument($id, 'order', $userId, true);
     }
 
     public function invoiceDocument(int $id, int $userId): int
@@ -1155,8 +1155,9 @@ class AppDatabase
         $this->pdo->beginTransaction();
         try {
             if ($source['doc_type'] === 'quote') {
-                $orderId = $this->copyDocument($id, 'order', $userId, false, true);
-                $invoiceId = $this->copyDocument($orderId, 'invoice', $userId, true, true);
+                $orderId = $this->copyDocument($id, 'order', $userId, true, true);
+                $order = $this->operation($orderId);
+                $invoiceId = $this->copyDocument($orderId, 'invoice', $userId, !$this->hasStockDecrement($order ?: []), true);
             } else {
                 $invoiceId = $this->copyDocument($id, 'invoice', $userId, !$this->hasStockDecrement($source), true);
             }
