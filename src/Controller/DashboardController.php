@@ -346,7 +346,10 @@ class DashboardController extends AbstractController
             return $user;
         }
 
-        return $this->render('app/billing.html.twig', $db->dashboardData() + ['user' => $user]);
+        return $this->render('app/billing.html.twig', $db->dashboardData() + [
+            'user' => $user,
+            'operation_action_token' => $this->csrfToken($request, 'operation_action'),
+        ]);
     }
 
     #[Route('/operations/history', name: 'app_operations_history', methods: ['GET'])]
@@ -382,6 +385,7 @@ class DashboardController extends AbstractController
             'operations' => $result['rows'],
             'result_total' => $result['total'],
             'is_limited' => $result['limited'],
+            'operation_action_token' => $this->csrfToken($request, 'operation_action'),
             'filters' => [
                 'q' => $filters['q'],
                 'doc_type' => $filters['doc_type'],
@@ -415,6 +419,7 @@ class DashboardController extends AbstractController
             'chain' => $db->operationDocumentChain($id),
             'back_query' => $request->query->all(),
             'record_token' => $this->csrfToken($request, 'record_state'),
+            'operation_action_token' => $this->csrfToken($request, 'operation_action'),
         ]);
     }
 
@@ -448,6 +453,24 @@ class DashboardController extends AbstractController
         return $this->redirect($request->headers->get('referer') ?: $this->generateUrl('app_dashboard'));
     }
 
+    #[Route('/operations/{id}/confirm', name: 'app_operation_confirm', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function confirmOperation(int $id, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
+    {
+        return $this->confirmDocument($id, $request, $db, $access);
+    }
+
+    #[Route('/operations/{id}/invoice', name: 'app_operation_invoice', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function invoiceOperation(int $id, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
+    {
+        return $this->invoiceOperationWithType($id, 'order', $request, $db, $access);
+    }
+
+    #[Route('/operations/{id}/invoice-direct', name: 'app_operation_invoice_direct', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function invoiceDirectOperation(int $id, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
+    {
+        return $this->invoiceOperationWithType($id, 'quote', $request, $db, $access);
+    }
+
     #[Route('/documents/{id}/confirm', name: 'app_document_confirm', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function confirmDocument(int $id, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
     {
@@ -455,16 +478,17 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'progress_document', 'app_invoice', ['id' => $id])) {
+        if ($denied = $this->denyUnlessCan($access, $user, 'progress_document', 'app_operation_show', ['id' => $id])) {
             return $denied;
         }
         try {
+            $this->verifyCsrf($request, 'operation_action');
             $orderId = $db->confirmQuote($id, (int) $user['id']);
-            $this->addFlash('success', 'تم إنشاء bon de commande');
-            return $this->redirectToRoute('app_invoice', ['id' => $orderId]);
+            $this->addFlash('success', 'operations.workflow.confirmed');
+            return $this->redirectToRoute('app_operation_show', ['id' => $orderId]);
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
-            return $this->redirectToRoute('app_invoice', ['id' => $id]);
+            return $this->redirectToRoute('app_operation_show', ['id' => $id]);
         }
     }
 
@@ -475,16 +499,46 @@ class DashboardController extends AbstractController
         if ($user instanceof RedirectResponse) {
             return $user;
         }
-        if ($denied = $this->denyUnlessCan($access, $user, 'progress_document', 'app_invoice', ['id' => $id])) {
+        if ($denied = $this->denyUnlessCan($access, $user, 'progress_document', 'app_operation_show', ['id' => $id])) {
             return $denied;
         }
         try {
+            $this->verifyCsrf($request, 'operation_action');
             $invoiceId = $db->invoiceDocument($id, (int) $user['id']);
-            $this->addFlash('success', 'تم إنشاء الفاتورة');
-            return $this->redirectToRoute('app_invoice', ['id' => $invoiceId]);
+            $this->addFlash('success', 'operations.workflow.invoiced');
+            return $this->redirectToRoute('app_operation_show', ['id' => $invoiceId]);
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
-            return $this->redirectToRoute('app_invoice', ['id' => $id]);
+            return $this->redirectToRoute('app_operation_show', ['id' => $id]);
+        }
+    }
+
+    private function invoiceOperationWithType(int $id, string $sourceType, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'progress_document', 'app_operation_show', ['id' => $id])) {
+            return $denied;
+        }
+
+        try {
+            $this->verifyCsrf($request, 'operation_action');
+            $operation = $db->operation($id);
+            if (!$operation) {
+                throw $this->createNotFoundException();
+            }
+            if (($operation['doc_type'] ?? '') !== $sourceType) {
+                throw new InvalidArgumentException($sourceType === 'order' ? 'operations.workflow.order_required' : 'operations.workflow.quote_required');
+            }
+
+            $invoiceId = $db->invoiceDocument($id, (int) $user['id']);
+            $this->addFlash('success', 'operations.workflow.invoiced');
+            return $this->redirectToRoute('app_operation_show', ['id' => $invoiceId]);
+        } catch (Throwable $e) {
+            $this->addFlash('error', $this->safeMessage($e));
+            return $this->redirectToRoute('app_operation_show', ['id' => $id]);
         }
     }
 
@@ -959,6 +1013,7 @@ class DashboardController extends AbstractController
             'user' => $user,
             'company' => $company->data(),
             'amount_words' => $formatter->money((float) $operation['total_ttc']),
+            'operation_action_token' => $this->csrfToken($request, 'operation_action'),
         ]);
     }
 

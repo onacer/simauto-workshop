@@ -12,10 +12,19 @@
             <a class="btn btn-primary" href="{{ path('app_receipt', {id: operation.id}) }}">Receipt</a>
         {% endif %}
         {% if operation.doc_type == 'quote' and operation.status == 'draft' %}
-            <form method="post" action="{{ path('app_document_confirm', {id: operation.id}) }}" class="inline-form"><button class="btn btn-primary" type="submit">Confirmer</button></form>
-            <form method="post" action="{{ path('app_document_invoice', {id: operation.id}) }}" class="inline-form"><button class="btn btn-primary" type="submit">Facturer</button></form>
-        {% elseif operation.doc_type == 'order' and operation.status == 'draft' %}
-            <form method="post" action="{{ path('app_document_invoice', {id: operation.id}) }}" class="inline-form"><button class="btn btn-primary" type="submit">Facturer</button></form>
+            <form method="post" action="{{ path('app_operation_confirm', {id: operation.id}) }}" class="inline-form">
+                <input type="hidden" name="_token" value="{{ operation_action_token|default('') }}">
+                <button class="btn btn-primary" type="submit">Confirmer</button>
+            </form>
+            <form method="post" action="{{ path('app_operation_invoice_direct', {id: operation.id}) }}" class="inline-form">
+                <input type="hidden" name="_token" value="{{ operation_action_token|default('') }}">
+                <button class="btn btn-primary" type="submit">Facturer</button>
+            </form>
+        {% elseif operation.doc_type == 'order' and operation.status == 'confirmed' %}
+            <form method="post" action="{{ path('app_operation_invoice', {id: operation.id}) }}" class="inline-form">
+                <input type="hidden" name="_token" value="{{ operation_action_token|default('') }}">
+                <button class="btn btn-primary" type="submit">Facturer</button>
+            </form>
         {% endif %}
         <button class="btn btn-primary" onclick="window.print()">Imprimer</button>
     </div>

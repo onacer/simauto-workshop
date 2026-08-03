@@ -1142,7 +1142,7 @@ class AppDatabase
 
     public function confirmQuote(int $id, int $userId): int
     {
-        return $this->copyDocument($id, 'order', $userId, true);
+        return $this->copyDocument($id, 'order', $userId, false);
     }
 
     public function invoiceDocument(int $id, int $userId): int
