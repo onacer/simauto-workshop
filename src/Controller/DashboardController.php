@@ -146,6 +146,7 @@ class DashboardController extends AbstractController
 
         return $this->render('app/stock.html.twig', $db->dashboardData() + [
             'user' => $user,
+            'stock_focus' => (int) $request->query->get('product', 0),
             'stock_adjust_token' => $this->csrfToken($request, 'stock_adjust'),
             'stock_movement_token' => $this->csrfToken($request, 'stock_movement'),
         ]);

@@ -6,6 +6,8 @@
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board">
+    {% include 'app/_flashes.html.twig' %}
+
     <section class="page-head">
         <h1>{{ 'billing.title'|trans }}</h1>
         <a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a>

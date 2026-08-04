@@ -6,9 +6,7 @@
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board compact-board">
-    {% for message in app.flashes('success') %}
-        <div class="alert alert-success">{{ message|trans }}</div>
-    {% endfor %}
+    {% include 'app/_flashes.html.twig' %}
 
     {% set critical_count = critical_stock_count|default(critical_stock_products|default([])|length) %}
     <section class="home-grid">
@@ -35,7 +33,14 @@
             <strong>{{ 'dashboard.billing'|trans }}</strong>
             <small>{{ 'dashboard.operations_count'|trans({'%count%': operations|length}) }}</small>
         </a>
-        <button class="home-card home-card-button {{ critical_count > 0 ? 'tone-critical' : 'tone-healthy' }}" type="button" data-critical-stock-toggle aria-expanded="false" aria-controls="critical-stock-panel">
+        <button
+            class="home-card home-card-button {{ critical_count > 0 ? 'tone-critical' : 'tone-healthy' }}"
+            type="button"
+            data-critical-stock-toggle
+            aria-expanded="false"
+            aria-controls="critical-stock-panel"
+            onclick="const panel=document.getElementById('critical-stock-panel');const open=this.getAttribute('aria-expanded')==='true';this.setAttribute('aria-expanded',open?'false':'true');if(panel)panel.hidden=open;"
+        >
             <span>05</span>
             <strong>{{ 'dashboard.critical_stock'|trans }} <em class="dashboard-badge {{ critical_count > 0 ? 'dashboard-badge-danger' : 'dashboard-badge-ok' }}">{{ critical_count }}</em></strong>
             <small>{{ critical_count > 0 ? 'dashboard.stock_alert_title'|trans({'%count%': critical_count}) : 'dashboard.stock_healthy'|trans }}</small>
@@ -56,7 +61,7 @@
                         </a>
                         <span>{{ 'stock.current'|trans }}: {{ product.stock_qty }}</span>
                         <span>{{ 'stock.minimum'|trans }}: {{ product.min_qty }}</span>
-                        <a class="critical-stock-restock" href="{{ path('app_stock') }}">{{ 'dashboard.stock_alert_restock_link'|trans }}</a>
+                        <a class="critical-stock-restock" href="{{ path('app_stock', {product: product.id}) }}">{{ 'dashboard.stock_alert_restock_link'|trans }}</a>
                     </div>
                 {% endfor %}
             </div>

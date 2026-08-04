@@ -20,7 +20,7 @@
                 <select name="product_id" required data-combobox>
                     {% for product in products %}
                         {% set product_ref = product.ref_company ?: (product.ref_universal ?: product.sku) %}
-                        <option value="{{ product.id }}" data-search="{{ (product.ref_company ~ ' ' ~ product.ref_universal ~ ' ' ~ product.sku ~ ' ' ~ product.name)|lower }}">[{{ product_ref }}] {{ product.name }} - {{ product.stock_qty }}</option>
+                        <option value="{{ product.id }}" data-search="{{ (product.ref_company ~ ' ' ~ product.ref_universal ~ ' ' ~ product.sku ~ ' ' ~ product.name)|lower }}" {{ stock_focus|default(0) == product.id ? 'selected' : '' }}>[{{ product_ref }}] {{ product.name }} - {{ product.stock_qty }}</option>
                     {% endfor %}
                 </select>
             </label>

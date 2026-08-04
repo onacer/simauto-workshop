@@ -1001,8 +1001,10 @@ select.is-combobox-native {
 }
 
 .row-actions button.btn,
-.row-actions .action-link-button {
+.row-actions .action-link-button,
+.operation-actions .operation-action-form button {
     padding: 6px 10px;
+    border: 0;
     border-radius: 8px;
     color: #080808;
     background: var(--yellow);

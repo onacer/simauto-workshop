@@ -15,6 +15,8 @@
 {% include 'app/_topbar.html.twig' with {user: user} %}
 
 <main class="main-board">
+    {% include 'app/_flashes.html.twig' %}
+
     <section class="page-head">
         <h1>{{ operation.document_title }} {{ operation.document_no }}</h1>
         {% include 'app/_operation_actions.html.twig' with {

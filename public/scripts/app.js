@@ -137,6 +137,7 @@ document.addEventListener("DOMContentLoaded", () => {
     syncReportFilters();
 
     document.querySelectorAll("[data-critical-stock-toggle]").forEach((button) => {
+        if (button.hasAttribute("onclick")) return;
         const panelId = button.getAttribute("aria-controls");
         const panel = panelId ? document.getElementById(panelId) : document.querySelector("[data-critical-stock-panel]");
         if (!panel) return;
