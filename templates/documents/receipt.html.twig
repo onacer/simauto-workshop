@@ -1,12 +1,17 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ operation.receipt_no }} - Receipt{% endblock %}
+{% block title %}{{ operation.document_no }} - SIM Auto{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>@page { size: 80mm auto; margin: 0; }</style>
+{% endblock %}
 
 {% block body %}
 <main class="receipt-page">
     <div class="doc-actions">
-        <a class="btn btn-dark" href="{{ path('app_invoice', {id: operation.id}) }}">فاتورة</a>
-        <button class="btn btn-primary" onclick="window.print()">طباعة</button>
+        <a class="btn btn-dark" href="{{ path('app_operation_show', {id: operation.id}) }}">{{ 'ui.back'|trans }}</a>
+        <button class="btn btn-primary" onclick="window.print()">{{ 'documents.print'|trans }}</button>
     </div>
 
     <section class="receipt-ticket">
@@ -15,30 +20,30 @@
         <p>{{ company.service_line_1 }}</p>
         <p>{{ company.address }}</p>
         <hr>
-        <div class="receipt-row"><span>Receipt</span><b>{{ operation.receipt_no }}</b></div>
-        <div class="receipt-row"><span>Date</span><b>{{ operation.created_at|date('d/m/Y H:i') }}</b></div>
+        <p class="receipt-number" dir="ltr">N° {{ operation.document_no }}</p>
+        <div class="receipt-row"><span>Date</span><b dir="ltr">{{ operation.created_at|date('d/m/Y H:i') }}</b></div>
         <div class="receipt-row"><span>Client</span><b>{{ operation.client_real_name ?: operation.client_name }}</b></div>
-        <div class="receipt-row"><span>Vehicule</span><b>{{ operation.brand_name ?: operation.vehicle_brand }} {{ operation.model_name ?: operation.vehicle_model }}</b></div>
-        <div class="receipt-row"><span>Matricule</span><b>{{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</b></div>
+        <div class="receipt-row"><span>Véhicule</span><b>{{ operation.brand_name ?: operation.vehicle_brand }} {{ operation.model_name ?: operation.vehicle_model }}</b></div>
+        <div class="receipt-row"><span>Matricule</span><b dir="ltr">{{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</b></div>
         <hr>
         {% for item in operation.items %}
             <div class="ticket-line">
                 <span>{% if item.product_sku %}{{ item.product_sku }} - {% endif %}{{ item.label }}</span>
-                <small>{{ item.quantity }} x {{ item.unit_price|number_format(0, ',', ' ') }}</small>
-                <b>{{ item.total|number_format(0, ',', ' ') }} DH</b>
+                <small dir="ltr">{{ item.quantity }} x {{ item.unit_price|money(0) }}</small>
+                <b>{{ item.total|money(0) }}</b>
             </div>
         {% endfor %}
         <hr>
         <div class="receipt-total">
             <span>TOTAL</span>
-            <strong>{{ operation.total_ttc|default(operation.total)|number_format(0, ',', ' ') }} DH</strong>
+            <strong>{{ operation.total_ttc|default(operation.total)|money(0) }}</strong>
         </div>
         <div class="receipt-row"><span>Paiement</span><b>{{ operation.payment_label }}</b></div>
         {% if operation.check_number %}
             <div class="receipt-row"><span>Cheque</span><b>{{ operation.check_number }}</b></div>
         {% endif %}
         <hr>
-        <p class="thanks">شكرا لزيارتكم</p>
+        <p class="thanks">Merci pour votre visite<br>شكرا لزيارتكم</p>
         <p>{{ company.contact }}</p>
     </section>
 </main>

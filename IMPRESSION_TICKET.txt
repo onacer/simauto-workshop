@@ -1,0 +1,6 @@
+IMPRESSION DU TICKET SIM AUTO
+
+Dans les propriétés du pilote Windows de l'imprimante WD LINK, sélectionner le
+format de papier « 80(80) x 3276 mm » (ou l'équivalent 80 mm continu), sans marge
+et à l'échelle 100 %. Le ticket web cible 80 mm. Pour un rouleau utile de 72 mm,
+ajouter la classe CSS `ticket-72mm` au conteneur `.receipt-ticket`.
