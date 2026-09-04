@@ -441,6 +441,24 @@ class AppDatabase
         return $stmt->fetchAll();
     }
 
+    public function stockSituation(array $filters): array
+    {
+        $rows = $this->products($filters);
+        $from = (string) ($filters['from'] ?? '');
+        $to = (string) ($filters['to'] ?? '');
+        if ($from !== '' && $to !== '') {
+            $rows = array_values(array_filter($rows, static fn (array $row): bool =>
+                substr((string) ($row['created_at'] ?? ''), 0, 10) >= $from
+                && substr((string) ($row['created_at'] ?? ''), 0, 10) <= $to
+            ));
+        }
+        foreach ($rows as &$row) {
+            $row['stock_value'] = round((float) $row['stock_qty'] * (float) $row['purchase_price'], 2);
+        }
+        unset($row);
+        return $rows;
+    }
+
     public function criticalStockProducts(): array
     {
         return $this->pdo->query(
@@ -1339,14 +1357,18 @@ class AppDatabase
 
         $operation = $this->decorateOperation($operation);
         $items = $this->pdo->prepare(
-            'SELECT oi.*, p.sku AS product_sku
+            'SELECT oi.*, p.sku AS product_sku, p.product_type, p.purchase_price
              FROM operation_items oi
              LEFT JOIN products p ON p.id = oi.product_id
              WHERE oi.operation_id = :id
              ORDER BY oi.id'
         );
         $items->execute(['id' => $id]);
-        $operation['items'] = $items->fetchAll();
+        $operation['items'] = array_map(
+            fn (array $line): array => LineMarginCalculator::decorate($line, (float) $operation['vat_rate']),
+            $items->fetchAll()
+        );
+        $operation['total_margin'] = round(array_sum(array_column($operation['items'], 'margin')), 2);
 
         return $operation;
     }
@@ -1643,12 +1665,9 @@ class AppDatabase
         $productType = (string) ($data['product_type'] ?? 'stockable');
         $productType = in_array($productType, ['stockable', 'service'], true) ? $productType : 'stockable';
         $marginMode = (string) ($data['margin_mode'] ?? 'manual');
-        $marginRate = in_array($marginMode, ['135', '145', '155'], true) ? (float) $marginMode : null;
+        $marginRate = PricingCalculator::supportedMargin($marginMode);
         if ($marginRate !== null) {
-            $expected = round($purchasePrice * ($marginRate / 100), 2);
-            if (abs($salePrice - $expected) <= 0.01 || $salePrice <= 0) {
-                $salePrice = $expected;
-            }
+            $salePrice = PricingCalculator::priceFromMargin($purchasePrice, $marginRate);
         }
 
         if ($sku === '' || $name === '' || $categoryId <= 0) {
@@ -1704,6 +1723,7 @@ class AppDatabase
         $linePrices = $data['line_unit_price'] ?? [];
         $lineDiscounts = $data['line_discount'] ?? [];
         $lineMarginModes = $data['line_margin_mode'] ?? [];
+        $lineTypes = $data['line_type'] ?? [];
 
         if (is_array($lineProducts) || is_array($lineLabels)) {
             $count = max(
@@ -1718,16 +1738,22 @@ class AppDatabase
                 $price = (float) ($linePrices[$i] ?? 0);
                 $discount = (float) ($lineDiscounts[$i] ?? 0);
                 $marginMode = (string) ($lineMarginModes[$i] ?? 'manual');
+                $requestedType = (string) ($lineTypes[$i] ?? '');
 
                 if ($productId > 0) {
                     $product = $this->product($productId);
                     if (!$product || (int) ($product['active'] ?? 0) !== 1) {
                         throw new InvalidArgumentException('Produit invalide');
                     }
+                    $actualType = ($product['product_type'] ?? 'stockable') === 'service' ? 'service' : 'product';
+                    if ($requestedType !== '' && $requestedType !== $actualType) {
+                        throw new InvalidArgumentException('Type de ligne invalide');
+                    }
                     $label = $label !== '' ? $label : (string) $product['name'];
                     $canUseMargin = (string) ($product['product_type'] ?? 'stockable') !== 'service' && (float) ($product['purchase_price'] ?? 0) > 0;
-                    if ($canUseMargin && in_array($marginMode, ['135', '145', '155'], true)) {
-                        $price = round((float) $product['purchase_price'] * ((float) $marginMode / 100), 2);
+                    $marginRate = PricingCalculator::supportedMargin($marginMode);
+                    if ($canUseMargin && $marginRate !== null) {
+                        $price = PricingCalculator::priceFromMargin((float) $product['purchase_price'], $marginRate);
                     }
                     if ($price <= 0) {
                         $price = (float) $product['sale_price'];
@@ -1736,6 +1762,9 @@ class AppDatabase
 
                 if ($productId <= 0 && $label === '' && $qty <= 0 && $price <= 0) {
                     continue;
+                }
+                if ($productId <= 0 && $requestedType === 'product') {
+                    throw new InvalidArgumentException('Un produit stockable est obligatoire');
                 }
                 if ($qty <= 0 || $price < 0 || $discount < 0 || $discount > 100 || $label === '') {
                     throw new InvalidArgumentException('Ligne operation invalide');
@@ -1867,34 +1896,7 @@ class AppDatabase
 
     private function decorateFinancialLine(array $line, float $vatRate): array
     {
-        $quantity = (float) ($line['quantity'] ?? 0);
-        $totalHt = round((float) ($line['total_ht'] ?? $line['total'] ?? 0), 2);
-        $productId = (int) ($line['product_id'] ?? 0);
-        $productType = (string) ($line['product_type'] ?? '');
-        $isMissingProduct = $productId <= 0 || $productType === '';
-        $isStockableProduct = !$isMissingProduct
-            && (string) ($line['line_type'] ?? '') === 'product'
-            && $productType === 'stockable';
-
-        $costHt = 0.0;
-        if ($isStockableProduct) {
-            $purchasePriceTtc = (float) ($line['purchase_price'] ?? 0);
-            $factor = 1 + (max(0, $vatRate) / 100);
-            $unitCostHt = $factor > 0 ? $purchasePriceTtc / $factor : $purchasePriceTtc;
-            $costHt = round($unitCostHt * $quantity, 2);
-        }
-
-        $margin = round($totalHt - $costHt, 2);
-        $line['product_type'] = $productType ?: null;
-        $line['quantity'] = $quantity;
-        $line['unit_price'] = (float) ($line['unit_price'] ?? 0);
-        $line['total_ht'] = $totalHt;
-        $line['cost_ht'] = $costHt;
-        $line['margin'] = $margin;
-        $line['margin_rate'] = $totalHt > 0 ? round(($margin / $totalHt) * 100, 2) : 0.0;
-        $line['is_estimated'] = $isMissingProduct;
-
-        return $line;
+        return LineMarginCalculator::decorate($line, $vatRate);
     }
 
     public function vehicle(int $id): ?array

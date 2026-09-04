@@ -1,0 +1,13 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ 'stock.situation'|trans }} - SIM Auto{% endblock %}
+{% block stylesheets %}{{ parent() }}<style>@page { size: A4 landscape; margin: 8mm; }</style>{% endblock %}
+{% block body %}
+<main class="stock-export-sheet" dir="ltr">
+    <div class="doc-actions"><button class="btn btn-primary" onclick="window.print()">{{ 'documents.print'|trans }}</button></div>
+    <header><h1>SIM Auto — {{ 'stock.situation'|trans }}</h1><p>{{ 'ui.date'|trans }}: {{ 'now'|date('d/m/Y H:i') }} · {{ filters.from }} → {{ filters.to }}</p></header>
+    <table class="stock-export-table"><thead><tr><th>SKU</th><th>{{ 'products.ref_company'|trans }}</th><th>{{ 'products.ref_universal'|trans }}</th><th>{{ 'products.name'|trans }}</th><th>{{ 'products.category'|trans }}</th><th>{{ 'products.type'|trans }}</th><th>{{ 'stock.current'|trans }}</th><th>{{ 'products.min_qty'|trans }}</th><th>{{ 'products.purchase_price'|trans }}</th><th>{{ 'products.sale_price'|trans }}</th><th>{{ 'stock.value'|trans }}</th></tr></thead>
+    <tbody>{% for row in rows %}<tr><td>{{ row.sku }}</td><td>{{ row.ref_company }}</td><td>{{ row.ref_universal }}</td><td>{{ row.name }}</td><td>{{ row.category_name ?: row.category }}</td><td>{{ ('products.' ~ row.product_type)|trans }}</td><td>{{ row.stock_qty }}</td><td>{{ row.min_qty }}</td><td>{{ row.purchase_price|money }}</td><td>{{ row.sale_price|money }}</td><td>{{ row.stock_value|money }}</td></tr>{% endfor %}</tbody>
+    <tfoot><tr><th colspan="10">TOTAL</th><th>{{ total_value|money }}</th></tr></tfoot></table>
+    <footer>{{ company.address }} · {{ company.contact }}</footer>
+</main>
+{% endblock %}

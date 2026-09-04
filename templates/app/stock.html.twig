@@ -15,6 +15,22 @@
     {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
 
     <section class="panel">
+        <form method="get" class="form-grid">
+            <label>{{ 'stock.period'|trans }}<select name="preset"><option value="today" {{ stock_filters.preset == 'today' ? 'selected' : '' }}>{{ 'reports.preset.today'|trans }}</option><option value="week" {{ stock_filters.preset == 'week' ? 'selected' : '' }}>{{ 'reports.preset.week'|trans }}</option><option value="month" {{ stock_filters.preset == 'month' ? 'selected' : '' }}>{{ 'reports.preset.month'|trans }}</option><option value="custom" {{ stock_filters.preset == 'custom' ? 'selected' : '' }}>{{ 'reports.preset.custom'|trans }}</option></select></label>
+            <label>{{ 'reports.date_from'|trans }}<input type="date" name="from" value="{{ stock_filters.from }}"></label>
+            <label>{{ 'reports.date_to'|trans }}<input type="date" name="to" value="{{ stock_filters.to }}"></label>
+            <label>{{ 'products.category'|trans }}<select name="category_id"><option value="0">{{ 'ui.all'|trans }}</option>{% for category in categories %}<option value="{{ category.id }}" {{ stock_filters.category_id == category.id ? 'selected' : '' }}>{{ category.name }}</option>{% endfor %}</select></label>
+            <label>{{ 'products.stock_state'|trans }}<select name="stock_state"><option value="">{{ 'ui.all'|trans }}</option><option value="low" {{ stock_filters.stock_state == 'low' ? 'selected' : '' }}>{{ 'stock.low'|trans }}</option><option value="empty" {{ stock_filters.stock_state == 'empty' ? 'selected' : '' }}>{{ 'stock.empty'|trans }}</option></select></label>
+            <label>{{ 'ui.active_record'|trans }}<select name="state"><option value="all">{{ 'ui.all'|trans }}</option><option value="active" {{ stock_filters.state == 'active' ? 'selected' : '' }}>{{ 'state.active'|trans }}</option><option value="inactive" {{ stock_filters.state == 'inactive' ? 'selected' : '' }}>{{ 'state.inactive'|trans }}</option></select></label>
+            <button class="btn btn-dark" type="submit">{{ 'ui.filter'|trans }}</button>
+        </form>
+        <div class="row-actions">
+            <a class="btn btn-primary" href="{{ path('app_stock_export_excel', app.request.query.all) }}">{{ 'stock.export_excel'|trans }}</a>
+            <a class="btn btn-primary" target="_blank" href="{{ path('app_stock_export_pdf', app.request.query.all) }}">{{ 'stock.export_pdf'|trans }}</a>
+        </div>
+    </section>
+
+    <section class="panel">
         <form action="{{ path('app_stock_in') }}" method="post" class="form-grid stock-form">
             <label>{{ 'products.product'|trans }}
                 <select name="product_id" required data-combobox>
@@ -64,7 +80,7 @@
     <section class="panel">
         <div class="data-table">
             <div class="table-head"><span>{{ 'products.product'|trans }}</span><span>{{ 'stock.current'|trans }}</span><span>{{ 'ui.status'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
-            {% for product in products %}
+            {% for product in stock_rows|default(products) %}
                 <div>
                     <strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong>
                     <span>{{ product.stock_qty }}</span>

@@ -13,6 +13,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use Throwable;
 
 class DashboardController extends AbstractController
@@ -144,12 +145,61 @@ class DashboardController extends AbstractController
             return $user;
         }
 
+        $filters = $this->stockSituationFilters($request);
         return $this->render('app/stock.html.twig', $db->dashboardData() + [
             'user' => $user,
+            'stock_rows' => $db->stockSituation($filters),
+            'stock_filters' => $filters,
             'stock_focus' => (int) $request->query->get('product', 0),
             'stock_adjust_token' => $this->csrfToken($request, 'stock_adjust'),
             'stock_movement_token' => $this->csrfToken($request, 'stock_movement'),
         ]);
+    }
+
+    #[Route('/stock/export/excel', name: 'app_stock_export_excel', methods: ['GET'])]
+    public function stockExportExcel(Request $request, AppDatabase $db, AccessControl $access, TranslatorInterface $translator): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) return $user;
+        if (!$access->can('view.stock', $user)) return $this->redirectToRoute('app_dashboard');
+        $rows = $db->stockSituation($this->stockSituationFilters($request));
+        $handle = fopen('php://temp', 'r+');
+        fputcsv($handle, ['SKU', $translator->trans('products.ref_company'), $translator->trans('products.ref_universal'), $translator->trans('products.name'), $translator->trans('products.category'), $translator->trans('products.type'), $translator->trans('stock.current'), $translator->trans('products.min_qty'), $translator->trans('products.purchase_price'), $translator->trans('products.sale_price'), $translator->trans('stock.value')], ';');
+        foreach ($rows as $row) {
+            fputcsv($handle, [$row['sku'], $row['ref_company'], $row['ref_universal'], $row['name'], $row['category_name'] ?: $row['category'], $row['product_type'], $row['stock_qty'], $row['min_qty'], $row['purchase_price'], $row['sale_price'], $row['stock_value']], ';');
+        }
+        fputcsv($handle, ['', '', '', '', '', '', '', '', '', 'TOTAL', array_sum(array_column($rows, 'stock_value'))], ';');
+        rewind($handle);
+        return new Response("\xEF\xBB\xBF" . stream_get_contents($handle), 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="situation-stock-' . date('Y-m-d') . '.csv"',
+        ]);
+    }
+
+    #[Route('/stock/export/pdf', name: 'app_stock_export_pdf', methods: ['GET'])]
+    public function stockExportPdf(Request $request, AppDatabase $db, AccessControl $access, CompanyProfile $company): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) return $user;
+        if (!$access->can('view.stock', $user)) return $this->redirectToRoute('app_dashboard');
+        $filters = $this->stockSituationFilters($request);
+        $rows = $db->stockSituation($filters);
+        return $this->render('documents/stock_situation.html.twig', ['user' => $user, 'company' => $company->data(), 'filters' => $filters, 'rows' => $rows, 'total_value' => array_sum(array_column($rows, 'stock_value'))]);
+    }
+
+    private function stockSituationFilters(Request $request): array
+    {
+        $today = date('Y-m-d');
+        $preset = (string) $request->query->get('preset', 'today');
+        $from = $today; $to = $today;
+        if ($preset === 'week') { $from = date('Y-m-d', strtotime('monday this week')); $to = date('Y-m-d', strtotime('sunday this week')); }
+        elseif ($preset === 'month') { $from = date('Y-m-01'); $to = date('Y-m-t'); }
+        elseif ($preset === 'custom') {
+            $candidateFrom = (string) $request->query->get('from', '');
+            $candidateTo = (string) $request->query->get('to', '');
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $candidateFrom) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $candidateTo) && $candidateFrom <= $candidateTo) { $from = $candidateFrom; $to = $candidateTo; } else { $preset = 'today'; }
+        }
+        return ['preset' => $preset, 'from' => $from, 'to' => $to, 'category_id' => (int) $request->query->get('category_id', 0), 'stock_state' => (string) $request->query->get('stock_state', ''), 'state' => (string) $request->query->get('state', 'all')];
     }
 
     #[Route('/stock/in', name: 'app_stock_in', methods: ['POST'])]
@@ -1036,7 +1086,7 @@ class DashboardController extends AbstractController
             return $this->redirectToRoute('app_dashboard');
         }
         $operation = $db->operation($id);
-        if (!$operation || $operation['doc_type'] !== 'invoice') {
+        if (!$operation) {
             throw $this->createNotFoundException();
         }
         return $this->render('documents/receipt.html.twig', ['operation' => $operation, 'user' => $user, 'company' => $company->data()]);
