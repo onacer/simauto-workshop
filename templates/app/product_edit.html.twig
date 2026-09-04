@@ -23,9 +23,9 @@
             <label>{{ 'products.margin'|trans }}
                 <select name="margin_mode" class="margin-mode">
                     <option value="manual" {{ product.margin_rate is empty ? 'selected' : '' }}>{{ 'products.manual'|trans }}</option>
-                    <option value="135" {{ product.margin_rate == 135 ? 'selected' : '' }}>35%</option>
-                    <option value="145" {{ product.margin_rate == 145 ? 'selected' : '' }}>45%</option>
-                    <option value="155" {{ product.margin_rate == 155 ? 'selected' : '' }}>55%</option>
+                    <option value="35" {{ product.margin_rate == 35 ? 'selected' : '' }}>35%</option>
+                    <option value="45" {{ product.margin_rate == 45 ? 'selected' : '' }}>45%</option>
+                    <option value="55" {{ product.margin_rate == 55 ? 'selected' : '' }}>55%</option>
                 </select>
             </label>
             <label>{{ 'products.sale_price'|trans }}<input name="sale_price" class="sale-price" type="number" step="0.01" min="0" value="{{ product.sale_price }}"></label>
