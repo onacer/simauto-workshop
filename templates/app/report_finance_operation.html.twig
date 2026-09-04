@@ -17,9 +17,9 @@
         {label: 'ui.client'|trans, value: operation.client_display_name},
         {label: 'vehicles.vehicle'|trans, value: operation.vehicle_display_plate},
         {label: 'reports.table.payment'|trans, value: ('payment.code.' ~ operation.payment_method)|trans},
-        {label: 'reports.kpi.total_ttc'|trans, value: operation.total_ttc|number_format(2, ',', ' ') ~ ' DH'},
-        {label: 'reports.kpi.subtotal_ht'|trans, value: operation.subtotal_ht|number_format(2, ',', ' ') ~ ' DH'},
-        {label: 'reports.kpi.margin'|trans, value: operation.margin|number_format(2, ',', ' ') ~ ' DH'}
+        {label: 'reports.kpi.total_ttc'|trans, value: operation.total_ttc|money},
+        {label: 'reports.kpi.subtotal_ht'|trans, value: operation.subtotal_ht|money},
+        {label: 'reports.kpi.margin'|trans, value: operation.margin|money}
     ]} %}
 
     <section class="panel">
@@ -42,10 +42,10 @@
                     </strong>
                     <span>{{ line.product_type ?: line.line_type }}</span>
                     <span>{{ line.quantity }}</span>
-                    <span>{{ line.unit_price|number_format(2, ',', ' ') }} DH</span>
-                    <span>{{ line.total_ht|number_format(2, ',', ' ') }} DH</span>
-                    <span>{{ line.cost_ht|number_format(2, ',', ' ') }} DH</span>
-                    <span class="margin-cell {{ line.margin < 0 ? 'negative-value' : '' }}">{{ line.margin|number_format(2, ',', ' ') }} DH</span>
+                    <span>{{ line.unit_price|money }}</span>
+                    <span>{{ line.total_ht|money }}</span>
+                    <span>{{ line.cost_ht|money }}</span>
+                    <span class="margin-cell {{ line.margin < 0 ? 'negative-value' : '' }}">{{ line.margin|money }}</span>
                     <span>{{ line.margin_rate|number_format(2, ',', ' ') }}%</span>
                 </div>
             {% endfor %}
@@ -54,9 +54,9 @@
                 <span></span>
                 <span></span>
                 <span></span>
-                <span>{{ operation.subtotal_ht|number_format(2, ',', ' ') }} DH</span>
-                <span>{{ operation.cost_ht|number_format(2, ',', ' ') }} DH</span>
-                <span class="{{ operation.margin < 0 ? 'negative-value' : '' }}">{{ operation.margin|number_format(2, ',', ' ') }} DH</span>
+                <span>{{ operation.subtotal_ht|money }}</span>
+                <span>{{ operation.cost_ht|money }}</span>
+                <span class="{{ operation.margin < 0 ? 'negative-value' : '' }}">{{ operation.margin|money }}</span>
                 <span>{{ operation.margin_rate|number_format(2, ',', ' ') }}%</span>
             </div>
         </div>

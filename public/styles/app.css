@@ -1174,8 +1174,13 @@ select.is-combobox-native {
 }
 
 .operation-lines-table > div {
-    grid-template-columns: 1.8fr .7fr .5fr .8fr .6fr .8fr;
+    grid-template-columns: 1.8fr .7fr .5fr .8fr .6fr .8fr .8fr;
 }
+
+.stock-export-sheet { width: 277mm; margin: auto; padding: 6mm; background: #fff; color: #111; }
+.stock-export-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+.stock-export-table th, .stock-export-table td { border: 1px solid #333; padding: 3px; }
+.stock-export-sheet footer { margin-top: 8mm; text-align: center; }
 
 .document-chain {
     display: flex;
@@ -1461,7 +1466,7 @@ select.is-combobox-native {
 }
 
 .receipt-ticket {
-    width: 302px;
+    width: 80mm;
     margin: 0 auto;
     padding: 18px 14px;
     background: #fff;
@@ -1471,10 +1476,31 @@ select.is-combobox-native {
     box-shadow: 0 20px 50px rgba(0, 0, 0, .18);
 }
 
+.money,
+.numeric {
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.operation-line-service,
+.operation-line-service-head {
+    grid-template-columns: 1.4fr 1.5fr .55fr .8fr .65fr .9fr;
+}
+
+.receipt-ticket.ticket-72mm { width: 72mm; }
+
 .receipt-ticket img {
     display: block;
     width: 92px;
     margin: 0 auto 6px;
+}
+
+@media print {
+    .receipt-page { width: 80mm; padding: 0; margin: 0; }
+    .receipt-page .receipt-ticket { width: 80mm; box-sizing: border-box; padding: 3mm; }
+    .receipt-page .doc-actions { display: none; }
 }
 
 .receipt-ticket h1,

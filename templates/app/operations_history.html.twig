@@ -70,7 +70,7 @@
                     <span>{{ operation.client_name }}</span>
                     <span>{{ operation.vehicle_plate }}</span>
                     <span>{{ ('payment.code.' ~ operation.payment_method)|trans }}</span>
-                    <span>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</span>
+                    <span>{{ operation.total_ttc|money }}</span>
                     {% include 'app/_operation_actions.html.twig' with {
                         operation: operation,
                         user: user,

@@ -35,10 +35,10 @@
     </section>
 
     <section class="report-kpis">
-        <article class="kpi-card tone-yellow"><span>{{ 'reports.kpi.total_ttc'|trans }}</span><strong>{{ summary.total_ttc|number_format(2, ',', ' ') }} DH</strong></article>
-        <article class="kpi-card tone-black"><span>{{ 'reports.kpi.subtotal_ht'|trans }}</span><strong>{{ summary.subtotal_ht|number_format(2, ',', ' ') }} DH</strong></article>
-        <article class="kpi-card tone-red"><span>{{ 'reports.kpi.vat'|trans }}</span><strong>{{ summary.vat_amount|number_format(2, ',', ' ') }} DH</strong></article>
-        <article class="kpi-card tone-gold"><span>{{ 'reports.kpi.margin'|trans }}</span><strong class="{{ summary.total_margin < 0 ? 'negative-value' : '' }}">{{ summary.total_margin|number_format(2, ',', ' ') }} DH</strong></article>
+        <article class="kpi-card tone-yellow"><span>{{ 'reports.kpi.total_ttc'|trans }}</span><strong>{{ summary.total_ttc|money }}</strong></article>
+        <article class="kpi-card tone-black"><span>{{ 'reports.kpi.subtotal_ht'|trans }}</span><strong>{{ summary.subtotal_ht|money }}</strong></article>
+        <article class="kpi-card tone-red"><span>{{ 'reports.kpi.vat'|trans }}</span><strong>{{ summary.vat_amount|money }}</strong></article>
+        <article class="kpi-card tone-gold"><span>{{ 'reports.kpi.margin'|trans }}</span><strong class="{{ summary.total_margin < 0 ? 'negative-value' : '' }}">{{ summary.total_margin|money }}</strong></article>
         <article class="kpi-card tone-yellow"><span>{{ 'reports.kpi.margin_rate'|trans }}</span><strong>{{ summary.margin_rate|number_format(2, ',', ' ') }}%</strong></article>
         <article class="kpi-card tone-black"><span>{{ 'reports.kpi.invoice_count'|trans }}</span><strong>{{ summary.invoice_count }}</strong></article>
     </section>
@@ -54,7 +54,7 @@
             {% for method, payment in summary.payments %}
                 <div>
                     <span>{{ ('payment.code.' ~ method)|trans }}</span>
-                    <strong>{{ payment.total_ttc|number_format(2, ',', ' ') }} DH</strong>
+                    <strong>{{ payment.total_ttc|money }}</strong>
                     <small>{{ payment.count }} {{ 'reports.invoice_short'|trans }}</small>
                 </div>
             {% endfor %}
@@ -80,9 +80,9 @@
                     <span>{{ operation.client_display_name }}</span>
                     <span>{{ operation.vehicle_display_plate }}</span>
                     <span>{{ ('payment.code.' ~ operation.payment_method)|trans }}</span>
-                    <span>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</span>
+                    <span>{{ operation.total_ttc|money }}</span>
                     <span class="margin-cell {{ operation.margin < 0 ? 'negative-value' : '' }}">
-                        {{ operation.margin|number_format(2, ',', ' ') }} DH
+                        {{ operation.margin|money }}
                         {% if operation.has_estimated_lines %}<small class="badge-estimated">{{ 'reports.estimated'|trans }}</small>{% endif %}
                     </span>
                     <span>{{ operation.margin_rate|number_format(2, ',', ' ') }}%</span>
