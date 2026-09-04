@@ -260,7 +260,7 @@ Routes documentaires:
 
 - `GET /document/{id}`: affiche le document imprimable universel selon son type: devis, bon de commande ou facture.
 - `GET /invoice/{id}`: alias historique de `/document/{id}` conserve pour compatibilite.
-- `GET /receipt/{id}`: affiche un ticket receipt imprimable, uniquement pour les factures.
+- `GET /receipt/{id}`: affiche un ticket thermique imprimable pour tout devis, bon de commande ou facture.
 - `POST /documents/{id}/confirm` et `POST /documents/{id}/invoice`: anciens endpoints conserves pour compatibilite, proteges par le meme token CSRF `operation_action`.
 
 Chaque route verifie la session avec la methode privee:
@@ -618,12 +618,12 @@ Un produit peut etre:
 - `stockable`: gere le stock et les mouvements.
 - `service`: sans stock, jamais bloque par les controles de quantite.
 
-Le formulaire propose une aide de prix par marge affichee `35%`, `45%`, `55%` ou manuel. En interne, les valeurs envoyees restent `135`, `145`, `155` pour conserver le calcul existant: prix de vente = prix d'achat x 1.35, 1.45 ou 1.55. Le prix de vente reste editable.
+Le formulaire propose une aide de prix par marge affichee et envoyee `35%`, `45%`, `55%` ou manuel. La formule unique est `prix_final = prix_base / ((100 - marge) / 100)`, arrondie a deux decimales. Ainsi, pour 100 DH: 35% donne 153,85 DH, 45% donne 181,82 DH et 55% donne 222,22 DH. Le prix reste editable; toute edition repasse le mode en manuel. Le serveur recalcule toujours la valeur finale.
 
 La saisie d'operation reprend la meme convention par ligne de produit:
 
 - le select de marge affiche `35%`, `45%`, `55%` ou manuel;
-- si un produit stockable possede un `purchase_price`, choisir une marge recalcule le prix unitaire TTC de la ligne (`purchase_price x coefficient`);
+- si un produit stockable possede un `purchase_price`, choisir une marge recalcule le prix unitaire TTC par la formule du diviseur;
 - si le prix est modifie a la main, la ligne repasse en manuel;
 - les services, lignes libres et produits sans prix d'achat restent en prix manuel;
 - le serveur recalcule toujours le prix final depuis le produit et le mode de marge poste, le JavaScript ne sert qu'a l'apercu.
@@ -745,7 +745,7 @@ Liste les derniers documents et donne les actions:
 
 - afficher la fiche detail de l'operation,
 - ouvrir le document imprimable: devis, bon de commande ou facture,
-- ouvrir le receipt uniquement pour une facture.
+- ouvrir le receipt pour un devis, un bon de commande ou une facture.
 
 Le document imprime reste en francais LTR et utilise le meme gabarit A4 pour les trois types:
 
@@ -1569,5 +1569,15 @@ L'application est fonctionnelle avec:
 - transaction stock/operation,
 - generation facture,
 - generation receipt,
+
+## Evolutions marge, stock et impression (septembre 2026)
+
+- `PricingCalculator` est l'unique point de calcul du prix par marge et applique la formule par diviseur documentee ci-dessus.
+- `LineMarginCalculator` est l'unique point d'extension de la marge de gestion. La marge est calculee en HT: total de ligne HT moins achat ramene en HT fois quantite; service et ligne libre ont un cout nul. Les ecrans operation affichent la marge par ligne et son total, jamais les documents client.
+- La saisie d'operation comporte deux sections: produits stockables (selection obligatoire, marge et stock) et services (service catalogue ou libelle libre, prix libre, aucun mouvement de stock).
+- Le filtre Twig `money` encapsule les montants dans un isolat LTR afin que les chiffres latins restent lisibles dans l'interface arabe RTL.
+- `/stock` propose une situation filtree par periode, categorie, etat de stock et statut actif. L'export Excel est un CSV UTF-8 BOM au separateur `;`, volontairement choisi pour eviter une dependance PHP lourde; l'export PDF est une vue A4 paysage imprimable/enregistrable en PDF par le navigateur.
+- Le reçu est universel (devis, bon de commande, facture), utilise le numero du document et reste en TTC direct.
+- Le ticket thermique cible 80 mm avec `@page { size: 80mm auto; margin: 0; }`; la classe `ticket-72mm` facilite le passage a 72 mm. Sous Windows, choisir dans le pilote WD LINK le papier `80(80) x 3276 mm` ou equivalent, sans marge, echelle 100 %. Voir `IMPRESSION_TICKET.txt`.
 - affichage utilisateurs admin,
 - tests PHPUnit.

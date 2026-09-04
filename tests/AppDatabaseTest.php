@@ -11,6 +11,9 @@ use App\Service\AccessControl;
 use App\Service\AppDatabase;
 use App\Service\DesktopPaths;
 use App\Service\ImportService;
+use App\Service\PricingCalculator;
+use App\Service\LineMarginCalculator;
+use App\Twig\MoneyExtension;
 use InvalidArgumentException;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -33,6 +36,20 @@ use Twig\TwigFunction;
 
 final class AppDatabaseTest extends TestCase
 {
+    public function testDivisorPricingAndSharedLineMarginCalculator(): void
+    {
+        self::assertSame(153.85, PricingCalculator::priceFromMargin(100, 35));
+        self::assertSame(181.82, PricingCalculator::priceFromMargin(100, 45));
+        self::assertSame(222.22, PricingCalculator::priceFromMargin(100, 55));
+        self::assertNull(PricingCalculator::supportedMargin('manual'));
+
+        $product = LineMarginCalculator::decorate(['product_id' => 1, 'line_type' => 'product', 'product_type' => 'stockable', 'quantity' => 2, 'purchase_price' => 60, 'total_ht' => 150], 20);
+        $service = LineMarginCalculator::decorate(['product_id' => null, 'line_type' => 'service', 'quantity' => 1, 'total_ht' => 50], 20);
+        self::assertSame(50.0, $product['margin']);
+        self::assertSame(50.0, $service['margin']);
+        self::assertSame(100.0, $product['margin'] + $service['margin']);
+    }
+
     private array $temporaryDirectories = [];
 
     protected function tearDown(): void
@@ -657,7 +674,7 @@ SQL);
             'min_qty' => 1,
             'purchase_price' => 100,
             'sale_price' => 130,
-            'margin_mode' => '145',
+            'margin_mode' => '45',
         ], 1);
         $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "MARGIN-LINE"');
         [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
@@ -669,16 +686,16 @@ SQL);
             'line_product_id' => [$productId, $productId],
             'line_label' => ['', 'Prix manuel'],
             'line_quantity' => [1, 1],
-            'line_margin_mode' => ['145', 'manual'],
+            'line_margin_mode' => ['45', 'manual'],
             'line_unit_price' => [1, 150],
             'line_discount' => [0, 0],
         ], 1);
         $operation = $db->operation($quoteId);
 
-        self::assertSame(145.0, (float) $operation['items'][0]['unit_price']);
-        self::assertSame(145.0, (float) $operation['items'][0]['total']);
+        self::assertSame(181.82, (float) $operation['items'][0]['unit_price']);
+        self::assertSame(181.82, (float) $operation['items'][0]['total']);
         self::assertSame(150.0, (float) $operation['items'][1]['unit_price']);
-        self::assertSame(295.0, (float) $operation['total_ttc']);
+        self::assertSame(331.82, (float) $operation['total_ttc']);
     }
 
     public function testDraftQuoteCanBeEditedWithLineMarginButConfirmedDocumentCannot(): void
@@ -715,13 +732,13 @@ SQL);
             'line_product_id' => [$productId],
             'line_label' => [''],
             'line_quantity' => [1],
-            'line_margin_mode' => ['155'],
+            'line_margin_mode' => ['55'],
             'line_unit_price' => [1],
             'line_discount' => [0],
         ], 1);
         $quote = $db->operation($quoteId);
-        self::assertSame(155.0, (float) $quote['items'][0]['unit_price']);
-        self::assertSame(155.0, (float) $quote['total_ttc']);
+        self::assertSame(222.22, (float) $quote['items'][0]['unit_price']);
+        self::assertSame(222.22, (float) $quote['total_ttc']);
 
         $orderId = $db->confirmQuote($quoteId, 1);
         $this->expectException(InvalidArgumentException::class);
@@ -757,7 +774,7 @@ SQL);
             'vehicles' => [],
         ]);
 
-        self::assertSame(1, substr_count($html, '/app_receipt/'));
+        self::assertSame(3, substr_count($html, '/app_receipt/'));
     }
 
     public function testSearchOperationsFiltersByTextTypePaymentAndInclusiveDates(): void
@@ -1562,8 +1579,8 @@ SQL);
             'stock_qty' => 999,
             'min_qty' => 1,
             'purchase_price' => 10,
-            'margin_mode' => '145',
-            'sale_price' => 14.5,
+            'margin_mode' => '45',
+            'sale_price' => 1,
         ], $manager);
         $controller->setContainer($this->controllerContainer($editRequest));
 
@@ -1574,7 +1591,7 @@ SQL);
         self::assertSame('Produit modifie', $product['name']);
         self::assertSame('SIM-ACL', $product['ref_company']);
         self::assertSame($beforeQty, (int) $product['stock_qty']);
-        self::assertSame(145.0, (float) $product['margin_rate']);
+        self::assertSame(45.0, (float) $product['margin_rate']);
 
         $editHtml = $this->renderTemplate('app/product_edit.html.twig', [
             'user' => $manager,
@@ -2179,6 +2196,7 @@ SQL);
         $twig->addFunction(new TwigFunction('can', fn (string $permission, array $user) => $access->can($permission, $user)));
         $twig->addFunction(new TwigFunction('can_edit_document', fn (array $user, array $operation) => $access->canEditDocument($user, $operation)));
         $twig->addFilter(new TwigFilter('trans', fn (string $key, array $params = []): string => $this->testTrans($key, $params)));
+        $twig->addExtension(new MoneyExtension());
 
         $request = Request::create('/');
         $request->attributes->set('_route', 'app_dashboard');
@@ -2215,6 +2233,7 @@ SQL);
     private function renderTemplate(string $template, array $context): string
     {
         $twig = new Environment(new FilesystemLoader(__DIR__ . '/../templates'));
+        $twig->addExtension(new MoneyExtension());
         $access = new AccessControl();
         $twig->addFunction(new TwigFunction('asset', fn (string $path) => '/assets/' . $path));
         $twig->addFunction(new TwigFunction('can', fn (string $permission, array $user) => $access->can($permission, $user)));
