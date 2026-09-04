@@ -71,15 +71,17 @@
                 <span>{{ 'operations.price_ttc'|trans }}</span>
                 <span>{{ 'operations.discount'|trans }}</span>
                 <span>{{ 'operations.total_ttc'|trans }}</span>
+                <span>{{ 'operations.margin'|trans }} HT</span>
             </div>
             {% for item in operation.items %}
                 <div>
                     <strong>{% if item.product_sku %}{{ item.product_sku }} - {% endif %}{{ item.label }}</strong>
                     <span>{{ ('operations.line_type.' ~ item.line_type)|trans }}</span>
-                    <span>{{ item.quantity }}</span>
-                    <span>{{ item.unit_price|number_format(2, ',', ' ') }} DH</span>
-                    <span>{{ item.discount_rate|default(0)|number_format(2, ',', ' ') }}%</span>
-                    <span>{{ item.total|number_format(2, ',', ' ') }} DH</span>
+                    <span class="numeric" dir="ltr">{{ item.quantity }}</span>
+                    <span>{{ item.unit_price|money }}</span>
+                    <span class="numeric" dir="ltr">{{ item.discount_rate|default(0)|number_format(2, ',', ' ') }}%</span>
+                    <span>{{ item.total|money }}</span>
+                    <span>{{ item.margin|money }}</span>
                 </div>
             {% else %}
                 <p class="empty-state">{{ 'ui.empty'|trans }}</p>
@@ -89,7 +91,8 @@
 
     <section class="panel totals-panel">
         <div class="invoice-totals operation-totals">
-            <div><span>{{ 'operations.total_ttc'|trans }}</span><strong>{{ operation.total_ttc|number_format(2, ',', ' ') }} DH</strong></div>
+            <div><span>{{ 'operations.total_ttc'|trans }}</span><strong>{{ operation.total_ttc|money }}</strong></div>
+            <div><span>{{ 'operations.total_margin'|trans }} HT</span><strong>{{ operation.total_margin|money }}</strong></div>
         </div>
     </section>
 </main>
