@@ -45,7 +45,11 @@ if (-not $SkipBackup) {
 }
 
 Write-Host "Pulling latest code..." -ForegroundColor Yellow
-git pull --ff-only
+git checkout main
+if ($LASTEXITCODE -ne 0) {
+    throw "git checkout main failed."
+}
+git pull --ff-only origin main
 if ($LASTEXITCODE -ne 0) {
     throw "git pull failed."
 }
@@ -53,8 +57,14 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Rebuilding and recreating containers..." -ForegroundColor Yellow
 Invoke-Compose @("up", "-d", "--build", "--force-recreate")
 
+Write-Host "Installing production PHP dependencies..." -ForegroundColor Yellow
+Invoke-Compose @("exec", "-T", "php", "composer", "install", "--no-interaction", "--prefer-dist", "--optimize-autoloader", "--no-dev")
+
 Write-Host "Resetting Symfony prod cache permissions..." -ForegroundColor Yellow
-Invoke-Compose @("exec", "-T", "php", "sh", "-lc", "rm -rf var/cache/prod && mkdir -p var/cache var/log data && chmod -R a+rwX var data")
+Invoke-Compose @("exec", "-T", "php", "sh", "-lc", "rm -rf var/cache/prod && mkdir -p var/cache var/log data && chmod -R a+rwX var data && php bin/console cache:clear --env=prod")
+
+Write-Host "Restarting containers..." -ForegroundColor Yellow
+Invoke-Compose @("restart")
 
 Write-Host "Triggering application boot and SQLite migrations..." -ForegroundColor Yellow
 try {
@@ -67,5 +77,8 @@ try {
 
 Write-Host "Container status:" -ForegroundColor Yellow
 Invoke-Compose @("ps")
+
+Write-Host "Recent container logs:" -ForegroundColor Yellow
+Invoke-Compose @("logs", "--tail=100")
 
 Write-Host "Update completed successfully." -ForegroundColor Green
