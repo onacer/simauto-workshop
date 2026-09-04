@@ -5,7 +5,9 @@
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
 {% set is_edit = operation is defined %}
-{% set form_lines = is_edit and operation.items is not empty ? operation.items : [{}] %}
+{% set form_lines = is_edit and operation.items is not empty ? operation.items : [] %}
+{% set product_lines = form_lines|filter(line => line.line_type|default('product') == 'product') %}
+{% set service_lines = form_lines|filter(line => line.line_type|default('') == 'service') %}
 
 <main class="main-board">
     <section class="page-head">
@@ -50,7 +52,8 @@
                 <input name="vat_rate" class="operation-vat-rate" type="hidden" value="{{ is_edit ? operation.vat_rate : 20 }}">
             </div>
 
-            <div class="operation-lines" data-operation-lines>
+            <h2>{{ 'operations.products_section'|trans }}</h2>
+            <div class="operation-lines" data-operation-lines="product">
                 <div class="operation-line operation-line-head">
                     <span>{{ 'operations.product_service'|trans }}</span>
                     <span>{{ 'operations.label'|trans }}</span>
@@ -60,11 +63,13 @@
                     <span>{{ 'operations.discount'|trans }}</span>
                     <span>{{ 'operations.line_total_ttc'|trans }}</span>
                 </div>
-                {% for line in form_lines %}
-                <div class="operation-line" data-line>
+                {% for line in product_lines|length ? product_lines : [{}] %}
+                <div class="operation-line" data-line data-line-type="product">
+                    <input type="hidden" name="line_type[]" value="product">
                     <select name="line_product_id[]" class="line-product" data-combobox>
-                        <option value="" {{ line.product_id|default('') ? '' : 'selected' }} data-price="0" data-name="" data-purchase-price="0" data-margin-rate="" data-product-type="service">{{ 'operations.free_line'|trans }}</option>
+                        <option value="" data-price="0" data-name="" data-purchase-price="0" data-margin-rate="" data-product-type="stockable">{{ 'operations.choose_product'|trans }}</option>
                         {% for product in products %}
+                            {% if product.product_type|default('stockable') == 'stockable' %}
                             {% set product_ref = product.ref_company ?: (product.ref_universal ?: product.sku) %}
                             <option value="{{ product.id }}"
                                     {{ line.product_id|default(0) == product.id ? 'selected' : '' }}
@@ -77,29 +82,57 @@
                                     data-ref-universal="{{ product.ref_universal }}"
                                     data-sku="{{ product.sku }}"
                                     data-search="{{ (product.ref_company ~ ' ' ~ product.ref_universal ~ ' ' ~ product.sku ~ ' ' ~ product.name)|lower }}">
-                                [{{ product_ref }}] {{ product.name }} - {{ product.stock_qty }} - {{ product.sale_price }} DH
+                                [{{ product_ref }}] {{ product.name }} - {{ product.stock_qty }} - {{ product.sale_price|money }}
                             </option>
+                            {% endif %}
                         {% endfor %}
                     </select>
                     <input name="line_label[]" class="line-label" placeholder="{{ 'operations.label'|trans }}" value="{{ line.label|default('') }}">
                     <input name="line_quantity[]" class="line-qty" type="number" step="0.01" min="0" value="{{ line.quantity|default(1) }}">
                     <select name="line_margin_mode[]" class="line-margin-mode">
                         <option value="manual">{{ 'products.manual'|trans }}</option>
-                        <option value="135">35%</option>
-                        <option value="145">45%</option>
-                        <option value="155">55%</option>
+                        <option value="35">35%</option>
+                        <option value="45">45%</option>
+                        <option value="55">55%</option>
                     </select>
                     <input name="line_unit_price[]" class="line-price" type="number" step="0.01" min="0" value="{{ line.unit_price|default(0) }}">
                     <input name="line_discount[]" class="line-discount" type="number" step="0.01" min="0" max="100" value="{{ line.discount_rate|default(0) }}">
-                    <strong class="line-total">0.00 DH</strong>
+                    <strong class="line-total money" dir="ltr">0.00 DH</strong>
                 </div>
                 {% endfor %}
             </div>
 
-            <button class="btn btn-dark" type="button" data-add-line>+ {{ 'operations.add_line'|trans }}</button>
+            <button class="btn btn-dark" type="button" data-add-line="product">+ {{ 'operations.add_product'|trans }}</button>
+
+            <h2>{{ 'operations.services_section'|trans }}</h2>
+            <div class="operation-lines operation-service-lines" data-operation-lines="service">
+                <div class="operation-line operation-line-head operation-line-service-head">
+                    <span>{{ 'operations.service'|trans }}</span><span>{{ 'operations.label'|trans }}</span><span>{{ 'operations.quantity'|trans }}</span>
+                    <span>{{ 'operations.price_ttc'|trans }}</span><span>{{ 'operations.discount'|trans }}</span><span>{{ 'operations.line_total_ttc'|trans }}</span>
+                </div>
+                {% for line in service_lines|length ? service_lines : [{}] %}
+                <div class="operation-line operation-line-service" data-line data-line-type="service">
+                    <input type="hidden" name="line_type[]" value="service">
+                    <select name="line_product_id[]" class="line-product" data-combobox>
+                        <option value="" {{ line.product_id|default('') ? '' : 'selected' }} data-price="0" data-name="" data-product-type="service">{{ 'operations.free_line'|trans }}</option>
+                        {% for product in products %}{% if product.product_type|default('stockable') == 'service' %}
+                            <option value="{{ product.id }}" {{ line.product_id|default(0) == product.id ? 'selected' : '' }} data-price="{{ product.sale_price }}" data-name="{{ product.name }}" data-product-type="service" data-search="{{ (product.sku ~ ' ' ~ product.name)|lower }}">[{{ product.sku }}] {{ product.name }}</option>
+                        {% endif %}{% endfor %}
+                    </select>
+                    <input name="line_label[]" class="line-label" placeholder="{{ 'operations.label'|trans }}" value="{{ line.label|default('') }}">
+                    <input name="line_quantity[]" class="line-qty" type="number" step="0.01" min="0" value="{{ line.quantity|default(1) }}">
+                    <input name="line_margin_mode[]" type="hidden" value="manual">
+                    <input name="line_unit_price[]" class="line-price" type="number" step="0.01" min="0" value="{{ line.unit_price|default(0) }}">
+                    <input name="line_discount[]" class="line-discount" type="number" step="0.01" min="0" max="100" value="{{ line.discount_rate|default(0) }}">
+                    <strong class="line-total money" dir="ltr">0.00 DH</strong>
+                </div>
+                {% endfor %}
+            </div>
+            <button class="btn btn-dark" type="button" data-add-line="service">+ {{ 'operations.add_service'|trans }}</button>
 
             <div class="operation-preview">
-                <span>{{ 'operations.total_ttc'|trans }}: <strong data-total-ttc>0.00 DH</strong></span>
+                <span>{{ 'operations.total_ttc'|trans }}: <strong class="money" dir="ltr" data-total-ttc>0.00 DH</strong></span>
+                <span>{{ 'operations.total_margin'|trans }} (HT): <strong class="money" dir="ltr" data-total-margin>0.00 DH</strong></span>
             </div>
 
             <button class="btn btn-primary" type="submit">{{ is_edit ? 'ui.update'|trans : 'operations.save_quote'|trans }}</button>
