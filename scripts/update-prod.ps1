@@ -61,10 +61,7 @@ Write-Host "Installing production PHP dependencies..." -ForegroundColor Yellow
 Invoke-Compose @("exec", "-T", "php", "composer", "install", "--no-interaction", "--prefer-dist", "--optimize-autoloader", "--no-dev")
 
 Write-Host "Resetting Symfony prod cache permissions..." -ForegroundColor Yellow
-Invoke-Compose @("exec", "-T", "php", "sh", "-lc", "rm -rf var/cache/prod && mkdir -p var/cache var/log data && chmod -R a+rwX var data && php bin/console cache:clear --env=prod")
-
-Write-Host "Restarting containers..." -ForegroundColor Yellow
-Invoke-Compose @("restart")
+Invoke-Compose @("exec", "-T", "php", "sh", "-lc", "rm -rf var/cache/prod && mkdir -p var/cache var/log data && chown -R www-data:www-data var && chmod -R a+rwX var data && su -s /bin/sh www-data -c 'php bin/console cache:clear --env=prod' && chmod -R a+rwX var data")
 
 Write-Host "Triggering application boot and SQLite migrations..." -ForegroundColor Yellow
 try {

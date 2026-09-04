@@ -8,6 +8,7 @@ services:
     working_dir: /var/www/html
     volumes:
       - .:/var/www/html:cached
+      - simauto_var:/var/www/html/var
     environment:
       APP_ENV: prod
       APP_DEBUG: 0
@@ -38,3 +39,6 @@ services:
 networks:
   simauto_network:
     driver: bridge
+
+volumes:
+  simauto_var:
