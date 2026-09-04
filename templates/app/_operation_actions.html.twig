@@ -79,7 +79,7 @@
         <a class="{{ compact ? '' : 'btn btn-primary' }}" href="{{ path('app_document', {id: operation.id}) }}" target="_blank" rel="noopener">{{ 'documents.print'|trans }}</a>
     {% endif %}
 
-    {% if show_receipt and operation.doc_type == 'invoice' %}
+    {% if show_receipt %}
         <a class="{{ compact ? '' : 'btn btn-primary' }}" href="{{ path('app_receipt', {id: operation.id}) }}">{{ 'billing.receipt'|trans }}</a>
     {% endif %}
 
