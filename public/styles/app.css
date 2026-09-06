@@ -1170,7 +1170,7 @@ select.is-combobox-native {
 }
 
 .operation-history-table > div {
-    grid-template-columns: .8fr 1fr .9fr 1.1fr 1fr .8fr .8fr 1.7fr;
+    grid-template-columns: .8fr 1fr .9fr 2fr .8fr .8fr 1.7fr;
 }
 
 .operation-lines-table > div {

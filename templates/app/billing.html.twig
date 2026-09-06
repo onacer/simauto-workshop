@@ -24,7 +24,7 @@
                 <div>
                     <span>{% include 'app/_doc_badge.html.twig' with {type: operation.doc_type} %}</span>
                     <strong>{{ operation.document_no|default(operation.invoice_no) }}</strong>
-                    <span>{{ operation.client_real_name ?: operation.client_name }}</span>
+                    <span>{{ operation.client_real_name ?: operation.client_name }}{% if operation.brand_name|default(operation.vehicle_brand) or operation.model_name|default(operation.vehicle_model) %} — {{ operation.brand_name|default(operation.vehicle_brand) }} {{ operation.model_name|default(operation.vehicle_model) }}{% endif %}</span>
                     <span>{{ operation.total_ttc|money }}</span>
                     {% include 'app/_operation_actions.html.twig' with {
                         operation: operation,
