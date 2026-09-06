@@ -50,6 +50,59 @@ final class AppDatabaseTest extends TestCase
         self::assertSame(100.0, $product['margin'] + $service['margin']);
     }
 
+    public function testServiceOnlyFormIgnoresBlankProductPrototypeAndReusesAutoCreatedService(): void
+    {
+        $db = $this->database();
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $db->pdo());
+        $payload = [
+            'client_id' => $clientId, 'vehicle_id' => $vehicleId, 'payment_method' => 'ESP',
+            'line_type' => ['product', 'service'], 'line_product_id' => ['', ''],
+            'line_label' => ['', 'Diagnostic Libre'], 'line_quantity' => [1, 1],
+            'line_margin_mode' => ['manual', 'manual'], 'line_unit_price' => [0, 50],
+            'line_discount' => [0, 0],
+        ];
+
+        $firstId = $db->createOperation($payload, 1);
+        $first = $db->operation($firstId);
+        self::assertCount(1, $first['items']);
+        self::assertSame('service', $first['items'][0]['line_type']);
+        self::assertGreaterThan(0, (int) $first['items'][0]['product_id']);
+        self::assertSame(0, (int) $db->pdo()->query("SELECT COUNT(*) FROM stock_movements WHERE movement_type = 'out'")->fetchColumn());
+
+        $payload['line_label'][1] = '  diagnostic   libre ';
+        $db->createOperation($payload, 1);
+        self::assertSame(1, (int) $db->pdo()->query("SELECT COUNT(*) FROM products WHERE product_type = 'service' AND lower(name) LIKE '%diagnostic%libre%'")->fetchColumn());
+    }
+
+    public function testInvalidNumericMarginIsRejectedByServerAndManualPriceIsPreserved(): void
+    {
+        self::assertSame(153.85, PricingCalculator::priceFromMargin(100, 35));
+        self::assertSame(181.82, PricingCalculator::priceFromMargin(100, 45));
+        self::assertSame(222.22, PricingCalculator::priceFromMargin(100, 55));
+        $this->expectException(InvalidArgumentException::class);
+        PricingCalculator::priceFromMargin(100, 100);
+    }
+
+    public function testThermalReceiptIsStandaloneContinuousAndHistoryCombinesClientVehicle(): void
+    {
+        $db = $this->database();
+        $id = $this->operationWithService($db, 'ESP');
+        $operation = $db->operation($id);
+        $receipt = $this->renderTemplate('documents/receipt.html.twig', ['operation' => $operation, 'company' => ['service_line_1' => 'Garage', 'address' => 'Agadir', 'contact' => '0600']]);
+        self::assertStringNotContainsString('topbar', $receipt);
+        self::assertStringNotContainsString('min-height', $receipt);
+        self::assertStringContainsString('@page { size: 80mm auto; margin: 0; }', $receipt);
+        self::assertStringContainsString('.receipt-ticket { width: 80mm; margin: 0; padding: 2mm;', $receipt);
+
+        $history = $this->renderTemplate('app/operations_history.html.twig', [
+            'user' => ['role' => 'manager', 'name' => 'Manager'], 'operations' => [$operation],
+            'result_total' => 1, 'is_limited' => false, 'operation_action_token' => 'token',
+            'filters' => ['q' => '', 'doc_type' => '', 'from' => '', 'to' => '', 'payment' => ''],
+        ]);
+        self::assertStringContainsString(($operation['client_real_name'] ?: $operation['client_name']) . ' — ' . $operation['brand_name'] . ' ' . $operation['model_name'], $history);
+        self::assertStringNotContainsString($operation['vehicle_real_plate'], $history);
+    }
+
     private array $temporaryDirectories = [];
 
     protected function tearDown(): void
@@ -1042,7 +1095,8 @@ SQL);
         self::assertSame(100.0, (float) $details['margin_lines'][1]['margin']);
         self::assertSame(0.0, (float) $details['margin_lines'][2]['cost_ht']);
         self::assertSame(50.0, (float) $details['margin_lines'][2]['margin']);
-        self::assertTrue((bool) $details['margin_lines'][2]['is_estimated']);
+        self::assertFalse((bool) $details['margin_lines'][2]['is_estimated']);
+        self::assertSame('service', $details['margin_lines'][2]['product_type']);
         self::assertSame(250.0, (float) $details['margin']);
         self::assertSame(350.0, (float) $details['subtotal_ht']);
     }

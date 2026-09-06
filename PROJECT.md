@@ -1579,5 +1579,13 @@ L'application est fonctionnelle avec:
 - `/stock` propose une situation filtree par periode, categorie, etat de stock et statut actif. L'export Excel est un CSV UTF-8 BOM au separateur `;`, volontairement choisi pour eviter une dependance PHP lourde; l'export PDF est une vue A4 paysage imprimable/enregistrable en PDF par le navigateur.
 - Le reçu est universel (devis, bon de commande, facture), utilise le numero du document et reste en TTC direct.
 - Le ticket thermique cible 80 mm avec `@page { size: 80mm auto; margin: 0; }`; la classe `ticket-72mm` facilite le passage a 72 mm. Sous Windows, choisir dans le pilote WD LINK le papier `80(80) x 3276 mm` ou equivalent, sans marge, echelle 100 %. Voir `IMPRESSION_TICKET.txt`.
+
+### Correctifs operations et ticket continu
+
+- Une operation est valide des qu'elle contient au moins une ligne produit ou service dont le montant est positif. Le prototype produit vide du formulaire est ignore et ne rend jamais un produit stockable obligatoire lorsqu'un service est saisi.
+- Un libelle libre de service cree automatiquement un produit catalogue de type `service`, sans stock ni prix impose. La resolution normalisee (casse et espaces ignores) reutilise un service existant et evite les doublons. Les services sont exclus des controles et mouvements de stock.
+- La formule de reference reste `prix_base / ((100 - marge) / 100)`, dans l'unique helper PHP et l'unique fonction JavaScript. Une marge numerique invalide, notamment 100, est refusee; le mode manuel conserve le prix saisi.
+- Le ticket est un template HTML autonome, sans layout applicatif ni CSS A4. Son flux continu utilise une largeur de 80 mm, une marge de page nulle, aucun `min-height` et interdit les coupures internes.
+- Les listes `/operations/history` et `/billing` ne montrent ni marge ni immatriculation. Leur colonne client combine le nom du client avec la marque et le modele; la fiche detail conserve toutes les informations, dont la plaque et les marges.
 - affichage utilisateurs admin,
 - tests PHPUnit.
