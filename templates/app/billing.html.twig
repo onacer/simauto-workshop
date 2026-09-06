@@ -19,13 +19,14 @@
             <a class="btn btn-primary" href="{{ path('app_operations_history') }}">{{ 'operations.history.title'|trans }}</a>
         </div>
         <div class="data-table billing-table">
-            <div class="table-head"><span>{{ 'ui.type'|trans }}</span><span>{{ 'billing.invoice'|trans }}</span><span>{{ 'ui.client'|trans }}</span><span>{{ 'ui.amount'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
+            <div class="table-head"><span>{{ 'ui.type'|trans }}</span><span>{{ 'billing.invoice'|trans }}</span><span>{{ 'ui.client'|trans }}</span><span>{{ 'ui.amount'|trans }}</span><span>{{ 'operations.margin'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for operation in operations %}
                 <div>
                     <span>{% include 'app/_doc_badge.html.twig' with {type: operation.doc_type} %}</span>
                     <strong>{{ operation.document_no|default(operation.invoice_no) }}</strong>
                     <span>{{ operation.client_real_name ?: operation.client_name }}{% if operation.brand_name|default(operation.vehicle_brand) or operation.model_name|default(operation.vehicle_model) %} — {{ operation.brand_name|default(operation.vehicle_brand) }} {{ operation.model_name|default(operation.vehicle_model) }}{% endif %}</span>
                     <span>{{ operation.total_ttc|money }}</span>
+                    <span>{{ operation.total_margin|money }}</span>
                     {% include 'app/_operation_actions.html.twig' with {
                         operation: operation,
                         user: user,

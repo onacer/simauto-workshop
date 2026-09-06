@@ -59,6 +59,7 @@
                 <span>{{ 'ui.client'|trans }}</span>
                 <span>{{ 'operations.payment'|trans }}</span>
                 <span>{{ 'operations.total_ttc'|trans }}</span>
+                <span>{{ 'operations.margin'|trans }}</span>
                 <span>{{ 'ui.actions'|trans }}</span>
             </div>
             {% for operation in operations %}
@@ -69,6 +70,7 @@
                     <span>{{ operation.client_name }}{% if operation.vehicle_brand or operation.vehicle_model %} — {{ operation.vehicle_brand }} {{ operation.vehicle_model }}{% endif %}</span>
                     <span>{{ ('payment.code.' ~ operation.payment_method)|trans }}</span>
                     <span>{{ operation.total_ttc|money }}</span>
+                    <span>{{ operation.total_margin|money }}</span>
                     {% include 'app/_operation_actions.html.twig' with {
                         operation: operation,
                         user: user,

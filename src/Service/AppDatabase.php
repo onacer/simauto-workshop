@@ -973,7 +973,7 @@ class AppDatabase
              ORDER BY o.id DESC LIMIT 25'
         )->fetchAll();
 
-        return array_map(fn (array $operation): array => $this->decorateOperation($operation), $operations);
+        return $this->decorateOperationsWithMargins($operations);
     }
 
     public function searchOperations(array $filters): array
@@ -1024,7 +1024,7 @@ class AppDatabase
                     COALESCE(v.plate, o.vehicle_plate) AS vehicle_plate,
                     COALESCE(vb.name, o.vehicle_brand, "") AS vehicle_brand,
                     COALESCE(vm.name, o.vehicle_model, "") AS vehicle_model,
-                    o.payment_method, o.total_ttc, o.total, o.status
+                    o.payment_method, o.vat_rate, o.total_ttc, o.total, o.status
              FROM operations o
              LEFT JOIN clients c ON c.id = o.client_id
              LEFT JOIN vehicles v ON v.id = o.vehicle_id
@@ -1035,7 +1035,7 @@ class AppDatabase
              LIMIT 200'
         );
         $stmt->execute($params);
-        $rows = array_map(fn (array $operation): array => $this->decorateOperation($operation), $stmt->fetchAll());
+        $rows = $this->decorateOperationsWithMargins($stmt->fetchAll());
 
         return [
             'rows' => $rows,
@@ -1919,6 +1919,20 @@ class AppDatabase
         }
 
         return $lines;
+    }
+
+    private function decorateOperationsWithMargins(array $operations): array
+    {
+        $linesByOperation = $this->financialLinesForOperations(array_column($operations, 'id'));
+        return array_map(function (array $operation) use ($linesByOperation): array {
+            $operation = $this->decorateOperation($operation);
+            $totals = $this->financialTotalsForLines(
+                $linesByOperation[(int) $operation['id']] ?? [],
+                (float) ($operation['vat_rate'] ?? 20)
+            );
+            $operation['total_margin'] = $totals['margin'];
+            return $operation;
+        }, $operations);
     }
 
     private function financialTotalsForLines(array $lines, float $vatRate): array

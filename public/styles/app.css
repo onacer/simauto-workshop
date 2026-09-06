@@ -1166,11 +1166,11 @@ select.is-combobox-native {
 }
 
 .billing-table > div {
-    grid-template-columns: .7fr 1fr 1.2fr .8fr 1.5fr;
+    grid-template-columns: .7fr 1fr 1.5fr .8fr .8fr 1.5fr;
 }
 
 .operation-history-table > div {
-    grid-template-columns: .8fr 1fr .9fr 2fr .8fr .8fr 1.7fr;
+    grid-template-columns: .8fr 1fr .9fr 2fr .8fr .8fr .8fr 1.7fr;
 }
 
 .operation-lines-table > div {
