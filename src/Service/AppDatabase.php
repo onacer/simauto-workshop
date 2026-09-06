@@ -1022,10 +1022,14 @@ class AppDatabase
             'SELECT o.id, o.doc_type, o.invoice_no, o.quote_no, o.order_no, o.created_at,
                     COALESCE(c.name, o.client_name) AS client_name,
                     COALESCE(v.plate, o.vehicle_plate) AS vehicle_plate,
+                    COALESCE(vb.name, o.vehicle_brand, "") AS vehicle_brand,
+                    COALESCE(vm.name, o.vehicle_model, "") AS vehicle_model,
                     o.payment_method, o.total_ttc, o.total, o.status
              FROM operations o
              LEFT JOIN clients c ON c.id = o.client_id
              LEFT JOIN vehicles v ON v.id = o.vehicle_id
+             LEFT JOIN vehicle_brands vb ON vb.id = v.brand_id
+             LEFT JOIN vehicle_models vm ON vm.id = v.model_id
              WHERE ' . $whereSql . '
              ORDER BY o.created_at DESC, o.id DESC
              LIMIT 200'
@@ -1666,6 +1670,9 @@ class AppDatabase
         $productType = in_array($productType, ['stockable', 'service'], true) ? $productType : 'stockable';
         $marginMode = (string) ($data['margin_mode'] ?? 'manual');
         $marginRate = PricingCalculator::supportedMargin($marginMode);
+        if ($marginMode !== '' && $marginMode !== 'manual' && $marginRate === null) {
+            throw new InvalidArgumentException('La marge doit etre comprise entre 0 et 99');
+        }
         if ($marginRate !== null) {
             $salePrice = PricingCalculator::priceFromMargin($purchasePrice, $marginRate);
         }
@@ -1740,6 +1747,11 @@ class AppDatabase
                 $marginMode = (string) ($lineMarginModes[$i] ?? 'manual');
                 $requestedType = (string) ($lineTypes[$i] ?? '');
 
+                // The blank product prototype has quantity 1 in the UI; it is not a business line.
+                if ($productId <= 0 && $label === '' && $price <= 0) {
+                    continue;
+                }
+
                 if ($productId > 0) {
                     $product = $this->product($productId);
                     if (!$product || (int) ($product['active'] ?? 0) !== 1) {
@@ -1752,17 +1764,17 @@ class AppDatabase
                     $label = $label !== '' ? $label : (string) $product['name'];
                     $canUseMargin = (string) ($product['product_type'] ?? 'stockable') !== 'service' && (float) ($product['purchase_price'] ?? 0) > 0;
                     $marginRate = PricingCalculator::supportedMargin($marginMode);
+                    if ($marginMode !== '' && $marginMode !== 'manual' && $marginRate === null) {
+                        throw new InvalidArgumentException('La marge doit etre comprise entre 0 et 99');
+                    }
                     if ($canUseMargin && $marginRate !== null) {
                         $price = PricingCalculator::priceFromMargin((float) $product['purchase_price'], $marginRate);
                     }
-                    if ($price <= 0) {
+                    if ($price <= 0 && $actualType === 'product') {
                         $price = (float) $product['sale_price'];
                     }
                 }
 
-                if ($productId <= 0 && $label === '' && $qty <= 0 && $price <= 0) {
-                    continue;
-                }
                 if ($productId <= 0 && $requestedType === 'product') {
                     throw new InvalidArgumentException('Un produit stockable est obligatoire');
                 }
@@ -1823,11 +1835,42 @@ class AppDatabase
             }
         }
 
-        if (!$lines) {
+        if (!$lines || !array_filter($lines, static fn (array $line): bool => (float) $line['total'] > 0)) {
             throw new InvalidArgumentException('يجب إدخال قطعة أو خدمة واحدة على الأقل');
         }
 
+        foreach ($lines as &$line) {
+            if ($line['line_type'] === 'service' && !$line['product_id']) {
+                $line['product_id'] = $this->getOrCreateServiceProduct((string) $line['label']);
+            }
+        }
+        unset($line);
+
         return $lines;
+    }
+
+    private function getOrCreateServiceProduct(string $label): int
+    {
+        $normalized = $this->normalizeSearchTerm($label);
+        foreach ($this->pdo->query("SELECT id, name FROM products WHERE product_type = 'service'")->fetchAll() as $service) {
+            if ($this->normalizeSearchTerm((string) $service['name']) === $normalized) {
+                return (int) $service['id'];
+            }
+        }
+
+        $categoryId = $this->getOrCreateCategory('Services');
+        $baseSku = 'SVC-AUTO-' . strtoupper(substr(sha1($normalized), 0, 10));
+        $sku = $baseSku;
+        $suffix = 1;
+        while ($this->productBySku($sku)) {
+            $sku = $baseSku . '-' . $suffix++;
+        }
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO products (sku, name, category, category_id, stock_qty, min_qty, purchase_price, sale_price, product_type, margin_rate, active, created_at)
+             VALUES (:sku, :name, :category, :category_id, 0, 0, 0, 0, "service", NULL, 1, datetime("now"))'
+        );
+        $stmt->execute(['sku' => $sku, 'name' => trim($label), 'category' => 'Services', 'category_id' => $categoryId]);
+        return (int) $this->pdo->lastInsertId();
     }
 
     private function splitIncludedTax(float $totalTtc, float $vatRate): array
