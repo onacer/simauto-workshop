@@ -109,7 +109,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 const price = Number.parseFloat(purchase.value || "0");
                 const rate = Number.parseFloat(margin.value || "0");
-                sale.value = (price / ((100 - rate) / 100)).toFixed(2);
+                const calculatedPrice = priceFromMargin(price, rate);
+                if (calculatedPrice !== null) sale.value = calculatedPrice.toFixed(2);
             };
             const syncType = () => {
                 const isService = type?.value === "service";
@@ -325,13 +326,20 @@ document.addEventListener("DOMContentLoaded", () => {
     syncDependentSelects();
     syncLiveSearch();
 
+    const operationMarginValues = ["35", "45", "55"];
+    function priceFromMargin(basePrice, marginPercent) {
+        const base = Number.parseFloat(basePrice);
+        const margin = Number.parseFloat(marginPercent);
+        if (!Number.isFinite(base) || !Number.isFinite(margin) || base < 0 || margin < 0 || margin >= 100) return null;
+        return Math.round((base / ((100 - margin) / 100) + Number.EPSILON) * 100) / 100;
+    }
+
     const syncOperationLines = (form) => {
         const totalTtcNode = form.querySelector("[data-total-ttc]");
         const totalMarginNode = form.querySelector("[data-total-margin]");
         let totalTtc = 0;
         let totalMargin = 0;
         const vatRate = Number.parseFloat(form.querySelector(".operation-vat-rate")?.value || "20");
-        const marginValues = ["35", "45", "55"];
 
         const recalculateLinePrice = (line, force = false) => {
             const product = line.querySelector(".line-product");
@@ -353,12 +361,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (force) {
                 const productMargin = option.dataset.marginRate || "";
-                margin.value = marginValues.includes(productMargin) ? productMargin : "manual";
+                margin.value = operationMarginValues.includes(productMargin) ? productMargin : "manual";
             }
 
-            if (marginValues.includes(margin.value)) {
+            if (operationMarginValues.includes(margin.value)) {
+                const calculatedPrice = priceFromMargin(purchasePrice, margin.value);
+                if (calculatedPrice === null) return;
                 price.dataset.syncingMargin = "1";
-                price.value = (purchasePrice / ((100 - Number.parseFloat(margin.value)) / 100)).toFixed(2);
+                price.value = calculatedPrice.toFixed(2);
                 delete price.dataset.syncingMargin;
             } else if (force && option.dataset.price) {
                 price.dataset.syncingMargin = "1";
@@ -421,9 +431,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     const product = line.querySelector(".line-product");
                     const option = product?.selectedOptions[0];
                     const purchasePrice = Number.parseFloat(option?.dataset.purchasePrice || "0");
-                    if (price && marginValues.includes(select.value) && purchasePrice > 0) {
+                    const calculatedPrice = priceFromMargin(purchasePrice, select.value);
+                    if (price && operationMarginValues.includes(select.value) && purchasePrice > 0 && calculatedPrice !== null) {
                         price.dataset.syncingMargin = "1";
-                        price.value = (purchasePrice / ((100 - Number.parseFloat(select.value)) / 100)).toFixed(2);
+                        price.value = calculatedPrice.toFixed(2);
                         delete price.dataset.syncingMargin;
                     }
                     syncOperationLines(form);
@@ -441,11 +452,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     const canUseMargin = Boolean(option?.value) && option?.dataset.productType !== "service" && purchasePrice > 0;
                     if (margin) {
                         margin.disabled = !canUseMargin;
-                        margin.value = canUseMargin && marginValues.includes(marginValue) ? marginValue : "manual";
+                        margin.value = canUseMargin && operationMarginValues.includes(marginValue) ? marginValue : "manual";
                     }
-                    if (price && margin && marginValues.includes(margin.value)) {
+                    const calculatedPrice = priceFromMargin(purchasePrice, margin?.value);
+                    if (price && margin && operationMarginValues.includes(margin.value) && calculatedPrice !== null) {
                         price.dataset.syncingMargin = "1";
-                        price.value = (purchasePrice / ((100 - Number.parseFloat(margin.value)) / 100)).toFixed(2);
+                        price.value = calculatedPrice.toFixed(2);
                         delete price.dataset.syncingMargin;
                     } else if (price && option?.dataset.price && line?.dataset.lineType !== "service") {
                         price.dataset.syncingMargin = "1";
