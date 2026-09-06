@@ -83,16 +83,20 @@ final class AppDatabaseTest extends TestCase
         PricingCalculator::priceFromMargin(100, 100);
     }
 
-    public function testThermalReceiptIsStandaloneContinuousAndHistoryCombinesClientVehicle(): void
+    public function testThermalReceiptUsesAppLayoutAndIsolatesTicketOnlyForPrint(): void
     {
         $db = $this->database();
         $id = $this->operationWithService($db, 'ESP');
         $operation = $db->operation($id);
-        $receipt = $this->renderTemplate('documents/receipt.html.twig', ['operation' => $operation, 'company' => ['service_line_1' => 'Garage', 'address' => 'Agadir', 'contact' => '0600']]);
-        self::assertStringNotContainsString('topbar', $receipt);
-        self::assertStringNotContainsString('min-height', $receipt);
+        $receipt = $this->renderTemplate('documents/receipt.html.twig', ['user' => ['role' => 'manager', 'name' => 'Manager'], 'operation' => $operation, 'company' => ['service_line_1' => 'Garage', 'address' => 'Agadir', 'contact' => '0600']]);
+        self::assertStringContainsString('class="topbar"', $receipt);
+        self::assertStringContainsString('ticket-screen-actions', $receipt);
         self::assertStringContainsString('@page { size: 80mm auto; margin: 0; }', $receipt);
-        self::assertStringContainsString('.receipt-ticket { width: 80mm; margin: 0; padding: 2mm;', $receipt);
+        self::assertStringContainsString('body * { visibility: hidden; }', $receipt);
+        self::assertStringContainsString('#ticket, #ticket * { visibility: visible; }', $receipt);
+        self::assertStringContainsString('width: 80mm; margin: 0 auto; padding: 2mm;', $receipt);
+        self::assertStringNotContainsString('min-height: 100vh', $receipt);
+        self::assertStringNotContainsString('Marge', $receipt);
 
         $history = $this->renderTemplate('app/operations_history.html.twig', [
             'user' => ['role' => 'manager', 'name' => 'Manager'], 'operations' => [$operation],
@@ -101,6 +105,8 @@ final class AppDatabaseTest extends TestCase
         ]);
         self::assertStringContainsString(($operation['client_real_name'] ?: $operation['client_name']) . ' — ' . $operation['brand_name'] . ' ' . $operation['model_name'], $history);
         self::assertStringNotContainsString($operation['vehicle_real_plate'], $history);
+        self::assertStringContainsString('operations.margin', $history);
+        self::assertStringContainsString('class="money" dir="ltr"', $history);
     }
 
     private array $temporaryDirectories = [];

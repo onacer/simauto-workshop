@@ -1586,6 +1586,7 @@ L'application est fonctionnelle avec:
 - Un libelle libre de service cree automatiquement un produit catalogue de type `service`, sans stock ni prix impose. La resolution normalisee (casse et espaces ignores) reutilise un service existant et evite les doublons. Les services sont exclus des controles et mouvements de stock.
 - La formule de reference reste `prix_base / ((100 - marge) / 100)`, dans l'unique helper PHP et l'unique fonction JavaScript. Une marge numerique invalide, notamment 100, est refusee; le mode manuel conserve le prix saisi.
 - Le ticket est un template HTML autonome, sans layout applicatif ni CSS A4. Son flux continu utilise une largeur de 80 mm, une marge de page nulle, aucun `min-height` et interdit les coupures internes.
-- Les listes `/operations/history` et `/billing` ne montrent ni marge ni immatriculation. Leur colonne client combine le nom du client avec la marque et le modele; la fiche detail conserve toutes les informations, dont la plaque et les marges.
+- Les listes `/operations/history` et `/billing` montrent la marge totale HT calculee par le helper partage, mais pas l'immatriculation. Leur colonne client combine le nom du client avec la marque et le modele; la fiche detail conserve toutes les informations, dont la plaque et les marges. Aucun document client n'imprime la marge.
+- A l'ecran, `/receipt/{id}` utilise le layout normal avec topbar et actions Retour/Imprimer. A l'impression seulement, le CSS masque tout le chrome et rend visible uniquement `#ticket` en flux continu 80 mm sans marge de page ni hauteur forcee; `ticket-72mm` reste disponible.
 - affichage utilisateurs admin,
 - tests PHPUnit.
