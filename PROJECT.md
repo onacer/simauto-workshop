@@ -1573,7 +1573,7 @@ L'application est fonctionnelle avec:
 ## Evolutions marge, stock et impression (septembre 2026)
 
 - `PricingCalculator` est l'unique point de calcul du prix par marge et applique la formule par diviseur documentee ci-dessus.
-- `LineMarginCalculator` est l'unique point d'extension de la marge de gestion. La marge est calculee en HT: total de ligne HT moins achat ramene en HT fois quantite; service et ligne libre ont un cout nul. Les ecrans operation affichent la marge par ligne et son total, jamais les documents client.
+- `LineMarginCalculator` est l'unique point d'extension de la marge de gestion. Un produit stockable conserve le calcul HT: total HT moins achat ramene en HT fois quantite. Pour un service ou une ligne libre, la marge vaut strictement 100% du montant saisi visible (`quantite x prix`, remise deduite), sans extraction de TVA, avec un cout nul. Les ecrans operation affichent la marge par ligne et son total, jamais les documents client.
 - La saisie d'operation comporte deux sections: produits stockables (selection obligatoire, marge et stock) et services (service catalogue ou libelle libre, prix libre, aucun mouvement de stock).
 - Le filtre Twig `money` encapsule les montants dans un isolat LTR afin que les chiffres latins restent lisibles dans l'interface arabe RTL.
 - `/stock` propose une situation filtree par periode, categorie, etat de stock et statut actif. L'export Excel est un CSV UTF-8 BOM au separateur `;`, volontairement choisi pour eviter une dependance PHP lourde; l'export PDF est une vue A4 paysage imprimable/enregistrable en PDF par le navigateur.
@@ -1586,7 +1586,8 @@ L'application est fonctionnelle avec:
 - Un libelle libre de service cree automatiquement un produit catalogue de type `service`, sans stock ni prix impose. La resolution normalisee (casse et espaces ignores) reutilise un service existant et evite les doublons. Les services sont exclus des controles et mouvements de stock.
 - La formule de reference reste `prix_base / ((100 - marge) / 100)`, dans l'unique helper PHP et l'unique fonction JavaScript. Une marge numerique invalide, notamment 100, est refusee; le mode manuel conserve le prix saisi.
 - Le ticket est un template HTML autonome, sans layout applicatif ni CSS A4. Son flux continu utilise une largeur de 80 mm, une marge de page nulle, aucun `min-height` et interdit les coupures internes.
-- Les listes `/operations/history` et `/billing` montrent la marge totale HT calculee par le helper partage, mais pas l'immatriculation. Leur colonne client combine le nom du client avec la marque et le modele; la fiche detail conserve toutes les informations, dont la plaque et les marges. Aucun document client n'imprime la marge.
+- Les listes `/operations/history` et `/billing` montrent la marge totale calculee par le helper partage, mais pas l'immatriculation. Leur colonne client combine le nom du client avec la marque et le modele; la fiche detail conserve toutes les informations, dont la plaque et les marges. Aucun document client n'imprime la marge.
 - A l'ecran, `/receipt/{id}` utilise le layout normal avec topbar et actions Retour/Imprimer. A l'impression seulement, le CSS masque tout le chrome et rend visible uniquement `#ticket` en flux continu 80 mm sans marge de page ni hauteur forcee; `ticket-72mm` reste disponible.
+- Le ticket utilise une police Arial/Tahoma de 12 px minimum, en graisse 700 sur tout le contenu et 900 sur le titre/total, avec noir pur sur fond blanc et `print-color-adjust: exact` pour un contraste adapte aux imprimantes thermiques 203 dpi.
 - affichage utilisateurs admin,
 - tests PHPUnit.

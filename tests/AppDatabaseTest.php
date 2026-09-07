@@ -50,6 +50,21 @@ final class AppDatabaseTest extends TestCase
         self::assertSame(100.0, $product['margin'] + $service['margin']);
     }
 
+    public function testServiceMarginUsesEnteredTotalWithQuantityAndDiscount(): void
+    {
+        $one = LineMarginCalculator::decorate(['product_id' => 1, 'line_type' => 'service', 'product_type' => 'service', 'quantity' => 1, 'total_ht' => 83.33, 'total' => 100], 20);
+        $two = LineMarginCalculator::decorate(['product_id' => 1, 'line_type' => 'service', 'product_type' => 'service', 'quantity' => 2, 'total_ht' => 166.67, 'total' => 200], 20);
+        $discounted = LineMarginCalculator::decorate(['product_id' => null, 'line_type' => 'service', 'quantity' => 1, 'total_ht' => 75, 'total' => 90], 20);
+        $product = LineMarginCalculator::decorate(['product_id' => 2, 'line_type' => 'product', 'product_type' => 'stockable', 'quantity' => 1, 'purchase_price' => 60, 'total_ht' => 100, 'total' => 120], 20);
+
+        self::assertSame(100.0, $one['margin']);
+        self::assertSame(200.0, $two['margin']);
+        self::assertSame(90.0, $discounted['margin']);
+        self::assertSame(50.0, $product['margin']);
+        self::assertSame(150.0, $one['margin'] + $product['margin']);
+        self::assertStringContainsString('line.dataset.lineType === "service"', file_get_contents(__DIR__ . '/../public/scripts/app.js'));
+    }
+
     public function testServiceOnlyFormIgnoresBlankProductPrototypeAndReusesAutoCreatedService(): void
     {
         $db = $this->database();
@@ -97,6 +112,10 @@ final class AppDatabaseTest extends TestCase
         self::assertStringContainsString('width: 80mm; margin: 0 auto; padding: 2mm;', $receipt);
         self::assertStringNotContainsString('min-height: 100vh', $receipt);
         self::assertStringNotContainsString('Marge', $receipt);
+        self::assertStringContainsString('font-weight: 700', $receipt);
+        self::assertStringContainsString('color: #000', $receipt);
+        self::assertStringContainsString('-webkit-print-color-adjust: exact', $receipt);
+        self::assertStringContainsString('print-color-adjust: exact', $receipt);
 
         $history = $this->renderTemplate('app/operations_history.html.twig', [
             'user' => ['role' => 'manager', 'name' => 'Manager'], 'operations' => [$operation],
@@ -1098,12 +1117,12 @@ SQL);
         self::assertSame(100.0, (float) $details['margin_lines'][0]['cost_ht']);
         self::assertSame(100.0, (float) $details['margin_lines'][0]['margin']);
         self::assertSame(0.0, (float) $details['margin_lines'][1]['cost_ht']);
-        self::assertSame(100.0, (float) $details['margin_lines'][1]['margin']);
+        self::assertSame(120.0, (float) $details['margin_lines'][1]['margin']);
         self::assertSame(0.0, (float) $details['margin_lines'][2]['cost_ht']);
-        self::assertSame(50.0, (float) $details['margin_lines'][2]['margin']);
+        self::assertSame(60.0, (float) $details['margin_lines'][2]['margin']);
         self::assertFalse((bool) $details['margin_lines'][2]['is_estimated']);
         self::assertSame('service', $details['margin_lines'][2]['product_type']);
-        self::assertSame(250.0, (float) $details['margin']);
+        self::assertSame(280.0, (float) $details['margin']);
         self::assertSame(350.0, (float) $details['subtotal_ht']);
     }
 
