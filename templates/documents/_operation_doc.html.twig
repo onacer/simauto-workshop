@@ -37,8 +37,8 @@
             <tr>
                 <th>DESIGNATION</th>
                 <th>QUANTITE</th>
-                <th>PRIX UNITE</th>
-                <th>MONTANT</th>
+                <th>PRIX UNITAIRE TTC</th>
+                <th>MONTANT TTC</th>
             </tr>
         </thead>
         <tbody>
@@ -47,13 +47,13 @@
                     <td>{% if item.product_sku %}{{ item.product_sku }} - {% endif %}{{ item.label }}</td>
                     <td>{{ item.quantity }}</td>
                     <td>{{ item.unit_price > 0 ? item.unit_price|money : '' }}</td>
-                    {% set line_amount = operation.doc_type == 'invoice' ? item.total_ht|default(item.total) : item.total %}
+                    {% set line_amount = item.total %}
                     <td>{{ line_amount > 0 ? line_amount|money : 'GRATUIT' }}</td>
                 </tr>
             {% endfor %}
             <tr class="total-row">
                 <td colspan="3">TOTAL</td>
-                <td>{{ (operation.doc_type == 'invoice' ? operation.subtotal_ht : operation.total_ttc)|money }}</td>
+                <td>{{ operation.total_ttc|money }}</td>
             </tr>
         </tbody>
     </table>
