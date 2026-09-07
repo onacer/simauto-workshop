@@ -11,12 +11,15 @@
 .receipt-ticket h1 { font-size: 18px; font-weight: 900; }
 .receipt-ticket .ticket-line, .receipt-ticket .ticket-line * { color: #000; font-size: 13px; font-weight: 900; line-height: 1.25; }
 .receipt-ticket .receipt-total, .receipt-ticket .receipt-total * { font-size: 16px; font-weight: 900; }
+.ticket-footer { page-break-inside: avoid; break-inside: avoid; }
 @media print {
-    html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    html, body { margin: 0 !important; padding: 0 !important; height: auto !important; min-height: unset !important; background: #fff !important; }
+    body::before, body::after { display: none !important; }
     body * { visibility: hidden; }
     #ticket, #ticket * { visibility: visible; }
     #ticket { position: absolute; top: 0; left: 0; width: 80mm; margin: 0 auto; padding: 2mm; box-sizing: border-box; color: #000; background: #fff; font-weight: 800; box-shadow: none; page-break-inside: avoid; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     #ticket.ticket-72mm { width: 72mm; }
+    .receipt-screen { margin: 0 !important; padding: 0 !important; height: auto !important; min-height: unset !important; }
     .topbar, .ticket-screen-actions { display: none !important; }
 }
 </style>
@@ -45,7 +48,7 @@
         <hr><div class="receipt-total"><span>{{ 'operations.total'|trans }}</span><strong>{{ operation.total_ttc|default(operation.total)|money(0) }}</strong></div>
         <div class="receipt-row"><span>{{ 'operations.payment'|trans }}</span><b>{{ operation.payment_label }}</b></div>
         {% if operation.check_number %}<div class="receipt-row"><span>{{ 'operations.check_number'|trans }}</span><b>{{ operation.check_number }}</b></div>{% endif %}
-        <hr><p class="thanks">Merci pour votre visite<br>شكرا لزيارتكم</p><p>{{ company.contact }}</p>
+        <footer class="ticket-footer"><hr><p class="thanks">Merci pour votre visite<br>شكرا لزيارتكم</p><p>{{ company.contact }}</p></footer>
     </section>
 </main>
 {% endblock %}
