@@ -392,7 +392,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const selected = product?.selectedOptions[0];
             const isStockable = line.dataset.lineType === "product" && selected?.dataset.productType === "stockable";
             const costHt = isStockable ? (Number.parseFloat(selected?.dataset.purchasePrice || "0") / (1 + vatRate / 100)) * quantity : 0;
-            totalMargin += lineTotalTtc / (1 + vatRate / 100) - costHt;
+            totalMargin += line.dataset.lineType === "service"
+                ? lineTotalTtc
+                : lineTotalTtc / (1 + vatRate / 100) - costHt;
             if (total) {
                 total.textContent = `${lineTotalTtc.toFixed(2)} DH`;
             }

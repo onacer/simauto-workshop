@@ -71,7 +71,7 @@
                 <span>{{ 'operations.price_ttc'|trans }}</span>
                 <span>{{ 'operations.discount'|trans }}</span>
                 <span>{{ 'operations.total_ttc'|trans }}</span>
-                <span>{{ 'operations.margin'|trans }} HT</span>
+                <span>{{ 'operations.margin'|trans }}</span>
             </div>
             {% for item in operation.items %}
                 <div>
@@ -92,7 +92,7 @@
     <section class="panel totals-panel">
         <div class="invoice-totals operation-totals">
             <div><span>{{ 'operations.total_ttc'|trans }}</span><strong>{{ operation.total_ttc|money }}</strong></div>
-            <div><span>{{ 'operations.total_margin'|trans }} HT</span><strong>{{ operation.total_margin|money }}</strong></div>
+            <div><span>{{ 'operations.total_margin'|trans }}</span><strong>{{ operation.total_margin|money }}</strong></div>
         </div>
     </section>
 </main>
