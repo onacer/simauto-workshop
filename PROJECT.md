@@ -1589,5 +1589,6 @@ L'application est fonctionnelle avec:
 - Les listes `/operations/history` et `/billing` montrent la marge totale calculee par le helper partage, mais pas l'immatriculation. Leur colonne client combine le nom du client avec la marque et le modele; la fiche detail conserve toutes les informations, dont la plaque et les marges. Aucun document client n'imprime la marge.
 - A l'ecran, `/receipt/{id}` utilise le layout normal avec topbar et actions Retour/Imprimer. A l'impression seulement, le CSS masque tout le chrome et rend visible uniquement `#ticket` en flux continu 80 mm sans marge de page ni hauteur forcee; `ticket-72mm` reste disponible.
 - Le ticket utilise une police Arial/Tahoma de 12 px minimum, en graisse 700 sur tout le contenu et 900 sur le titre/total, avec noir pur sur fond blanc et `print-color-adjust: exact` pour un contraste adapte aux imprimantes thermiques 203 dpi.
+- L'ajout dynamique de plusieurs lignes preserve les champs caches `line_type` et `line_margin_mode`: chaque clone produit reste `product`, chaque clone service reste `service`. Le serveur valide chaque famille separement; plusieurs produits stockables et plusieurs services peuvent coexister, et seuls les produits stockables generent des sorties de stock.
 - affichage utilisateurs admin,
 - tests PHPUnit.

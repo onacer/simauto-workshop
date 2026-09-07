@@ -485,6 +485,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 select.selectedIndex = 0;
             });
             clone.querySelectorAll("input").forEach((input) => {
+                if (input.type === "hidden") return;
                 input.value = input.classList.contains("line-qty") ? "1" : "0";
                 if (input.classList.contains("line-label")) input.value = "";
             });

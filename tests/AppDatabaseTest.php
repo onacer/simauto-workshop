@@ -89,6 +89,46 @@ final class AppDatabaseTest extends TestCase
         self::assertSame(1, (int) $db->pdo()->query("SELECT COUNT(*) FROM products WHERE product_type = 'service' AND lower(name) LIKE '%diagnostic%libre%'")->fetchColumn());
     }
 
+    public function testMultipleStockableAndServiceRowsKeepTheirSeparateRules(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        foreach ([['MULTI-P-1', 10, 20], ['MULTI-P-2', 20, 40]] as [$sku, $purchase, $sale]) {
+            $db->saveProduct(['sku' => $sku, 'name' => $sku, 'category_id' => $categoryId, 'stock_qty' => 10, 'min_qty' => 1, 'purchase_price' => $purchase, 'sale_price' => $sale], 1);
+        }
+        $db->saveProduct(['sku' => 'MULTI-S-1', 'name' => 'Service catalogue multi', 'category_id' => $categoryId, 'stock_qty' => 0, 'min_qty' => 0, 'purchase_price' => 0, 'sale_price' => 0, 'product_type' => 'service'], 1);
+        $p1 = $this->id($pdo, 'SELECT id FROM products WHERE sku = "MULTI-P-1"');
+        $p2 = $this->id($pdo, 'SELECT id FROM products WHERE sku = "MULTI-P-2"');
+        $service = $this->id($pdo, 'SELECT id FROM products WHERE sku = "MULTI-S-1"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+
+        $quoteId = $db->createOperation([
+            'client_id' => $clientId, 'vehicle_id' => $vehicleId, 'payment_method' => 'ESP',
+            'line_type' => ['product', 'product', 'service', 'service'],
+            'line_product_id' => [$p1, $p2, $service, ''],
+            'line_label' => ['', '', '', 'Service libre multi'],
+            'line_quantity' => [2, 3, 2, 1],
+            'line_margin_mode' => ['manual', 'manual', 'manual', 'manual'],
+            'line_unit_price' => [20, 40, 50, 75],
+            'line_discount' => [0, 0, 10, 0],
+        ], 1);
+        $quote = $db->operation($quoteId);
+        self::assertCount(4, $quote['items']);
+        self::assertSame(['product', 'product', 'service', 'service'], array_column($quote['items'], 'line_type'));
+        self::assertSame(90.0, (float) $quote['items'][2]['margin']);
+        self::assertSame(75.0, (float) $quote['items'][3]['margin']);
+
+        $db->invoiceDocument($quoteId, 1);
+        self::assertSame(8, (int) $db->product($p1)['stock_qty']);
+        self::assertSame(7, (int) $db->product($p2)['stock_qty']);
+        self::assertSame(0, (int) $db->product($service)['stock_qty']);
+        self::assertSame(2, (int) $pdo->query("SELECT COUNT(*) FROM stock_movements WHERE movement_type = 'out' AND product_id IN ($p1, $p2, $service)")->fetchColumn());
+
+        $js = file_get_contents(__DIR__ . '/../public/scripts/app.js');
+        self::assertStringContainsString('if (input.type === "hidden") return;', $js);
+    }
+
     public function testInvalidNumericMarginIsRejectedByServerAndManualPriceIsPreserved(): void
     {
         self::assertSame(153.85, PricingCalculator::priceFromMargin(100, 35));
