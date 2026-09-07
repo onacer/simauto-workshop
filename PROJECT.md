@@ -523,30 +523,13 @@ Les devis et bons de commande sont exclus du chiffre d'affaires et de la marge.
 
 ### Regles de marge
 
-Tous les prix stockes sont TTC. Le reporting travaille avec le HT extrait depuis le TTC et le taux TVA de l'operation.
-
-Pour chaque ligne de facture:
-
-- Produit stockable lie a un produit existant:
-  - `cout_ht = (purchase_price / (1 + vat_rate / 100)) * quantity`
-  - `marge = total_ht - cout_ht`
-- Service ou produit de type `service`:
-  - `cout_ht = 0`
-  - `marge = total_ht`
-- Ligne libre ou produit supprime:
-  - `cout_ht = 0`
-  - `marge = total_ht`
-  - ligne marquee comme estimee.
-
-Le cout utilise le `purchase_price` actuel du produit. Il n'y a pas d'historique de cout dans cette iteration.
-
-Le taux de marge est:
-
-```text
-marge / subtotal_ht * 100
-```
-
-avec protection contre la division par zero.
+Tous les prix et marges sont en TTC direct, sans extraction HT.
+- Produit stockable: cout TTC = purchase_price x quantite; marge = total TTC de ligne - cout TTC.
+- Service et ligne libre: cout zero; marge = total TTC apres quantite et remise.
+- Marge document = somme des marges de lignes; taux = marge / total TTC x 100, avec protection division par zero.
+- Le cout utilise le prix d'achat actuel; un produit manquant est marque estime.
+- LineMarginCalculator est la source serveur commune au detail, historique et reporting; l'apercu JavaScript applique les memes arrondis par ligne.
+- L'extraction HT/TVA est reservee aux donnees legales du pied de facture et ne participe jamais aux marges. Les lignes de facture affichent exclusivement le TTC.
 
 Le ticket de cloture journalier est un document imprime en francais LTR, format 80 mm, avec:
 
@@ -555,8 +538,6 @@ Le ticket de cloture journalier est un document imprime en francais LTR, format 
 - utilisateur,
 - nombre de factures,
 - total TTC,
-- total HT,
-- TVA,
 - ventilation par mode de paiement,
 - total marge,
 - liste compacte des factures.
@@ -753,7 +734,7 @@ Le document imprime reste en francais LTR et utilise le meme gabarit A4 pour les
 - bon de commande: `BON DE COMMANDE N° {order_no}`;
 - facture: `FACTURE N° {invoice_no}`.
 
-Les montants saisis et visibles dans l'interface sont des TTC directs. L'ecran operation, la fiche detail operation, l'historique, la page facturation et le receipt n'affichent pas de decomposition TVA. Les champs `subtotal_ht`, `vat_rate`, `vat_amount` et `total_ttc` restent stockes pour la facture et le reporting.
+Les montants saisis et visibles dans l'interface sont des TTC directs. L'ecran operation, la fiche detail operation, l'historique, la page facturation et le receipt n'affichent pas de decomposition TVA. Les champs `subtotal_ht`, `vat_rate`, `vat_amount` et `total_ttc` restent stockes pour compatibilite et le pied legal de facture; les marges ne les utilisent pas.
 
 Regle d'impression:
 
@@ -938,7 +919,7 @@ Page facturation:
 Page situation financiere:
 
 - filtres jour, semaine, mois et periode libre,
-- cartes KPI: CA TTC, total HT, TVA, marge, taux de marge, nombre de factures,
+- cartes KPI: CA TTC, marge, taux de marge, nombre de factures,
 - ventilation par mode de paiement,
 - tableau des factures de la periode,
 - lien vers le detail marge de chaque facture,
@@ -949,7 +930,7 @@ Page situation financiere:
 Detail marge d'une facture:
 
 - informations facture,
-- lignes avec type, quantite, PU TTC, total HT, cout HT, marge et taux,
+- lignes avec type, quantite, PU TTC, total TTC, cout TTC, marge et taux,
 - badge estime pour les lignes libres ou produits introuvables,
 - totaux de facture.
 
@@ -1039,7 +1020,7 @@ Le partiel rend le document A4 pour:
 - mode de paiement en clair: `ESP`, `CHEQUE`, `CB` ou `VIR`,
 - mention `Cheque N°` quand un numero de cheque est renseigne,
 - tableau designation / quantite / prix / montant,
-- lignes en montant HT calcule depuis les prix TTC,
+- lignes en montant TTC direct,
 - bloc `MT HT`, `TVA`, `MT TTC A PAYER`,
 - merci pour votre visite,
 - footer avec informations de contact centralisees dans `App\Service\CompanyProfile`,
@@ -1075,7 +1056,7 @@ Ticket de cloture de caisse:
 - ventilation paiement,
 - liste compacte des factures.
 
-Le ticket imprime ne montre pas HT, TVA ni marge. Ces indicateurs restent disponibles dans `/reports/finance`.
+Le ticket imprime ne montre pas HT, TVA ni marge. Les marges restent disponibles dans `/reports/finance`.
 
 ## Assets Publics
 
@@ -1132,7 +1113,7 @@ Il gere aussi:
 - la fermeture clavier avec Escape,
 - l'affichage conditionnel des champs societe pour les clients.
 - l'affichage conditionnel du champ numero de cheque quand le paiement est `CHQ`.
-- la preview des operations avec prix TTC, extraction HT et TVA incluse.
+- la preview des operations avec prix et marges TTC directs.
 - l'affichage du formulaire dates quand le preset reporting est `custom`.
 
 ## Vues Detail
@@ -1422,8 +1403,8 @@ Tests couverts:
 - erreurs de ligne import sans annuler les lignes valides,
 - resolution marque/modele insensible a la casse,
 - matrice de droits admin/manager,
-- calcul marge produit stockable avec cout achat HT extrait du TTC,
-- marge service a 100% du total HT,
+- calcul marge produit stockable avec cout achat TTC direct,
+- marge service a 100% du total TTC,
 - ligne libre marquee estimee,
 - synthese financiere sur factures uniquement,
 - periode custom inclusive,
@@ -1573,7 +1554,7 @@ L'application est fonctionnelle avec:
 ## Evolutions marge, stock et impression (septembre 2026)
 
 - `PricingCalculator` est l'unique point de calcul du prix par marge et applique la formule par diviseur documentee ci-dessus.
-- `LineMarginCalculator` est l'unique point d'extension de la marge de gestion. Un produit stockable conserve le calcul HT: total HT moins achat ramene en HT fois quantite. Pour un service ou une ligne libre, la marge vaut strictement 100% du montant saisi visible (`quantite x prix`, remise deduite), sans extraction de TVA, avec un cout nul. Les ecrans operation affichent la marge par ligne et son total, jamais les documents client.
+- `LineMarginCalculator` est l'unique point d'extension de la marge de gestion. Un produit stockable utilise le TTC direct: total TTC moins achat TTC fois quantite. Pour un service ou une ligne libre, la marge vaut strictement 100% du montant saisi visible (`quantite x prix`, remise deduite), sans extraction de TVA, avec un cout nul. Les ecrans operation affichent la marge par ligne et son total, jamais les documents client.
 - Le formulaire d'operation accepte dans un meme devis plusieurs lignes stockables et plusieurs lignes service. Chaque ligne conserve son `line_type`; les services libres ne subissent ni validation de produit stockable ni controle/decrement de stock.
 - Le recu thermique reste sur un rouleau continu de 80 mm : son pied est indivisible et le chrome applicatif ainsi que les hauteurs d'ecran sont neutralises uniquement a l'impression.
 - La saisie d'operation comporte deux sections: produits stockables (selection obligatoire, marge et stock) et services (service catalogue ou libelle libre, prix libre, aucun mouvement de stock).
@@ -1594,3 +1575,15 @@ L'application est fonctionnelle avec:
 - L'ajout dynamique de plusieurs lignes preserve les champs caches `line_type` et `line_margin_mode`: chaque clone produit reste `product`, chaque clone service reste `service`. Le serveur valide chaque famille separement; plusieurs produits stockables et plusieurs services peuvent coexister, et seuls les produits stockables generent des sorties de stock.
 - affichage utilisateurs admin,
 - tests PHPUnit.
+
+
+## Diagnostic TTC direct — 2026-09-08
+
+- `src/Service/LineMarginCalculator.php`: suppression du facteur TVA et de la division du cout achat; suppression de la base `total_ht` pour la marge et le taux. Services deja corrects en TTC avant correction; produits corriges.
+- `public/scripts/app.js`, `syncOperationLines`: suppression des deux divisions TVA (cout achat et total ligne). Arrondis au centime par ligne et cout pour correspondre au serveur. Cache navigateur invalide par version du script.
+- `src/Service/AppDatabase.php`: `getFinancialSummary`, `getFinancialOperations`, `getOperationMarginDetails` divisent maintenant la marge par le total TTC. La requete `financialLinesForOperations` ne faisait aucune extraction SQL; elle reutilise le helper, comme `operation` et `decorateOperationsWithMargins` pour l'historique et la facturation. Couts renommes `cost_ttc`/`total_cost_ttc`.
+- `DashboardController.php`, formulaires, fiche et historique: aucune division TVA locale; les valeurs viennent du helper commun ou de l'apercu corrige.
+- `templates/app/report_finance_operation.html.twig`: totaux et couts affiches en TTC; `report_finance.html.twig`: retrait des KPI HT/TVA.
+- `templates/documents/_operation_doc.html.twig`: lignes et somme du tableau TTC pour tous les documents; decomposition HT/TVA uniquement dans le pied de facture. `invoice.html.twig` inclut ce partiel sans calcul duplique.
+- Les extractions restantes dans `splitIncludedTax`, la normalisation et les migrations conservent les champs fiscaux historiques pour le pied legal. Aucune ne nourrit une marge.
+- Validation: regressions rouges avant correction (produit et facture); services deja verts. Tests JavaScript executables avec `node tests/ttc-preview.cjs`.

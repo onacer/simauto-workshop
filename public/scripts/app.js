@@ -339,7 +339,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const totalMarginNode = form.querySelector("[data-total-margin]");
         let totalTtc = 0;
         let totalMargin = 0;
-        const vatRate = Number.parseFloat(form.querySelector(".operation-vat-rate")?.value || "20");
 
         const recalculateLinePrice = (line, force = false) => {
             const product = line.querySelector(".line-product");
@@ -387,14 +386,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const quantity = Number.parseFloat(qty?.value || "0");
             const unitPrice = Number.parseFloat(price?.value || "0");
             const discountRate = Number.parseFloat(discount?.value || "0");
-            const lineTotalTtc = Math.max(0, quantity * unitPrice * (1 - discountRate / 100));
+            const lineTotalTtc = Math.round((Math.max(0, quantity * unitPrice * (1 - discountRate / 100)) + Number.EPSILON) * 100) / 100;
             totalTtc += lineTotalTtc;
             const selected = product?.selectedOptions[0];
             const isStockable = line.dataset.lineType === "product" && selected?.dataset.productType === "stockable";
-            const costHt = isStockable ? (Number.parseFloat(selected?.dataset.purchasePrice || "0") / (1 + vatRate / 100)) * quantity : 0;
+            const costTtc = isStockable ? Math.round((Number.parseFloat(selected?.dataset.purchasePrice || "0") * quantity + Number.EPSILON) * 100) / 100 : 0;
             totalMargin += line.dataset.lineType === "service"
                 ? lineTotalTtc
-                : lineTotalTtc / (1 + vatRate / 100) - costHt;
+                : Math.round((lineTotalTtc - costTtc + Number.EPSILON) * 100) / 100;
             if (total) {
                 total.textContent = `${lineTotalTtc.toFixed(2)} DH`;
             }

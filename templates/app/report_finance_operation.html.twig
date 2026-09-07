@@ -18,7 +18,6 @@
         {label: 'vehicles.vehicle'|trans, value: operation.vehicle_display_plate},
         {label: 'reports.table.payment'|trans, value: ('payment.code.' ~ operation.payment_method)|trans},
         {label: 'reports.kpi.total_ttc'|trans, value: operation.total_ttc|money},
-        {label: 'reports.kpi.subtotal_ht'|trans, value: operation.subtotal_ht|money},
         {label: 'reports.kpi.margin'|trans, value: operation.margin|money}
     ]} %}
 
@@ -29,8 +28,8 @@
                 <span>{{ 'ui.type'|trans }}</span>
                 <span>{{ 'operations.quantity'|trans }}</span>
                 <span>{{ 'reports.line.unit_ttc'|trans }}</span>
-                <span>{{ 'reports.line.total_ht'|trans }}</span>
-                <span>{{ 'reports.line.cost_ht'|trans }}</span>
+                <span>{{ 'reports.line.total_ttc'|trans }}</span>
+                <span>{{ 'reports.line.cost_ttc'|trans }}</span>
                 <span>{{ 'reports.table.margin'|trans }}</span>
                 <span>{{ 'reports.table.margin_rate'|trans }}</span>
             </div>
@@ -43,8 +42,8 @@
                     <span>{{ line.product_type ?: line.line_type }}</span>
                     <span>{{ line.quantity }}</span>
                     <span>{{ line.unit_price|money }}</span>
-                    <span>{{ line.total_ht|money }}</span>
-                    <span>{{ line.cost_ht|money }}</span>
+                    <span>{{ line.total|money }}</span>
+                    <span>{{ line.cost_ttc|money }}</span>
                     <span class="margin-cell {{ line.margin < 0 ? 'negative-value' : '' }}">{{ line.margin|money }}</span>
                     <span>{{ line.margin_rate|number_format(2, ',', ' ') }}%</span>
                 </div>
@@ -54,8 +53,8 @@
                 <span></span>
                 <span></span>
                 <span></span>
-                <span>{{ operation.subtotal_ht|money }}</span>
-                <span>{{ operation.cost_ht|money }}</span>
+                <span>{{ operation.total_ttc|money }}</span>
+                <span>{{ operation.cost_ttc|money }}</span>
                 <span class="{{ operation.margin < 0 ? 'negative-value' : '' }}">{{ operation.margin|money }}</span>
                 <span>{{ operation.margin_rate|number_format(2, ',', ' ') }}%</span>
             </div>

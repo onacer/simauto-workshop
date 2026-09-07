@@ -402,3 +402,6 @@ backups.empty: 'Aucune sauvegarde créée pour le moment.'
 'الصنف غير موجود': 'Catégorie introuvable'
 'ثمن الخدمة يجب أن يكون 0 أو أكثر': 'Le prix du service doit être supérieur ou égal à 0'
 'يجب إدخال قطعة أو خدمة واحدة على الأقل': 'Vous devez saisir au moins une pièce ou un service'
+
+reports.line.total_ttc: "Total TTC"
+reports.line.cost_ttc: "Cout TTC"

@@ -1053,7 +1053,7 @@ class AppDatabase
             'total_ttc' => 0.0,
             'subtotal_ht' => 0.0,
             'vat_amount' => 0.0,
-            'total_cost_ht' => 0.0,
+            'total_cost_ttc' => 0.0,
             'total_margin' => 0.0,
             'margin_rate' => 0.0,
             'payments' => $paymentMethods,
@@ -1063,7 +1063,7 @@ class AppDatabase
             $summary['total_ttc'] += (float) $operation['total_ttc'];
             $summary['subtotal_ht'] += (float) $operation['subtotal_ht'];
             $summary['vat_amount'] += (float) $operation['vat_amount'];
-            $summary['total_cost_ht'] += (float) $operation['cost_ht'];
+            $summary['total_cost_ttc'] += (float) $operation['cost_ttc'];
             $summary['total_margin'] += (float) $operation['margin'];
             $method = $this->normalizePaymentMethod((string) ($operation['payment_method'] ?? 'ESP'));
             $summary['payments'][$method]['count']++;
@@ -1077,9 +1077,9 @@ class AppDatabase
         $summary['total_ttc'] = round($summary['total_ttc'], 2);
         $summary['subtotal_ht'] = round($summary['subtotal_ht'], 2);
         $summary['vat_amount'] = round($summary['vat_amount'], 2);
-        $summary['total_cost_ht'] = round($summary['total_cost_ht'], 2);
+        $summary['total_cost_ttc'] = round($summary['total_cost_ttc'], 2);
         $summary['total_margin'] = round($summary['total_margin'], 2);
-        $summary['margin_rate'] = $summary['subtotal_ht'] > 0 ? round(($summary['total_margin'] / $summary['subtotal_ht']) * 100, 2) : 0.0;
+        $summary['margin_rate'] = $summary['total_ttc'] > 0 ? round(($summary['total_margin'] / $summary['total_ttc']) * 100, 2) : 0.0;
 
         return $summary;
     }
@@ -1111,9 +1111,9 @@ class AppDatabase
             $totals = $this->financialTotalsForLines($lines, (float) $operation['vat_rate']);
             $operation['client_display_name'] = $operation['client_real_name'] ?: $operation['client_name'];
             $operation['vehicle_display_plate'] = $operation['vehicle_real_plate'] ?: $operation['vehicle_plate'];
-            $operation['cost_ht'] = $totals['cost_ht'];
+            $operation['cost_ttc'] = $totals['cost_ttc'];
             $operation['margin'] = $totals['margin'];
-            $operation['margin_rate'] = (float) $operation['subtotal_ht'] > 0 ? round(($totals['margin'] / (float) $operation['subtotal_ht']) * 100, 2) : 0.0;
+            $operation['margin_rate'] = (float) $operation['total_ttc'] > 0 ? round(($totals['margin'] / (float) $operation['total_ttc']) * 100, 2) : 0.0;
             $operation['has_estimated_lines'] = $totals['has_estimated_lines'];
         }
         unset($operation);
@@ -1144,9 +1144,9 @@ class AppDatabase
             $lines
         );
         $totals = $this->financialTotalsForLines($lines, (float) $operation['vat_rate']);
-        $operation['cost_ht'] = $totals['cost_ht'];
+        $operation['cost_ttc'] = $totals['cost_ttc'];
         $operation['margin'] = $totals['margin'];
-        $operation['margin_rate'] = (float) $operation['subtotal_ht'] > 0 ? round(($totals['margin'] / (float) $operation['subtotal_ht']) * 100, 2) : 0.0;
+        $operation['margin_rate'] = (float) $operation['total_ttc'] > 0 ? round(($totals['margin'] / (float) $operation['total_ttc']) * 100, 2) : 0.0;
         $operation['has_estimated_lines'] = $totals['has_estimated_lines'];
 
         return $operation;
@@ -1873,6 +1873,7 @@ class AppDatabase
         return (int) $this->pdo->lastInsertId();
     }
 
+    // Legal invoice footer data only. Never use these HT/VAT values as margin inputs.
     private function splitIncludedTax(float $totalTtc, float $vatRate): array
     {
         $totalTtc = round(max(0, $totalTtc), 2);
@@ -1937,15 +1938,15 @@ class AppDatabase
 
     private function financialTotalsForLines(array $lines, float $vatRate): array
     {
-        $totals = ['cost_ht' => 0.0, 'margin' => 0.0, 'has_estimated_lines' => false];
+        $totals = ['cost_ttc' => 0.0, 'margin' => 0.0, 'has_estimated_lines' => false];
         foreach ($lines as $line) {
             $decorated = $this->decorateFinancialLine($line, $vatRate);
-            $totals['cost_ht'] += (float) $decorated['cost_ht'];
+            $totals['cost_ttc'] += (float) $decorated['cost_ttc'];
             $totals['margin'] += (float) $decorated['margin'];
             $totals['has_estimated_lines'] = $totals['has_estimated_lines'] || (bool) $decorated['is_estimated'];
         }
 
-        $totals['cost_ht'] = round($totals['cost_ht'], 2);
+        $totals['cost_ttc'] = round($totals['cost_ttc'], 2);
         $totals['margin'] = round($totals['margin'], 2);
 
         return $totals;
