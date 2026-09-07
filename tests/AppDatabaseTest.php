@@ -36,6 +36,17 @@ use Twig\TwigFunction;
 
 final class AppDatabaseTest extends TestCase
 {
+    public function testTtcMarginsIgnoreLegalTaxFields(): void
+    {
+        foreach ([0, 7, 20] as $vat) {
+            foreach ([1, 3] as $quantity) {
+                $line = LineMarginCalculator::decorate(['product_id' => 1, 'line_type' => 'product', 'product_type' => 'stockable', 'quantity' => $quantity, 'purchase_price' => 100, 'total' => 150 * $quantity, 'total_ht' => 1], $vat);
+                self::assertSame(50.0 * $quantity, $line['margin']);
+                self::assertSame(33.33, $line['margin_rate']);
+            }
+        }
+    }
+
     public function testDivisorPricingAndSharedLineMarginCalculator(): void
     {
         self::assertSame(153.85, PricingCalculator::priceFromMargin(100, 35));
@@ -43,8 +54,8 @@ final class AppDatabaseTest extends TestCase
         self::assertSame(222.22, PricingCalculator::priceFromMargin(100, 55));
         self::assertNull(PricingCalculator::supportedMargin('manual'));
 
-        $product = LineMarginCalculator::decorate(['product_id' => 1, 'line_type' => 'product', 'product_type' => 'stockable', 'quantity' => 2, 'purchase_price' => 60, 'total_ht' => 150], 20);
-        $service = LineMarginCalculator::decorate(['product_id' => null, 'line_type' => 'service', 'quantity' => 1, 'total_ht' => 50], 20);
+        $product = LineMarginCalculator::decorate(['product_id' => 1, 'line_type' => 'product', 'product_type' => 'stockable', 'quantity' => 2, 'purchase_price' => 60, 'total' => 170, 'total_ht' => 150], 20);
+        $service = LineMarginCalculator::decorate(['product_id' => null, 'line_type' => 'service', 'quantity' => 1, 'total' => 50, 'total_ht' => 50], 20);
         self::assertSame(50.0, $product['margin']);
         self::assertSame(50.0, $service['margin']);
         self::assertSame(100.0, $product['margin'] + $service['margin']);
@@ -55,7 +66,7 @@ final class AppDatabaseTest extends TestCase
         $one = LineMarginCalculator::decorate(['product_id' => 1, 'line_type' => 'service', 'product_type' => 'service', 'quantity' => 1, 'total_ht' => 83.33, 'total' => 100], 20);
         $two = LineMarginCalculator::decorate(['product_id' => 1, 'line_type' => 'service', 'product_type' => 'service', 'quantity' => 2, 'total_ht' => 166.67, 'total' => 200], 20);
         $discounted = LineMarginCalculator::decorate(['product_id' => null, 'line_type' => 'service', 'quantity' => 1, 'total_ht' => 75, 'total' => 90], 20);
-        $product = LineMarginCalculator::decorate(['product_id' => 2, 'line_type' => 'product', 'product_type' => 'stockable', 'quantity' => 1, 'purchase_price' => 60, 'total_ht' => 100, 'total' => 120], 20);
+        $product = LineMarginCalculator::decorate(['product_id' => 2, 'line_type' => 'product', 'product_type' => 'stockable', 'quantity' => 1, 'purchase_price' => 70, 'total_ht' => 100, 'total' => 120], 20);
 
         self::assertSame(100.0, $one['margin']);
         self::assertSame(200.0, $two['margin']);
@@ -819,6 +830,11 @@ SQL);
         self::assertStringNotContainsString('MT HT', $orderHtml);
         self::assertStringNotContainsString('TVA', $orderHtml);
         self::assertStringContainsString('FACTURE N° ' . $invoice['invoice_no'], $invoiceHtml);
+        preg_match('/<table class="invoice-table">(.*?)<\/table>/s', $invoiceHtml, $table);
+        self::assertStringContainsString('150,00 DH', strip_tags($table[1]));
+        self::assertStringNotContainsString('125,00 DH', strip_tags($table[1]));
+        self::assertStringNotContainsString('HT', strip_tags($table[1]));
+        self::assertStringNotContainsString('TVA', strip_tags($table[1]));
         self::assertStringContainsString('MT HT', $invoiceHtml);
         self::assertStringContainsString('TVA', $invoiceHtml);
         self::assertStringContainsString('MT TTC A PAYER', $invoiceHtml);
@@ -1181,7 +1197,7 @@ SQL);
             'category_id' => $categoryId,
             'stock_qty' => 5,
             'min_qty' => 1,
-            'purchase_price' => 120,
+            'purchase_price' => 100,
             'sale_price' => 240,
         ], 1);
         $productId = $this->id($pdo, 'SELECT id FROM products WHERE sku = "MARGIN-001"');
@@ -1194,23 +1210,32 @@ SQL);
             'line_product_id' => [$productId, '', ''],
             'line_label' => ['', 'Service diagnostic', 'Ligne libre'],
             'line_quantity' => [1, 1, 1],
-            'line_unit_price' => [240, 120, 60],
+            'line_unit_price' => [200, 120, 60],
             'line_discount' => [0, 0, 0],
         ], 1);
         $invoiceId = $db->invoiceDocument($quoteId, 1);
         $details = $db->getOperationMarginDetails($invoiceId);
 
         self::assertCount(3, $details['margin_lines']);
-        self::assertSame(100.0, (float) $details['margin_lines'][0]['cost_ht']);
+        self::assertSame(100.0, (float) $details['margin_lines'][0]['cost_ttc']);
         self::assertSame(100.0, (float) $details['margin_lines'][0]['margin']);
-        self::assertSame(0.0, (float) $details['margin_lines'][1]['cost_ht']);
+        self::assertSame(0.0, (float) $details['margin_lines'][1]['cost_ttc']);
         self::assertSame(120.0, (float) $details['margin_lines'][1]['margin']);
-        self::assertSame(0.0, (float) $details['margin_lines'][2]['cost_ht']);
+        self::assertSame(0.0, (float) $details['margin_lines'][2]['cost_ttc']);
         self::assertSame(60.0, (float) $details['margin_lines'][2]['margin']);
         self::assertFalse((bool) $details['margin_lines'][2]['is_estimated']);
         self::assertSame('service', $details['margin_lines'][2]['product_type']);
         self::assertSame(280.0, (float) $details['margin']);
-        self::assertSame(350.0, (float) $details['subtotal_ht']);
+        self::assertSame(316.67, (float) $details['subtotal_ht']);
+        self::assertSame(73.68, $details['margin_rate']);
+        self::assertSame($details['margin'], $db->operation($invoiceId)['total_margin']);
+        $summary = $db->getFinancialSummary(date('Y-m-d'), date('Y-m-d'));
+        self::assertSame($details['margin'], $summary['total_margin']);
+        self::assertSame(73.68, $summary['margin_rate']);
+        $history = $db->searchOperations(['doc_type' => 'invoice']);
+        self::assertSame($details['margin'], $history['rows'][0]['total_margin']);
+        self::assertSame($details['margin'], $db->getFinancialOperations(date('Y-m-d'), date('Y-m-d'))[0]['margin']);
+
     }
 
     public function testFinancialSummaryUsesInvoicesOnlyInclusiveDatesAndPaymentBreakdown(): void
@@ -1288,8 +1313,8 @@ SQL);
             'summary' => $db->getFinancialSummary($date, $date),
             'operations' => [],
         ]);
-        self::assertStringContainsString('reports.kpi.subtotal_ht', $financeHtml);
-        self::assertStringContainsString('reports.kpi.vat', $financeHtml);
+        self::assertStringNotContainsString('reports.kpi.subtotal_ht', $financeHtml);
+        self::assertStringNotContainsString('reports.kpi.vat', $financeHtml);
         self::assertStringContainsString('reports.kpi.margin', $financeHtml);
     }
 
