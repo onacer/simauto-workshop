@@ -6,11 +6,15 @@
 {{ parent() }}
 <style>
 @page { size: 80mm auto; margin: 0; }
+.receipt-ticket, .receipt-ticket * { color: #000; font-family: Arial, Tahoma, sans-serif; font-size: 12px; font-weight: 700; }
+.receipt-ticket { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.receipt-ticket h1 { font-size: 18px; font-weight: 900; }
+.receipt-ticket .receipt-total, .receipt-ticket .receipt-total * { font-size: 16px; font-weight: 900; }
 @media print {
     html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
     body * { visibility: hidden; }
     #ticket, #ticket * { visibility: visible; }
-    #ticket { position: absolute; top: 0; left: 0; width: 80mm; margin: 0 auto; padding: 2mm; box-sizing: border-box; box-shadow: none; page-break-inside: avoid; break-inside: avoid; }
+    #ticket { position: absolute; top: 0; left: 0; width: 80mm; margin: 0 auto; padding: 2mm; box-sizing: border-box; color: #000; background: #fff; font-weight: 700; box-shadow: none; page-break-inside: avoid; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     #ticket.ticket-72mm { width: 72mm; }
     .topbar, .ticket-screen-actions { display: none !important; }
 }
