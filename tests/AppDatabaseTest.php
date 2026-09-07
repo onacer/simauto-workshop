@@ -152,7 +152,8 @@ final class AppDatabaseTest extends TestCase
         self::assertStringContainsString('width: 80mm; margin: 0 auto; padding: 2mm;', $receipt);
         self::assertStringNotContainsString('min-height: 100vh', $receipt);
         self::assertStringNotContainsString('Marge', $receipt);
-        self::assertStringContainsString('font-weight: 700', $receipt);
+        self::assertStringContainsString('font-weight: 800', $receipt);
+        self::assertStringContainsString('.receipt-ticket .ticket-line, .receipt-ticket .ticket-line * { color: #000; font-size: 13px; font-weight: 900;', $receipt);
         self::assertStringContainsString('color: #000', $receipt);
         self::assertStringContainsString('-webkit-print-color-adjust: exact', $receipt);
         self::assertStringContainsString('print-color-adjust: exact', $receipt);
