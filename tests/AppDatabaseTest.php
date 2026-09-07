@@ -127,6 +127,50 @@ final class AppDatabaseTest extends TestCase
 
         $js = file_get_contents(__DIR__ . '/../public/scripts/app.js');
         self::assertStringContainsString('if (input.type === "hidden") return;', $js);
+        self::assertStringContainsString(
+            'scripts/app.js\') }}?v=20260907-mixed-lines-1',
+            file_get_contents(__DIR__ . '/../templates/base.html.twig'),
+            'The fixed line-type serializer must not be hidden behind the previous browser cache key.'
+        );
+    }
+
+    public function testMixedStockableAndFreeServiceLinesPassThroughControllerPost(): void
+    {
+        $db = $this->database();
+        $pdo = $db->pdo();
+        $categoryId = $this->id($pdo, 'SELECT id FROM categories ORDER BY id LIMIT 1');
+        foreach ([['POST-MIX-A', 10, 25], ['POST-MIX-B', 15, 35]] as [$sku, $purchase, $sale]) {
+            $db->saveProduct(['sku' => $sku, 'name' => $sku, 'category_id' => $categoryId, 'stock_qty' => 10, 'min_qty' => 1, 'purchase_price' => $purchase, 'sale_price' => $sale], 1);
+        }
+        $productA = $this->id($pdo, 'SELECT id FROM products WHERE sku = "POST-MIX-A"');
+        $productB = $this->id($pdo, 'SELECT id FROM products WHERE sku = "POST-MIX-B"');
+        [$clientId, $vehicleId] = $this->clientAndVehicle($db, $pdo);
+        $manager = ['id' => 2, 'name' => 'Manager', 'email' => 'manager@simauto.ma', 'role' => 'manager'];
+        $request = $this->requestWithUser('/operations/new', 'POST', [
+            'client_id' => $clientId, 'vehicle_id' => $vehicleId, 'payment_method' => 'ESP',
+            'line_type' => ['product', 'product', 'service'],
+            'line_product_id' => [$productA, $productB, ''],
+            'line_label' => ['', '', 'Main oeuvre libre'],
+            'line_quantity' => [1, 2, 1],
+            'line_margin_mode' => ['manual', 'manual', 'manual'],
+            'line_unit_price' => [25, 35, 100],
+            'line_discount' => [0, 0, 0],
+        ], $manager);
+        $controller = new DashboardController();
+        $csrf = new ReflectionMethod($controller, 'csrfToken');
+        $csrf->setAccessible(true);
+        $request->request->set('_token', $csrf->invoke($controller, $request, 'operation_form'));
+        $controller->setContainer($this->controllerContainer($request));
+
+        $response = $controller->newOperation($request, $db, new AccessControl());
+        $operationId = (int) $pdo->query('SELECT id FROM operations ORDER BY id DESC LIMIT 1')->fetchColumn();
+        $operation = $db->operation($operationId);
+
+        self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertCount(3, $operation['items']);
+        self::assertSame(['product', 'product', 'service'], array_column($operation['items'], 'line_type'));
+        self::assertSame(10, (int) $db->product($productA)['stock_qty']);
+        self::assertSame(10, (int) $db->product($productB)['stock_qty']);
     }
 
     public function testInvalidNumericMarginIsRejectedByServerAndManualPriceIsPreserved(): void
@@ -157,6 +201,8 @@ final class AppDatabaseTest extends TestCase
         self::assertStringContainsString('color: #000', $receipt);
         self::assertStringContainsString('-webkit-print-color-adjust: exact', $receipt);
         self::assertStringContainsString('print-color-adjust: exact', $receipt);
+        self::assertStringContainsString('class="ticket-footer"', $receipt);
+        self::assertStringContainsString('.ticket-footer { page-break-inside: avoid; break-inside: avoid; }', $receipt);
 
         $history = $this->renderTemplate('app/operations_history.html.twig', [
             'user' => ['role' => 'manager', 'name' => 'Manager'], 'operations' => [$operation],

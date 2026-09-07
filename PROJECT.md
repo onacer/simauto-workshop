@@ -1574,6 +1574,8 @@ L'application est fonctionnelle avec:
 
 - `PricingCalculator` est l'unique point de calcul du prix par marge et applique la formule par diviseur documentee ci-dessus.
 - `LineMarginCalculator` est l'unique point d'extension de la marge de gestion. Un produit stockable conserve le calcul HT: total HT moins achat ramene en HT fois quantite. Pour un service ou une ligne libre, la marge vaut strictement 100% du montant saisi visible (`quantite x prix`, remise deduite), sans extraction de TVA, avec un cout nul. Les ecrans operation affichent la marge par ligne et son total, jamais les documents client.
+- Le formulaire d'operation accepte dans un meme devis plusieurs lignes stockables et plusieurs lignes service. Chaque ligne conserve son `line_type`; les services libres ne subissent ni validation de produit stockable ni controle/decrement de stock.
+- Le recu thermique reste sur un rouleau continu de 80 mm : son pied est indivisible et le chrome applicatif ainsi que les hauteurs d'ecran sont neutralises uniquement a l'impression.
 - La saisie d'operation comporte deux sections: produits stockables (selection obligatoire, marge et stock) et services (service catalogue ou libelle libre, prix libre, aucun mouvement de stock).
 - Le filtre Twig `money` encapsule les montants dans un isolat LTR afin que les chiffres latins restent lisibles dans l'interface arabe RTL.
 - `/stock` propose une situation filtree par periode, categorie, etat de stock et statut actif. L'export Excel est un CSV UTF-8 BOM au separateur `;`, volontairement choisi pour eviter une dependance PHP lourde; l'export PDF est une vue A4 paysage imprimable/enregistrable en PDF par le navigateur.
