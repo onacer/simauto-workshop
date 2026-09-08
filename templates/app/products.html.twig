@@ -65,7 +65,7 @@
             </label>
             <label class="stock-field">{{ 'products.quantity'|trans }}<input name="stock_qty" type="number" step="1" min="0" value="0" required></label>
             <label>{{ 'products.min_qty'|trans }}<input name="min_qty" type="number" step="1" min="0" value="0"></label>
-            <label>{{ 'products.purchase_price_ht'|trans }}<input name="purchase_price" class="purchase-price" type="number" step="0.01" min="0" value="0"></label>
+            <label>{{ 'products.purchase_price'|trans }}<input name="purchase_price" class="purchase-price" type="number" step="0.01" min="0" value="0"></label>
             <label>{{ 'products.margin'|trans }}
                 <select name="margin_mode" class="margin-mode">
                     <option value="manual">{{ 'products.manual'|trans }}</option>
@@ -74,7 +74,7 @@
                     <option value="55">55%</option>
                 </select>
             </label>
-            <label>{{ 'products.sale_price_ht'|trans }}<input name="sale_price" class="sale-price" type="number" step="0.01" min="0" value="0"></label>
+            <label>{{ 'products.sale_price'|trans }}<input name="sale_price" class="sale-price" type="number" step="0.01" min="0" value="0"></label>
             <button class="btn btn-primary" type="submit">{{ 'ui.save'|trans }}</button>
         </form>
     </section>

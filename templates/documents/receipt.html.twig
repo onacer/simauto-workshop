@@ -44,7 +44,7 @@
         <div class="receipt-row"><span>{{ 'ui.client'|trans }}</span><b>{{ operation.client_real_name ?: operation.client_name }}</b></div>
         <div class="receipt-row"><span>{{ 'vehicles.vehicle'|trans }}</span><b>{{ operation.brand_name ?: operation.vehicle_brand }} {{ operation.model_name ?: operation.vehicle_model }}</b></div>
         <div class="receipt-row"><span>{{ 'vehicles.plate'|trans }}</span><b class="numeric">{{ operation.vehicle_real_plate ?: operation.vehicle_plate }}</b></div><hr>
-        {% for item in operation.items %}<div class="ticket-line"><span>{% if item.product_sku %}{{ item.product_sku }} - {% endif %}{{ item.label }}</span><small class="numeric">{{ item.quantity }} × {{ item.unit_price|money(0) }}</small><b>{{ item.total|money(0) }}</b></div>{% endfor %}
+        {% for item in operation.items %}<div class="ticket-line"><span>{{ item.label }}</span><small class="numeric">{{ item.quantity }} × {{ item.unit_price|money(0) }}</small><b>{{ item.total|money(0) }}</b></div>{% endfor %}
         <hr><div class="receipt-total"><span>{{ 'operations.total'|trans }}</span><strong>{{ operation.total_ttc|default(operation.total)|money(0) }}</strong></div>
         <div class="receipt-row"><span>{{ 'operations.payment'|trans }}</span><b>{{ operation.payment_label }}</b></div>
         {% if operation.check_number %}<div class="receipt-row"><span>{{ 'operations.check_number'|trans }}</span><b>{{ operation.check_number }}</b></div>{% endif %}

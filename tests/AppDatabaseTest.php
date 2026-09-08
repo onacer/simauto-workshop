@@ -214,6 +214,8 @@ final class AppDatabaseTest extends TestCase
         self::assertStringContainsString('print-color-adjust: exact', $receipt);
         self::assertStringContainsString('class="ticket-footer"', $receipt);
         self::assertStringContainsString('.ticket-footer { page-break-inside: avoid; break-inside: avoid; }', $receipt);
+        self::assertStringContainsString($operation['items'][0]['label'], $receipt);
+        self::assertStringNotContainsString($operation['items'][0]['product_sku'], $receipt);
 
         $history = $this->renderTemplate('app/operations_history.html.twig', [
             'user' => ['role' => 'manager', 'name' => 'Manager'], 'operations' => [$operation],
@@ -1407,6 +1409,12 @@ SQL);
 
         self::assertStringContainsString('SIM-RENDER', $productsHtml);
         self::assertStringContainsString('OEM-RENDER', $showHtml);
+        self::assertSame(1, substr_count($productsHtml, 'products.purchase_price'));
+        self::assertSame(1, substr_count($productsHtml, 'products.sale_price'));
+        self::assertStringNotContainsString('products.purchase_price_ht', $productsHtml);
+        self::assertStringNotContainsString('products.sale_price_ht', $productsHtml);
+        self::assertStringContainsString('products.purchase_price', $showHtml);
+        self::assertStringContainsString('products.sale_price', $showHtml);
         self::assertStringContainsString('<select name="line_product_id[]"', $operationHtml);
         self::assertStringContainsString('data-ref-company="SIM-RENDER"', $operationHtml);
     }
@@ -2506,8 +2514,6 @@ SQL);
             'products.category' => 'الصنف',
             'products.quantity' => 'الكمية',
             'products.min_qty' => 'الحد الأدنى',
-            'products.purchase_price_ht' => 'ثمن الشراء HT',
-            'products.sale_price_ht' => 'ثمن البيع HT',
             'products.margin' => 'هامش الربح',
             'products.manual' => 'يدوي',
             'products.product' => 'المنتج',
