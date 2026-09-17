@@ -24,10 +24,16 @@
             <label>{{ 'ui.active_record'|trans }}<select name="state"><option value="all">{{ 'ui.all'|trans }}</option><option value="active" {{ stock_filters.state == 'active' ? 'selected' : '' }}>{{ 'state.active'|trans }}</option><option value="inactive" {{ stock_filters.state == 'inactive' ? 'selected' : '' }}>{{ 'state.inactive'|trans }}</option></select></label>
             <button class="btn btn-dark" type="submit">{{ 'ui.filter'|trans }}</button>
         </form>
-        <div class="row-actions">
-            <a class="btn btn-primary" href="{{ path('app_stock_export_excel', app.request.query.all) }}">{{ 'stock.export_excel'|trans }}</a>
-            <a class="btn btn-primary" target="_blank" href="{{ path('app_stock_export_pdf', app.request.query.all) }}">{{ 'stock.export_pdf'|trans }}</a>
-        </div>
+        <form id="stock-export-selection" method="get" action="{{ path('app_stock_export_excel') }}">
+            {% for key in ['preset', 'from', 'to', 'category_id', 'stock_state', 'state'] %}
+                <input type="hidden" name="{{ key }}" value="{{ attribute(stock_filters, key) }}">
+            {% endfor %}
+            <p>{{ 'stock.selection_hint'|trans }}</p>
+            <div class="row-actions">
+                <button class="btn btn-primary" type="submit">{{ 'stock.export_excel'|trans }}</button>
+                <button class="btn btn-primary" type="submit" formaction="{{ path('app_stock_export_pdf') }}" formtarget="_blank">{{ 'stock.export_pdf'|trans }}</button>
+            </div>
+        </form>
     </section>
 
     <section class="panel">
@@ -82,7 +88,7 @@
             <div class="table-head"><span>{{ 'products.product'|trans }}</span><span>{{ 'stock.current'|trans }}</span><span>{{ 'ui.status'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for product in stock_rows|default(products) %}
                 <div>
-                    <strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong>
+                    <label class="stock-selection"><input type="checkbox" name="product_ids[]" value="{{ product.id }}" form="stock-export-selection" aria-label="{{ 'stock.select_product'|trans({'%name%': product.name}) }}"><strong>{{ product.name }}<br><small>{{ product.sku }}</small></strong></label>
                     <span>{{ product.stock_qty }}</span>
                     <span>{{ product.stock_qty <= 0 ? 'stock.empty'|trans : (product.min_qty > 0 and product.stock_qty <= product.min_qty ? 'stock.low'|trans : 'stock.available'|trans) }}</span>
                     <span class="row-actions">

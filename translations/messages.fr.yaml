@@ -413,3 +413,6 @@ billing.day_number: "Numero du document"
 billing.day_total: "Total general TTC des documents"
 billing.day_invalid_date: "Veuillez choisir une date valide."
 billing.day_scope: "CSV compatible Excel : devis, commandes et factures crees a cette date. Le total additionne les documents, y compris ceux du meme cycle ; il ne represente pas les encaissements."
+
+stock.selection_hint: "Cochez les produits a exporter ou imprimer. Sans selection, tous les produits correspondant aux filtres sont inclus."
+stock.select_product: "Selectionner %name%"

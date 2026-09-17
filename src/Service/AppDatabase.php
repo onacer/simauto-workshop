@@ -444,6 +444,10 @@ class AppDatabase
     public function stockSituation(array $filters): array
     {
         $rows = $this->products($filters);
+        $selected = $filters['product_ids'] ?? [];
+        if ($selected !== []) {
+            $rows = array_values(array_filter($rows, static fn (array $row): bool => in_array((int) $row['id'], $selected, true)));
+        }
         $from = (string) ($filters['from'] ?? '');
         $to = (string) ($filters['to'] ?? '');
         if ($from !== '' && $to !== '') {

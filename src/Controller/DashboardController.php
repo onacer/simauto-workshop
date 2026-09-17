@@ -199,7 +199,18 @@ class DashboardController extends AbstractController
             $candidateTo = (string) $request->query->get('to', '');
             if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $candidateFrom) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $candidateTo) && $candidateFrom <= $candidateTo) { $from = $candidateFrom; $to = $candidateTo; } else { $preset = 'today'; }
         }
-        return ['preset' => $preset, 'from' => $from, 'to' => $to, 'category_id' => (int) $request->query->get('category_id', 0), 'stock_state' => (string) $request->query->get('stock_state', ''), 'state' => (string) $request->query->get('state', 'all')];
+        $rawIds = $request->query->all()['product_ids'] ?? [];
+        $ids = [];
+        if ($rawIds !== []) {
+            foreach ((array) $rawIds as $value) {
+                if (is_scalar($value) && ctype_digit((string) $value) && (int) $value > 0) {
+                    $ids[] = (int) $value;
+                }
+            }
+            // A supplied but invalid selection must never silently export everything.
+            $ids = $ids === [] ? [0] : array_values(array_unique($ids));
+        }
+        return ['preset' => $preset, 'from' => $from, 'to' => $to, 'category_id' => (int) $request->query->get('category_id', 0), 'stock_state' => (string) $request->query->get('stock_state', ''), 'state' => (string) $request->query->get('state', 'all'), 'product_ids' => $ids];
     }
 
     #[Route('/stock/in', name: 'app_stock_in', methods: ['POST'])]
