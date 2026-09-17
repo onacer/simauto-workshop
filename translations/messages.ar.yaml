@@ -346,3 +346,7 @@ backups.empty: 'لم يتم إنشاء أي نسخة احتياطية بعد.'
 
 reports.line.total_ttc: "المجموع شامل الضريبة"
 reports.line.cost_ttc: "التكلفة شاملة الضريبة"
+
+operations.workflow.reset_draft: "إعادة إلى المسودة"
+operations.workflow.reset_done: "تمت إعادة أمر الطلب إلى المسودة وإرجاع المخزون."
+operations.workflow.reset_not_allowed: "يمكن إعادة أمر طلب مؤكد وغير مفوتر فقط إلى المسودة."

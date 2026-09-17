@@ -35,6 +35,7 @@ class AccessControl
             'progress_document',
             'edit.reference',
             'edit.quote_draft',
+            'order.reset_draft',
         ];
 
         $legacyViewAliases = [

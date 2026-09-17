@@ -504,6 +504,26 @@ class DashboardController extends AbstractController
         return $this->redirect($request->headers->get('referer') ?: $this->generateUrl('app_dashboard'));
     }
 
+    #[Route('/operations/{id}/reset-draft', name: 'app_operation_reset_draft', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function resetOrderDraft(int $id, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'order.reset_draft', 'app_operation_show', ['id' => $id])) {
+            return $denied;
+        }
+        try {
+            $this->verifyCsrf($request, 'operation_action');
+            $db->resetOrderToDraft($id, (int) $user['id']);
+            $this->addFlash('success', 'operations.workflow.reset_done');
+        } catch (Throwable $e) {
+            $this->addFlash('error', $this->safeMessage($e));
+        }
+        return $this->redirectToRoute('app_operation_show', ['id' => $id]);
+    }
+
     #[Route('/operations/{id}/confirm', name: 'app_operation_confirm', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function confirmOperation(int $id, Request $request, AppDatabase $db, AccessControl $access): RedirectResponse
     {

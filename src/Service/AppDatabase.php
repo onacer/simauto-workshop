@@ -1162,6 +1162,49 @@ class AppDatabase
         ];
     }
 
+    public function resetOrderToDraft(int $id, int $userId): void
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $operation = $this->operation($id);
+            if (!$operation || $operation['doc_type'] !== 'order' || $operation['status'] !== 'confirmed'
+                || $this->row('SELECT id FROM operations WHERE parent_id = :id LIMIT 1', ['id' => $id])) {
+                throw new InvalidArgumentException('operations.workflow.reset_not_allowed');
+            }
+
+            // Claim the transition before changing stock. Keep order_no reserved for its audit trail.
+            $quoteNo = $this->nextDocumentNumber('quote');
+            $update = $this->pdo->prepare('UPDATE operations SET doc_type = "quote", status = "draft",
+                invoice_no = :number, quote_no = :number, stock_decremented_at = NULL
+                WHERE id = :id AND doc_type = "order" AND status = "confirmed"');
+            $update->execute(['number' => $quoteNo, 'id' => $id]);
+            if ($update->rowCount() !== 1) {
+                throw new InvalidArgumentException('operations.workflow.reset_not_allowed');
+            }
+
+            if ($this->hasStockDecrement($operation)) {
+                // Reverse recorded movements, not today's product type or edited catalogue data.
+                $movements = $this->pdo->prepare('SELECT product_id, SUM(quantity) AS quantity
+                    FROM stock_movements WHERE movement_type = "out" AND operation_id = :operation_id GROUP BY product_id');
+                $movements->execute(['operation_id' => $id]);
+                foreach ($movements->fetchAll() as $movement) {
+                    $quantity = (int) $movement['quantity'];
+                    $productId = (int) $movement['product_id'];
+                    $stock = $this->pdo->prepare('UPDATE products SET stock_qty = stock_qty + :quantity WHERE id = :id');
+                    $stock->execute(['quantity' => $quantity, 'id' => $productId]);
+                    if ($stock->rowCount() !== 1) {
+                        throw new RuntimeException('Stock compensation product missing');
+                    }
+                    $this->addMovement($productId, 'in', $quantity, 'Annulation BC ' . $operation['document_no'], $userId, null, null, $id);
+                }
+            }
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
     public function confirmQuote(int $id, int $userId): int
     {
         return $this->copyDocument($id, 'order', $userId, true);
@@ -1312,7 +1355,7 @@ class AppDatabase
                         if ($update->rowCount() !== 1) {
                             throw new InvalidArgumentException('Stock insuffisant pour: ' . $line['label']);
                         }
-                        $this->addMovement((int) $line['product_id'], 'out', $quantity, $this->stockOutNote($targetType, $documentNo), $userId);
+                        $this->addMovement((int) $line['product_id'], 'out', $quantity, $this->stockOutNote($targetType, $documentNo), $userId, null, null, $newId);
                     }
                 }
             }
@@ -2024,11 +2067,11 @@ class AppDatabase
         return $operation;
     }
 
-    private function addMovement(int $productId, string $type, int $quantity, string $note, int $userId, ?int $supplierId = null, ?float $unitCost = null): void
+    private function addMovement(int $productId, string $type, int $quantity, string $note, int $userId, ?int $supplierId = null, ?float $unitCost = null, ?int $operationId = null): void
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_by, supplier_id, unit_cost, created_at)
-             VALUES (:product_id, :movement_type, :quantity, :note, :created_by, :supplier_id, :unit_cost, datetime("now"))'
+            'INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_by, supplier_id, unit_cost, operation_id, created_at)
+             VALUES (:product_id, :movement_type, :quantity, :note, :created_by, :supplier_id, :unit_cost, :operation_id, datetime("now"))'
         );
         $stmt->execute([
             'product_id' => $productId,
@@ -2038,6 +2081,7 @@ class AppDatabase
             'created_by' => $userId,
             'supplier_id' => $supplierId,
             'unit_cost' => $unitCost,
+            'operation_id' => $operationId,
         ]);
     }
 
@@ -2249,6 +2293,15 @@ SQL);
         $this->addColumnIfMissing('operations', 'total_ttc', 'REAL');
         $this->addColumnIfMissing('operations', 'parent_id', 'INTEGER');
         $this->addColumnIfMissing('operations', 'stock_decremented_at', 'TEXT');
+        $this->addColumnIfMissing('stock_movements', 'operation_id', 'INTEGER REFERENCES operations(id) ON DELETE SET NULL');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_stock_movements_operation ON stock_movements(operation_id)');
+        // Backfill legacy document movements without changing their quantities or notes.
+        $this->pdo->exec("UPDATE stock_movements SET operation_id = (
+            SELECT o.id FROM operations o
+            WHERE (o.doc_type = 'order' AND stock_movements.note = 'Bon de commande ' || o.order_no)
+               OR (o.doc_type = 'invoice' AND stock_movements.note = 'Facture ' || o.invoice_no)
+            LIMIT 1
+        ) WHERE operation_id IS NULL AND movement_type = 'out'");
         $this->addColumnIfMissing('operation_items', 'discount_rate', 'REAL NOT NULL DEFAULT 0');
         $this->addColumnIfMissing('operation_items', 'total_ht', 'REAL');
         $this->pdo->exec("UPDATE operations SET doc_type = 'invoice' WHERE doc_type IS NULL OR doc_type = ''");
@@ -2438,6 +2491,10 @@ SQL);
         do {
             $number = $prefix . '/' . $period . '/' . $next;
             $exists = $this->row("SELECT id FROM operations WHERE invoice_no = :number OR $column = :number", ['number' => $number]);
+            if (!$exists && $type === 'order') {
+                // A reset draft can be deleted; never reuse its historical stock-out number.
+                $exists = $this->row('SELECT id FROM stock_movements WHERE note = :note OR note = :reversal LIMIT 1', ['note' => $this->stockOutNote('order', $number), 'reversal' => 'Annulation BC ' . $number]);
+            }
             $next++;
         } while ($exists);
 

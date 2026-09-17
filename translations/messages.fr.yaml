@@ -403,3 +403,7 @@ backups.empty: 'Aucune sauvegarde créée pour le moment.'
 
 reports.line.total_ttc: "Total TTC"
 reports.line.cost_ttc: "Cout TTC"
+
+operations.workflow.reset_draft: "Remettre en brouillon"
+operations.workflow.reset_done: "Bon de commande remis en brouillon et stock restitue."
+operations.workflow.reset_not_allowed: "Seul un bon de commande confirme non facture peut etre remis en brouillon."
