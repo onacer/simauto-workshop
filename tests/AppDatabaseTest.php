@@ -36,6 +36,290 @@ use Twig\TwigFunction;
 
 final class AppDatabaseTest extends TestCase
 {
+    public function testReceiptMediumWeightUsesProductNameWithoutChangingStoredLabelsOrA4(): void
+    {
+        $db = $this->database();
+        $category = (int) $db->pdo()->query('SELECT id FROM categories LIMIT 1')->fetchColumn();
+        $db->saveProduct(['sku' => 'TECH-SKU-99', 'ref_company' => 'INTERNAL-99', 'ref_universal' => 'OEM-99', 'name' => 'Huile moteur', 'category_id' => $category, 'stock_qty' => 10, 'purchase_price' => 10, 'sale_price' => 20], 1);
+        $product = $db->productBySku('TECH-SKU-99');
+        [$client, $vehicle] = $this->clientAndVehicle($db, $db->pdo());
+        $id = $db->createOperation(['client_id' => $client, 'vehicle_id' => $vehicle, 'line_product_id' => [$product['id'], ''], 'line_type' => ['product', 'service'], 'line_label' => ['OEM-99 - CASTROL 5L', 'Vidange speciale'], 'line_quantity' => [1, 1], 'line_unit_price' => [20, 30]], 1);
+        $operation = $db->operation($id);
+        $context = ['operation' => $operation, 'user' => ['role' => 'manager', 'name' => 'Manager'], 'company' => $this->company(), 'amount_words' => 'Cinquante dirhams'];
+        $receipt = $this->renderTemplate('documents/receipt.html.twig', $context);
+        self::assertStringContainsString('<span>Huile moteur</span>', $receipt);
+        self::assertStringContainsString('Vidange speciale', $receipt);
+        foreach (['TECH-SKU-99', 'INTERNAL-99', 'OEM-99', 'CASTROL 5L', 'font-weight: 800', 'font-weight: 900'] as $hidden) {
+            self::assertStringNotContainsString($hidden, $receipt);
+        }
+        self::assertStringContainsString('font-weight: 600', $receipt);
+        self::assertStringContainsString('.receipt-ticket .receipt-total * { font-size: 16px; font-weight: 700;', $receipt);
+        self::assertSame('OEM-99 - CASTROL 5L', $db->operation($id)['items'][0]['label']);
+        self::assertStringContainsString('OEM-99 - CASTROL 5L', $this->renderTemplate('documents/invoice.html.twig', $context));
+    }
+
+    public function testResetOrderDraftThroughPostRestoresStockAndCanBeEditedAndReconfirmed(): void
+    {
+        foreach ([1 => 'admin', 2 => 'manager'] as $userId => $role) {
+            $db = $this->database();
+            $category = (int) $db->pdo()->query('SELECT id FROM categories LIMIT 1')->fetchColumn();
+            $db->saveProduct(['sku' => 'RESET', 'name' => 'Reset product', 'category_id' => $category, 'stock_qty' => 10, 'purchase_price' => 10, 'sale_price' => 20], 1);
+            $product = $db->productBySku('RESET');
+            [$client, $vehicle] = $this->clientAndVehicle($db, $db->pdo());
+            $payload = ['client_id' => $client, 'vehicle_id' => $vehicle, 'product_1' => $product['id'], 'product_qty_1' => 2, 'service_label_1' => 'Service reset', 'service_price_1' => 30];
+            $quote = $db->createOperation($payload, $userId);
+            $order = $db->confirmQuote($quote, $userId);
+            $orderNo = $db->operation($order)['document_no'];
+            $request = $this->requestWithUser('/operations/' . $order . '/reset-draft', 'POST', ['_token' => 'reset-token'], ['id' => $userId, 'role' => $role]);
+            $request->getSession()->set('csrf_tokens', ['operation_action' => 'reset-token']);
+            $controller = new DashboardController();
+            $controller->setContainer($this->controllerContainer($request));
+            $response = $controller->resetOrderDraft($order, $request, $db, new AccessControl());
+            self::assertSame('/app_operation_show/' . $order, $response->getTargetUrl());
+            $draft = $db->operation($order);
+            self::assertSame('quote', $draft['doc_type']);
+            self::assertSame('draft', $draft['status']);
+            self::assertNull($draft['stock_decremented_at']);
+            self::assertSame(10, (int) $db->product($product['id'])['stock_qty']);
+            self::assertTrue((new AccessControl())->canEditDocument(['role' => $role], $draft));
+            $movements = array_values(array_filter($db->productMovements($product['id']), fn (array $m) => $m['note'] === 'Annulation BC ' . $orderNo));
+            self::assertCount(1, $movements);
+            self::assertSame('in', $movements[0]['movement_type']);
+            self::assertSame(2, (int) $movements[0]['quantity']);
+            self::assertSame($userId, (int) $movements[0]['created_by']);
+            $controller->resetOrderDraft($order, $request, $db, new AccessControl());
+            self::assertSame(10, (int) $db->product($product['id'])['stock_qty']);
+            $payload['product_qty_1'] = 3;
+            $db->updateDraftOperation($order, $payload, $userId);
+            $newOrder = $db->confirmQuote($order, $userId);
+            self::assertNotSame($orderNo, $db->operation($newOrder)['document_no']);
+            self::assertSame(7, (int) $db->product($product['id'])['stock_qty']);
+            $invoice = $db->invoiceDocument($newOrder, $userId);
+            self::assertSame(7, (int) $db->product($product['id'])['stock_qty']);
+            foreach ([$quote, $order, $newOrder, $invoice] as $locked) {
+                try {
+                    $db->resetOrderToDraft($locked, $userId);
+                    self::fail('Only an uninvoiced confirmed order can be reset');
+                } catch (InvalidArgumentException $e) {
+                    self::assertSame('operations.workflow.reset_not_allowed', $e->getMessage());
+                }
+            }
+            self::assertSame([], $db->stockConsistencyIssues());
+            $tester = new CommandTester(new StockCheckCommand($db));
+            self::assertSame(0, $tester->execute([]));
+        }
+    }
+
+    public function testResetOrderRejectsMissingCsrfAndRollsBackCompensationFailure(): void
+    {
+        $db = $this->database();
+        [$client, $vehicle] = $this->clientAndVehicle($db, $db->pdo());
+        $product = $db->products([])[0];
+        $db->addStock($product['id'], 10, 'Test baseline', 1);
+        $stock = (int) $db->product($product['id'])['stock_qty'];
+        $quote = $db->createOperation(['client_id' => $client, 'vehicle_id' => $vehicle, 'product_1' => $product['id'], 'product_qty_1' => 2], 1);
+        $order = $db->confirmQuote($quote, 1);
+        $before = $db->operation($order);
+        $request = $this->requestWithUser('/operations/' . $order . '/reset-draft', 'POST', [], ['id' => 2, 'role' => 'manager']);
+        $controller = new DashboardController();
+        $controller->setContainer($this->controllerContainer($request));
+        $controller->resetOrderDraft($order, $request, $db, new AccessControl());
+        self::assertSame($before, $db->operation($order));
+        $db->pdo()->exec("CREATE TRIGGER fail_compensation BEFORE INSERT ON stock_movements WHEN NEW.note LIKE 'Annulation BC %' BEGIN SELECT RAISE(ABORT, 'test rollback'); END");
+        try {
+            $db->resetOrderToDraft($order, 2);
+            self::fail('Expected injected failure');
+        } catch (\PDOException $e) {
+            self::assertStringContainsString('test rollback', $e->getMessage());
+        }
+        self::assertSame($before, $db->operation($order));
+        self::assertSame($stock - 2, (int) $db->product($product['id'])['stock_qty']);
+        self::assertSame([], $db->stockConsistencyIssues());
+    }
+
+    public function testDailyExportForBothRolesHasAllDocumentsTotalsAndNoFinancialAccess(): void
+    {
+        $db = $this->database();
+        $quote = $this->operationWithService($db, 'ESP');
+        $order = $db->confirmQuote($quote, 1);
+        $invoice = $db->invoiceDocument($order, 1);
+        $other = $this->operationWithService($db, 'CB');
+        $db->pdo()->exec("UPDATE operations SET created_at = '2026-09-15 12:30:00'");
+        $db->pdo()->exec("UPDATE operations SET created_at = '2026-09-14 23:59:59' WHERE id = $other");
+        $translator = new \Symfony\Component\Translation\Translator('fr');
+        $translator->addLoader('yaml', new \Symfony\Component\Translation\Loader\YamlFileLoader());
+        foreach (['fr', 'ar'] as $locale) {
+            $translator->addResource('yaml', __DIR__ . '/../translations/messages.' . $locale . '.yaml', $locale);
+        }
+        foreach ([1 => 'admin', 2 => 'manager'] as $userId => $role) {
+            $request = $this->requestWithUser('/billing/export/day?date=2026-09-15', 'GET', [], ['id' => $userId, 'role' => $role]);
+            $controller = new DashboardController();
+            $controller->setContainer($this->controllerContainer($request));
+            $response = $controller->exportDaySituation($request, $db, new AccessControl(), $translator);
+            self::assertSame(200, $response->getStatusCode());
+            $csv = $response->getContent();
+            self::assertStringStartsWith("\xEF\xBB\xBF", $csv);
+            self::assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
+            foreach ([$quote, $order, $invoice] as $id) {
+                self::assertStringContainsString($db->operation($id)['document_no'], $csv);
+            }
+            self::assertStringNotContainsString($db->operation($other)['document_no'], $csv);
+            self::assertStringContainsString('450,00', $csv);
+            self::assertStringContainsString('150,00', $csv);
+            self::assertStringContainsString($translator->trans('reports.payments.title'), $csv);
+            self::assertStringNotContainsString('Marge', $csv);
+            self::assertStringNotContainsString('cost_ttc', $csv);
+            self::assertTrue((new AccessControl())->can('export.day_situation', ['role' => $role]));
+            if ($role === 'manager') {
+                $report = new ReportController();
+                $report->setContainer($this->controllerContainer($request));
+                self::assertSame('/app_dashboard', $report->finance($request, $db, new AccessControl())->getTargetUrl());
+            }
+            $request->query->set('date', '2026-02-30');
+            self::assertInstanceOf(RedirectResponse::class, $controller->exportDaySituation($request, $db, new AccessControl(), $translator));
+            $request->query->set('date', '2026-09-15');
+            $translator->setLocale('ar');
+            self::assertStringContainsString($translator->trans('ui.client'), $controller->exportDaySituation($request, $db, new AccessControl(), $translator)->getContent());
+            $translator->setLocale('fr');
+        }
+    }
+
+    public function testStockExportsUseSelectedIdsIntersectedWithFiltersForBothRoles(): void
+    {
+        $db = $this->database();
+        $category = (int) $db->pdo()->query('SELECT id FROM categories LIMIT 1')->fetchColumn();
+        $ids = [];
+        foreach (['SELECT-A', 'SELECT-B', 'EXCLUDED-C'] as $sku) {
+            $db->saveProduct(['sku' => $sku, 'name' => $sku, 'category_id' => $category, 'stock_qty' => 10, 'purchase_price' => 10, 'sale_price' => 20], 1);
+            $ids[] = $db->productBySku($sku)['id'];
+        }
+        $db->pdo()->exec("UPDATE products SET created_at = '2026-09-15 12:00:00'");
+        $translator = new \Symfony\Component\Translation\Translator('fr');
+        foreach ([1 => 'admin', 2 => 'manager'] as $userId => $role) {
+            $request = $this->requestWithUser('/stock/export/excel', 'GET', ['preset' => 'custom', 'from' => '2026-09-15', 'to' => '2026-09-15', 'product_ids' => array_slice($ids, 0, 2)], ['id' => $userId, 'role' => $role]);
+            $controller = new DashboardController();
+            $container = $this->controllerContainer($request);
+            $twig = new Environment(new FilesystemLoader(__DIR__ . '/../templates'));
+            $twig->addExtension(new MoneyExtension());
+            $twig->addFilter(new TwigFilter('trans', fn ($key) => $key));
+            $twig->addFunction(new TwigFunction('asset', fn ($path) => $path));
+            $twig->addGlobal('app', ['request' => $request]);
+            $twig->addGlobal('app_name', 'SIM Auto');
+            $container->set('twig', $twig);
+            $controller->setContainer($container);
+            $csv = $controller->stockExportExcel($request, $db, new AccessControl(), $translator)->getContent();
+            $pdf = $controller->stockExportPdf($request, $db, new AccessControl(), new \App\Service\CompanyProfile())->getContent();
+            foreach ([$csv, $pdf] as $content) {
+                self::assertStringContainsString('SELECT-A', $content);
+                self::assertStringContainsString('SELECT-B', $content);
+                self::assertStringNotContainsString('EXCLUDED-C', $content);
+            }
+            $request->query->set('product_ids', []);
+            self::assertStringContainsString('EXCLUDED-C', $controller->stockExportExcel($request, $db, new AccessControl(), $translator)->getContent());
+            self::assertStringContainsString('EXCLUDED-C', $controller->stockExportPdf($request, $db, new AccessControl(), new \App\Service\CompanyProfile())->getContent());
+            $request->query->set('product_ids', [$ids[0]]);
+            $request->query->set('stock_state', 'empty');
+            self::assertStringNotContainsString('SELECT-A', $controller->stockExportExcel($request, $db, new AccessControl(), $translator)->getContent());
+            $request->query->set('stock_state', '');
+            $request->query->set('product_ids', ['invalid']);
+            self::assertStringNotContainsString('SELECT-A', $controller->stockExportExcel($request, $db, new AccessControl(), $translator)->getContent());
+        }
+    }
+
+    public function testResetServiceOrderAndActionVisibilityRejectDraftAndInvoicePosts(): void
+    {
+        $db = $this->database();
+        $quote = $this->operationWithService($db, 'ESP');
+        $request = $this->requestWithUser('/operations/reset-draft', 'POST', ['_token' => 'valid'], ['id' => 2, 'role' => 'manager']);
+        $request->getSession()->set('csrf_tokens', ['operation_action' => 'valid']);
+        $controller = new DashboardController();
+        $controller->setContainer($this->controllerContainer($request));
+        $controller->resetOrderDraft($quote, $request, $db, new AccessControl());
+        self::assertSame(['operations.workflow.reset_not_allowed'], $request->getSession()->getFlashBag()->get('error'));
+        $order = $db->confirmQuote($quote, 2);
+        $movementCount = (int) $db->pdo()->query('SELECT COUNT(*) FROM stock_movements')->fetchColumn();
+        foreach (['admin', 'manager'] as $role) {
+            $html = $this->renderTemplate('app/_operation_actions.html.twig', ['operation' => $db->operation($order), 'user' => ['role' => $role], 'operation_action_token' => 'valid']);
+            self::assertStringContainsString('/app_operation_reset_draft/' . $order, $html);
+            self::assertStringContainsString('name="_token" value="valid"', $html);
+            $html = $this->renderTemplate('app/_operation_actions.html.twig', ['operation' => $db->operation($quote), 'user' => ['role' => $role]]);
+            self::assertStringNotContainsString('/app_operation_reset_draft', $html);
+        }
+        $db->resetOrderToDraft($order, 2);
+        self::assertSame($movementCount, (int) $db->pdo()->query('SELECT COUNT(*) FROM stock_movements')->fetchColumn());
+        $newOrder = $db->confirmQuote($order, 2);
+        $invoice = $db->invoiceDocument($newOrder, 2);
+        foreach ([$newOrder, $invoice] as $id) {
+            $before = $db->operation($id);
+            $controller->resetOrderDraft($id, $request, $db, new AccessControl());
+            self::assertSame($before, $db->operation($id));
+            self::assertSame(['operations.workflow.reset_not_allowed'], $request->getSession()->getFlashBag()->get('error'));
+            $html = $this->renderTemplate('app/_operation_actions.html.twig', ['operation' => $before, 'user' => ['role' => 'manager']]);
+            self::assertStringNotContainsString('/app_operation_reset_draft', $html);
+        }
+    }
+
+    public function testDeletedResetDraftCannotReuseHistoricalStockMovementNumber(): void
+    {
+        $db = $this->database();
+        [$client, $vehicle] = $this->clientAndVehicle($db, $db->pdo());
+        $product = $db->products([])[0];
+        $payload = ['client_id' => $client, 'vehicle_id' => $vehicle, 'product_1' => $product['id'], 'product_qty_1' => 1];
+        $order = $db->confirmQuote($db->createOperation($payload, 1), 1);
+        $oldNumber = $db->operation($order)['document_no'];
+        $db->resetOrderToDraft($order, 1);
+        $db->deleteRecord('operation', $order);
+        $newOrder = $db->confirmQuote($db->createOperation($payload, 1), 1);
+        self::assertNotSame($oldNumber, $db->operation($newOrder)['document_no']);
+        $db->resetOrderToDraft($newOrder, 1);
+        self::assertSame((int) $product['stock_qty'], (int) $db->product($product['id'])['stock_qty']);
+        self::assertSame([], $db->stockConsistencyIssues());
+    }
+
+    public function testDailyExportIsUnlimitedHasExactCentsAndEscapesSpreadsheetNames(): void
+    {
+        $db = $this->database();
+        $insert = $db->pdo()->prepare('INSERT INTO operations (invoice_no, receipt_no, doc_type, quote_no, client_name, payment_method, total, total_ttc, status, created_by, created_at) VALUES (:number, :number, "quote", :number, :client, "CB", 0.10, 0.10, "draft", 1, "2026-09-15 23:59:59")');
+        $db->pdo()->beginTransaction();
+        for ($i = 1; $i <= 205; $i++) {
+            $insert->execute(['number' => 'EXPORT-' . $i, 'client' => '=1+1']);
+        }
+        $db->pdo()->commit();
+        self::assertCount(205, $db->dailySituationDocuments('2026-09-15'));
+        $request = $this->requestWithUser('/billing/export/day?date=2026-09-15', 'GET', [], ['id' => 2, 'role' => 'manager']);
+        $controller = new DashboardController();
+        $controller->setContainer($this->controllerContainer($request));
+        $csv = $controller->exportDaySituation($request, $db, new AccessControl(), new \Symfony\Component\Translation\Translator('fr'))->getContent();
+        self::assertStringContainsString('EXPORT-205', $csv);
+        self::assertStringContainsString("'=1+1", $csv);
+        self::assertStringContainsString('20,50', $csv);
+        $request->query->set('date', '2026-09-16');
+        $empty = $controller->exportDaySituation($request, $db, new AccessControl(), new \Symfony\Component\Translation\Translator('fr'))->getContent();
+        self::assertStringNotContainsString('EXPORT-', $empty);
+        self::assertStringContainsString('0,00', $empty);
+    }
+
+    public function testResetMovementLinkMigrationIsIdempotentAndSurvivesNoteEdits(): void
+    {
+        $db = $this->database();
+        [$client, $vehicle] = $this->clientAndVehicle($db, $db->pdo());
+        $product = $db->products([])[0];
+        $order = $db->confirmQuote($db->createOperation(['client_id' => $client, 'vehicle_id' => $vehicle, 'product_1' => $product['id'], 'product_qty_1' => 2], 1), 1);
+        $movement = $db->pdo()->query('SELECT * FROM stock_movements WHERE operation_id = ' . $order)->fetch();
+        self::assertSame('out', $movement['movement_type']);
+        $db->pdo()->exec('UPDATE stock_movements SET operation_id = NULL WHERE id = ' . $movement['id']);
+        $path = $db->pdo()->query('PRAGMA database_list')->fetch()['file'];
+        $db = new AppDatabase(dirname($path), $path);
+        self::assertSame($order, (int) $db->stockMovement($movement['id'])['operation_id']);
+        $before = $db->pdo()->query('SELECT * FROM stock_movements ORDER BY id')->fetchAll();
+        $db = new AppDatabase(dirname($path), $path);
+        self::assertSame($before, $db->pdo()->query('SELECT * FROM stock_movements ORDER BY id')->fetchAll());
+        $db->updateStockMovement($movement['id'], ['movement_type' => 'out', 'quantity' => 2, 'note' => 'Note corrigee'], 1);
+        $db->resetOrderToDraft($order, 2);
+        self::assertSame((int) $product['stock_qty'], (int) $db->product($product['id'])['stock_qty']);
+        self::assertSame([], $db->stockConsistencyIssues());
+    }
+
     public function testTtcMarginsIgnoreLegalTaxFields(): void
     {
         foreach ([0, 7, 20] as $vat) {
@@ -207,8 +491,8 @@ final class AppDatabaseTest extends TestCase
         self::assertStringContainsString('width: 80mm; margin: 0 auto; padding: 2mm;', $receipt);
         self::assertStringNotContainsString('min-height: 100vh', $receipt);
         self::assertStringNotContainsString('Marge', $receipt);
-        self::assertStringContainsString('font-weight: 800', $receipt);
-        self::assertStringContainsString('.receipt-ticket .ticket-line, .receipt-ticket .ticket-line * { color: #000; font-size: 13px; font-weight: 900;', $receipt);
+        self::assertStringContainsString('font-weight: 600', $receipt);
+        self::assertStringContainsString('.receipt-ticket .ticket-line, .receipt-ticket .ticket-line * { color: #000; font-size: 13px; font-weight: 600;', $receipt);
         self::assertStringContainsString('color: #000', $receipt);
         self::assertStringContainsString('-webkit-print-color-adjust: exact', $receipt);
         self::assertStringContainsString('print-color-adjust: exact', $receipt);
