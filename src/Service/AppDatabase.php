@@ -1152,6 +1152,26 @@ class AppDatabase
         return $operation;
     }
 
+    /** All documents for one creation date; deliberately excludes costs and margins. */
+    public function dailySituationDocuments(string $date): array
+    {
+        $stmt = $this->pdo->prepare('SELECT o.id, o.doc_type, o.invoice_no, o.quote_no, o.order_no,
+                o.created_at, COALESCE(c.name, o.client_name) AS client_name,
+                COALESCE(v.plate, o.vehicle_plate) AS vehicle_plate,
+                COALESCE(vb.name, o.vehicle_brand) AS vehicle_brand,
+                COALESCE(vm.name, o.vehicle_model) AS vehicle_model,
+                o.payment_method, COALESCE(o.total_ttc, o.total) AS total_ttc
+            FROM operations o
+            LEFT JOIN clients c ON c.id = o.client_id
+            LEFT JOIN vehicles v ON v.id = o.vehicle_id
+            LEFT JOIN vehicle_brands vb ON vb.id = v.brand_id
+            LEFT JOIN vehicle_models vm ON vm.id = v.model_id
+            WHERE DATE(o.created_at) = :date AND o.doc_type IN ("quote", "order", "invoice")
+            ORDER BY o.created_at, o.id');
+        $stmt->execute(['date' => $date]);
+        return $stmt->fetchAll();
+    }
+
     public function getDailySessionReport(string $date): array
     {
         return [

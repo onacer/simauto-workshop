@@ -403,6 +403,63 @@ class DashboardController extends AbstractController
         ]);
     }
 
+    #[Route('/billing/export/day', name: 'app_billing_export_day', methods: ['GET'])]
+    public function exportDaySituation(Request $request, AppDatabase $db, AccessControl $access, TranslatorInterface $translator): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'export.day_situation', 'app_billing')) {
+            return $denied;
+        }
+        $date = (string) $request->query->get('date', date('Y-m-d'));
+        if ($date === '' || !$this->validDateRange($date, $date)) {
+            $this->addFlash('error', 'billing.day_invalid_date');
+            return $this->redirectToRoute('app_billing');
+        }
+
+        $handle = fopen('php://temp', 'r+');
+        // Spreadsheet cells containing user data must remain text, including formula-like names.
+        $write = static function (array $cells) use ($handle): void {
+            $cells = array_map(static fn ($cell) => preg_match('/^[\s]*[=+@-]/u', (string) $cell) ? "'" . $cell : $cell, $cells);
+            fputcsv($handle, $cells, ';', '"', '');
+        };
+        $money = static fn (int $cents): string => number_format($cents / 100, 2, ',', '');
+        $write(array_map(fn ($key) => $translator->trans($key), ['billing.day_number', 'ui.type', 'ui.date', 'ui.client', 'vehicles.vehicle', 'operations.payment', 'reports.line.total_ttc']));
+        $totalCents = 0;
+        $payments = array_fill_keys(['ESP', 'CHQ', 'CB', 'VIR'], 0);
+        foreach ($db->dailySituationDocuments($date) as $document) {
+            $number = match ($document['doc_type']) {
+                'quote' => $document['quote_no'] ?: $document['invoice_no'],
+                'order' => $document['order_no'] ?: $document['invoice_no'],
+                default => $document['invoice_no'],
+            };
+            $cents = (int) round((float) $document['total_ttc'] * 100);
+            $method = $document['payment_method'];
+            $totalCents += $cents;
+            $payments[$method] = ($payments[$method] ?? 0) + $cents;
+            $write([$number, $translator->trans('documents.type.' . $document['doc_type']), $document['created_at'],
+                $document['client_name'], trim($document['vehicle_brand'] . ' ' . $document['vehicle_model'] . ' ' . $document['vehicle_plate']),
+                $translator->trans('payment.code.' . $method), $money($cents)]);
+        }
+        $write([$translator->trans('billing.day_total'), '', '', '', '', '', $money($totalCents)]);
+        $write([]);
+        $write([$translator->trans('reports.payments.title'), $translator->trans('reports.line.total_ttc')]);
+        foreach ($payments as $method => $cents) {
+            $write([$translator->trans('payment.code.' . $method), $money($cents)]);
+        }
+        $write([]);
+        $write([$translator->trans('billing.day_scope')]);
+        rewind($handle);
+        $content = stream_get_contents($handle);
+        fclose($handle);
+        return new Response("\xEF\xBB\xBF" . $content, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="situation-journee-' . $date . '.csv"',
+        ]);
+    }
+
     #[Route('/operations/history', name: 'app_operations_history', methods: ['GET'])]
     public function operationsHistory(Request $request, AppDatabase $db, AccessControl $access): Response
     {

@@ -13,6 +13,16 @@
         <a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a>
     </section>
 
+    {% if can('export.day_situation', user) %}
+        <section class="panel">
+            <form method="get" action="{{ path('app_billing_export_day') }}" class="form-grid">
+                <label>{{ 'ui.date'|trans }}<input type="date" name="date" value="{{ 'now'|date('Y-m-d') }}" required></label>
+                <button class="btn btn-primary" type="submit">{{ 'billing.export_day'|trans }}</button>
+            </form>
+            <p>{{ 'billing.day_scope'|trans }}</p>
+        </section>
+    {% endif %}
+
     <section class="panel">
         <div class="panel-title-row">
             <h2>{{ 'billing.title'|trans }}</h2>

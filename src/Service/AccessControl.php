@@ -36,6 +36,7 @@ class AccessControl
             'edit.reference',
             'edit.quote_draft',
             'order.reset_draft',
+            'export.day_situation',
         ];
 
         $legacyViewAliases = [
