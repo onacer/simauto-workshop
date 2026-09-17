@@ -1361,7 +1361,7 @@ class AppDatabase
 
         $operation = $this->decorateOperation($operation);
         $items = $this->pdo->prepare(
-            'SELECT oi.*, p.sku AS product_sku, p.product_type, p.purchase_price
+            'SELECT oi.*, p.sku AS product_sku, p.name AS product_name, p.product_type, p.purchase_price
              FROM operation_items oi
              LEFT JOIN products p ON p.id = oi.product_id
              WHERE oi.operation_id = :id
