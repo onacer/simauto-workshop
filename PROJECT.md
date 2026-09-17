@@ -1,5 +1,7 @@
 # SIM Auto Workshop - Documentation Projet
 
+Derniere mise a jour: 17 septembre 2026. Documentation alignee sur les evolutions du prompt `p.md`: recu, remise en brouillon des BC et exports de gestion.
+
 ## Objectif
 
 Cette application est une petite application Symfony pour la gestion interne de SIM Auto.
@@ -46,7 +48,7 @@ Le service PHP cree automatiquement les dossiers `data` et `var`, ajuste les dro
 Deux roles existent:
 
 - `admin`: acces total sans exception: lecture, creation, modification, suppression, activation/desactivation, imports, rapports, parametres et utilisateurs.
-- `manager`: lecture des vues metier, creation quotidienne, et modification des entites de reference: clients, fournisseurs, vehicules, marques, modeles, categories et fiche produit descriptive. Il ne supprime rien, ne desactive rien, n'importe pas, n'accede pas aux finances, et ne modifie pas le stock ni les documents confirmes/factures.
+- `manager`: lecture des vues metier, creation quotidienne, et modification des entites de reference: clients, fournisseurs, vehicules, marques, modeles, categories et fiche produit descriptive. Il ne supprime rien, ne desactive rien, n'importe pas et n'accede pas au reporting financier complet. Il peut exporter les documents de la journee et remettre un BC confirme non facture en brouillon; les factures restent verrouillees.
 
 Des comptes initiaux sont crees automatiquement si la table `users` est vide:
 
@@ -90,7 +92,7 @@ APP_ENV: prod
 APP_DEBUG: 0
 ```
 
-Cela evite les pages debug Symfony en usage normal.
+Cela evite les pages debug Symfony en usage normal. Le volume nomme `simauto_var` heberge le cache et les logs du conteneur PHP; les services utilisent `restart: unless-stopped`.
 
 La commande de demarrage du service PHP:
 
@@ -225,12 +227,15 @@ Routes principales:
 - `GET /`: dashboard principal.
 - `GET /products`: page d'entree et liste des produits.
 - `GET /products/{id}`: fiche detail produit.
-- `GET /stock`: page de gestion du stock.
+- `GET /stock`: page de gestion et situation filtree du stock.
+- `GET /stock/export/excel`: export CSV compatible Excel de la situation filtree.
+- `GET /stock/export/pdf`: vue A4 paysage imprimable de la situation filtree.
 - `GET /operations`: page de creation d'une operation garage.
 - `GET /operations/history`: historique filtrable des devis, bons de commande et factures.
 - `GET /operations/{id}`: fiche detail lecture seule d'une operation avec lignes, totaux et chaine documentaire.
 - `GET|POST /operations/{id}/edit`: modification d'un devis brouillon uniquement pour admin et manager; refuse les bons de commande et factures.
-- `GET /billing`: page des factures et receipts.
+- `GET /billing`: page des factures et receipts, avec choix de date et export journalier.
+- `GET /billing/export/day?date=Y-m-d`: CSV des documents du jour, admin et manager via `export.day_situation`.
 - `GET /reports/finance`: situation financiere jour, semaine, mois ou periode libre.
 - `GET /reports/finance/operation/{id}`: detail de marge d'une facture.
 - `GET /reports/finance/day-receipt`: ticket de cloture journalier 80 mm.
@@ -251,10 +256,12 @@ Routes d'action:
 
 - `POST /products/new`: ajoute un produit.
 - `POST /stock/in`: ajoute une entree de stock.
-- `POST /operations/new`: cree une operation garage et redirige vers la facture.
+- `POST /operations/new`: cree un devis avec ses lignes produits et/ou services.
 - `POST /operations/{id}/confirm`: confirme un devis brouillon en bon de commande, avec CSRF, controle et sortie de stock transactionnels.
 - `POST /operations/{id}/invoice`: transforme un bon de commande confirme en facture, avec CSRF, sans double sortie si le BC a deja applique le stock.
 - `POST /operations/{id}/invoice-direct`: transforme directement un devis brouillon en bon de commande puis facture, avec un seul decrement de stock.
+
+- `POST /operations/{id}/reset-draft`: remet un BC confirme non facture en devis brouillon et compense ses sorties de stock, admin et manager via `order.reset_draft`, token CSRF `operation_action`.
 
 Routes documentaires:
 
@@ -434,6 +441,7 @@ Champs:
 - `created_by`
 - `supplier_id`
 - `unit_cost`
+- `operation_id`: lien optionnel au document pour tracer ses sorties et compensations; conserve lors de la modification de la note.
 - `created_at`
 
 #### `operations`
@@ -464,6 +472,7 @@ Champs:
 - `total_ttc`
 - `parent_id`
 - `status`
+- `stock_decremented_at`: suivi du decrement pour eviter une double sortie de stock.
 - `created_by`
 - `created_at`
 
@@ -539,10 +548,9 @@ Le ticket de cloture journalier est un document imprime en francais LTR, format 
 - nombre de factures,
 - total TTC,
 - ventilation par mode de paiement,
-- total marge,
 - liste compacte des factures.
 
-## Flux Metier
+Le ticket de cloture ne montre ni HT, ni TVA, ni marge; ces dernieres restent consultables dans le reporting admin.
 
 ## Internationalisation
 
@@ -557,6 +565,8 @@ L'interface utilise `symfony/translation`.
 - Les titres, boutons, labels, tableaux, messages vides, alertes connues et pages metier utilisent les cles `|trans`.
 - Les donnees saisies par l'utilisateur, par exemple les noms de categories ou produits, restent dans leur langue d'origine.
 - Les documents imprimes restent en francais LTR.
+
+## Flux Metier
 
 ### 1. Entree Produit
 
@@ -634,6 +644,15 @@ Controle de coherence:
 - la commande `php bin/console app:stock:check` liste les produits dont `stock_qty` diverge de cette somme;
 - cette commande est un outil de diagnostic: elle ne modifie jamais les donnees.
 
+### Situation et exports de stock
+
+La page `/stock` propose des filtres jour, semaine, mois ou periode libre, categorie, etat du stock et statut actif/inactif. Les exports reprennent les filtres de la page et sont accessibles aux roles disposant de `view.stock` (admin et manager).
+
+- Export Excel: fichier `.csv` UTF-8 avec BOM et separateur `;`, comprenant references, categorie, type, quantite, seuil, prix et valorisation totale; ce n'est pas un fichier `.xlsx`.
+- Export PDF: vue `templates/documents/stock_situation.html.twig` en A4 paysage a imprimer ou enregistrer en PDF avec le navigateur.
+- Selection: cocher les produits dans la liste `/stock`; les deux boutons soumettent les memes `product_ids[]` et filtres actifs. Sans case cochee, tous les produits filtres sont inclus.
+- Les identifiants sont valides cote serveur et intersectes avec les filtres. Une selection fournie mais invalide ou hors filtre ne bascule pas vers un export global. Ces vues restent en lecture seule pour les deux roles.
+
 ### Ajustement de Stock
 
 L'ajustement de stock est reserve au role `admin` via la permission:
@@ -680,6 +699,10 @@ L'utilisateur cree un devis avec:
 - lignes dynamiques: produit stockable, produit service ou ligne libre,
 - quantite, prix unitaire TTC, remise `%`.
 
+Le formulaire separe les produits stockables et les services. Il accepte plusieurs lignes de chaque famille, ou uniquement des services; la ligne produit vide initiale est ignoree. Chaque ligne ajoutee conserve son type et son mode de marge.
+
+Un service peut etre choisi dans le catalogue ou saisi avec un libelle libre. Un nouveau libelle cree un produit `service`; la recherche normalisee (casse et espaces ignores) reutilise les services existants. Ces lignes n'imposent aucun stock et ne generent aucun mouvement.
+
 L'application calcule toujours cote serveur:
 
 - `subtotal_ht`,
@@ -714,6 +737,14 @@ Regles de stock dans le cycle documentaire:
 - `operations.stock_decremented_at` sert de garde-fou pour ne jamais retirer le stock deux fois sur la meme chaine documentaire;
 - garde-fou anti double decrement: un devis deja confirme, un bon de commande deja facture ou une facture deja emise ne peuvent pas etre refactures.
 
+### Remettre un BC en brouillon
+
+L'action `Remettre en brouillon` est proposee sur les BC confirmes non factures pour admin et manager. Elle est absente sur devis et factures, desactivee sur un BC deja facture; le serveur refuse egalement ces cas et toute seconde remise en brouillon.
+
+Dans une transaction PDO, `resetOrderToDraft` transforme le BC existant en `quote` / `draft`, lui attribue un nouveau numero de devis et remet `stock_decremented_at` a `NULL`. Si le stock avait ete retire, les mouvements `out` enregistres pour ce BC sont compenses par des mouvements `in` notes `Annulation BC {numero}`, avec restitution exacte des quantites. Les prix et marges ne sont pas recalcules par cette action. Une migration idempotente ajoute `stock_movements.operation_id` et rattache les anciennes sorties identifiables par leur note documentaire; les nouvelles sorties et compensations sont liees directement au document. Modifier la note ne casse donc plus le lien de compensation.
+
+L'ancien `order_no` est conserve pour la tracabilite et le lien au devis parent reste present. Le nouveau brouillon utilise le formulaire de modification existant; sa confirmation cree un nouveau BC avec une seule sortie de stock. La facturation conserve la protection contre le double decrement. Un BC ayant deja un document enfant ne peut pas etre remis en brouillon.
+
 ### 4. Factures et Receipts
 
 Page:
@@ -742,6 +773,17 @@ Regle d'impression:
 - bon de commande: lignes TTC, total TTC, `NET A PAYER`, montant en lettres, sans `MT HT` ni `TVA`;
 - facture: seul document client avec `MT HT`, `TVA`, `MT TTC A PAYER` et montant TTC en lettres;
 - receipt: ticket compact en TTC direct, sans decomposition TVA.
+
+### Export journalier depuis la facturation
+
+La page `/billing` contient le choix d'une date (aujourd'hui par defaut) et le bouton `Exporter la journee (Excel)`. Ce placement permet aux deux roles d'acceder a l'export sans ouvrir le reporting financier admin.
+
+- Permission dediee `export.day_situation`: admin et manager; `reports.view` reste reservee a l'admin.
+- Format CSV UTF-8 avec BOM, separateur `;`, compatible Excel; aucun fichier `.xlsx` n'est genere.
+- Tous les devis, BC et factures crees a la date demandee sont inclus, sans limite de 25 ou 200 lignes. La date suit la date de creation stockee, comme l'historique existant.
+- Colonnes: numero, type, date/heure, client, vehicule (marque/modele/plaque), paiement et total TTC; total general et ventilation par mode de paiement. En-tetes et types traduits AR/FR, montants a deux decimales, aucune marge ni cout d'achat.
+- Le total additionne les documents, y compris les etapes du meme cycle; il ne represente ni des encaissements ni le chiffre d'affaires des seules factures. Cette precision figure aussi sur la page et dans le CSV.
+- Une date invalide est refusee avec un message traduit; les cellules texte pouvant etre interpretees comme formules Excel sont neutralisees.
 
 ### 5. Historique Operations
 
@@ -773,11 +815,11 @@ Page:
 La fiche detail affiche:
 
 - type de document, numero, date, statut, client, vehicule, paiement et numero de cheque;
-- lignes: designation, type, quantite, prix unitaire TTC, remise, total HT;
-- totaux: `MT HT`, `TVA`, `MT TTC`;
+- lignes: designation, type, quantite, prix unitaire TTC, remise, total TTC et marge;
+- totaux TTC et marge de gestion, sans decomposition HT/TVA;
 - liens client et vehicule;
 - chaine documentaire via `parent_id`: devis, bon de commande et facture lies;
-- boutons imprimer, receipt pour facture seulement, et retour vers l'historique.
+- boutons imprimer, receipt pour les trois types de documents, et retour vers l'historique.
 
 ## Templates
 
@@ -883,7 +925,7 @@ Page operations:
 - choix client et vehicule,
 - lignes dynamiques produit/service/ligne libre,
 - prix unitaires TTC,
-- extraction HT/TVA/TTC dans la preview,
+- apercu des totaux et marges TTC par ligne et pour le document,
 - creation du devis,
 - lien vers l'historique des operations.
 
@@ -894,7 +936,7 @@ Historique filtrable des documents:
 - barre de recherche,
 - filtres type, dates et paiement,
 - tableau avec badges de type,
-- actions partagees via `_operation_actions.html.twig`: afficher, modifier si devis brouillon, confirmer, facturer, imprimer et receipt pour factures.
+- actions partagees via `_operation_actions.html.twig`: afficher, modifier si devis brouillon, confirmer, facturer, imprimer et receipt pour devis, commandes et factures.
 
 ### `templates/app/operation_show.html.twig`
 
@@ -1021,7 +1063,7 @@ Le partiel rend le document A4 pour:
 - mention `Cheque N°` quand un numero de cheque est renseigne,
 - tableau designation / quantite / prix / montant,
 - lignes en montant TTC direct,
-- bloc `MT HT`, `TVA`, `MT TTC A PAYER`,
+- bloc legal `MT HT`, `TVA`, `MT TTC A PAYER` uniquement dans le pied de facture; devis et commandes en TTC sans decomposition fiscale,
 - merci pour votre visite,
 - footer avec informations de contact centralisees dans `App\Service\CompanyProfile`,
 - filigrane transparent derriere le contenu.
@@ -1034,7 +1076,7 @@ Ticket receipt format petite imprimante:
 
 - largeur proche 80 mm a l'impression,
 - logo,
-- numero receipt,
+- numero du document (devis, bon de commande ou facture),
 - date,
 - client,
 - vehicule,
@@ -1042,6 +1084,10 @@ Ticket receipt format petite imprimante:
 - total,
 - mode de paiement.
 - numero de cheque quand renseigne.
+
+Le ticket affiche uniquement `products.name` pour une ligne produit (repli sur le libelle si le produit manque), ou le libelle saisi pour un service. Les references internes/OEM/SKU et prefixes du libelle produit ne sont pas repris. Les libelles stockes et les documents A4 restent inchanges. A l'ecran, le ticket utilise le layout applicatif avec topbar et actions Retour/Imprimer. A l'impression, seul `#ticket` reste visible: largeur 80 mm (variante `ticket-72mm`), marges nulles, hauteurs d'ecran neutralisees et pied indivisible. La police Arial/Tahoma de 13 px, en noir sur blanc, utilise une graisse moyenne 600 pour le corps et 700 pour le total, avec noir pur et `print-color-adjust: exact`.
+
+Le format de papier du pilote doit etre adapte au rouleau continu; voir [IMPRESSION_TICKET.txt](IMPRESSION_TICKET.txt). Le CSS ne remplace pas ce reglage de l'imprimante.
 
 ### `templates/documents/day_receipt.html.twig`
 
@@ -1216,6 +1262,9 @@ Manager:
 - creation d'entrees de stock;
 - creation de devis et progression du workflow devis -> bon de commande -> facture;
 - modification d'un devis tant qu'il est brouillon;
+- remise en brouillon d'un BC confirme non facture avec compensation du stock;
+- export journalier des documents sans acces aux rapports de marges;
+- export et impression de la selection de stock ou de tous les produits filtres;
 - impression documents et receipts;
 - changement de son mot de passe.
 
@@ -1240,7 +1289,7 @@ Permissions centralisees:
 
 - admin: `can(...)` retourne vrai pour toutes les permissions;
 - manager autorise en lecture: `view`, `view.dashboard`, `view.products`, `view.stock`, `view.categories`, `view.suppliers`, `view.clients`, `view.vehicles`, `view.vehicle_settings`, `view.operations`, `view.billing`, `view.documents`;
-- manager autorise en action quotidienne: `create`, `progress_document`, `edit.reference`, `edit.quote_draft`;
+- manager autorise en action quotidienne: `create`, `progress_document`, `edit.reference`, `edit.quote_draft`, `order.reset_draft`, `export.day_situation`;
 - `canEditDocument(user, operation)` refuse toujours si `doc_type != quote` ou `status != draft`, meme pour admin;
 - manager interdit: `edit`, `edit.stock`, `edit.operation`, `stock.adjust`, `delete`, `toggle`, `import`, `imports`, `manage_users`, `reports.view`.
 
@@ -1253,7 +1302,7 @@ Convention UI des actions:
 Templates d'action:
 
 - `templates/app/_action_button.html.twig`: composant Twig commun pour rendre une action active ou desactivee.
-- `templates/app/_operation_actions.html.twig`: barre d'actions documentaire commune a la fiche operation, l'historique et la page facturation. Les progressions sont des formulaires POST avec token CSRF `operation_action`; les actions contextuellement impossibles restent visibles mais desactivees avec un motif au survol.
+- `templates/app/_operation_actions.html.twig`: barre d'actions documentaire commune a la fiche operation, l'historique et la page facturation. Les progressions et la remise en brouillon des BC sont des formulaires POST avec token CSRF `operation_action`; les actions contextuellement impossibles restent visibles mais desactivees avec un motif au survol.
 
 ## Mode Impression
 
@@ -1373,7 +1422,30 @@ Commande:
 docker-compose exec -T php php bin/phpunit
 ```
 
+Verification JavaScript des calculs TTC:
+
+```sh
+node tests/ttc-preview.cjs
+```
+
+Les tests PHP sont regroupes dans `tests/AppDatabaseTest.php`. La validation du 17 septembre 2026 passe avec `OK (76 tests, 656 assertions)` via `docker-compose.exe exec -T php php bin/phpunit --colors=never` (lanceur Windows depuis WSL), ainsi que les 6 scenarios de `node.exe tests/ttc-preview.cjs`. Les templates Twig modifies, les traductions YAML et la syntaxe PHP ont egalement ete verifies. Seules les deux assertions historiques de graisse 800/900 ont ete actualisees pour la nouvelle specification du recu 600/700.
+
 Tests couverts:
+
+- recu en graisse 600/700, nom produit seul, libelles stockes et rendu A4 preserves,
+- remise en brouillon via POST pour les deux roles, refus CSRF, devis/facture/BC facture et doubles appels,
+- compensation stock atomique, rollback sur erreur, modification et reconfirmation sans double decrement,
+- export journalier pour les deux roles, dates, totaux, ventilation et traduction; reporting complet toujours refuse au manager,
+- export CSV et impression de deux produits selectionnes, de tous les produits filtres et de selections invalides,
+
+- calcul par diviseur, refus des marges numeriques invalides et conservation des prix manuels,
+- operations composees uniquement de services et reutilisation des services crees automatiquement,
+- soumission HTTP de plusieurs lignes stockables et services dans le meme devis,
+- marges TTC independantes des champs fiscaux et marge service apres quantite/remise,
+- lignes A4 en TTC et bloc HT/TVA limite au pied de facture,
+- isolation du ticket a l'impression, contraste thermique et regles CSS de pagination,
+- confirmation et facturation directe sans double decrement, verification de coherence stock,
+- modification des devis brouillons et verrouillage des documents confirmes,
 
 - creation produit et entree de stock,
 - creation client societe et vehicule,
@@ -1415,7 +1487,7 @@ Tests couverts:
 - rendu ticket de cloture,
 - rendu document devis/commande/facture via le partiel commun,
 - recherche historique par texte, type, paiement et dates inclusives,
-- absence de receipt sur devis et bon de commande,
+- receipt disponible sur devis, bon de commande et facture,
 - fiche detail operation avec liens parent/enfant.
 
 ## Securite Utilisateurs
@@ -1451,7 +1523,7 @@ Au prochain acces, la base sera recreree avec les donnees initiales.
 1. Changer les mots de passe initiaux au premier login.
 2. Ajouter les exports PDF si necessaire.
 3. Ajouter HTTPS si deploye sur un serveur accessible publiquement.
-4. Remplacer `chmod -R 777` par une gestion de droits plus stricte selon le serveur cible.
+4. Remplacer les permissions larges `chmod -R a+rwX` par une gestion de droits plus stricte selon le serveur cible.
 
 ## Commandes Utiles
 
@@ -1521,7 +1593,7 @@ L'application est fonctionnelle avec:
 - calcul marge par facture et par ligne,
 - ticket de cloture journalier 80 mm,
 - ticket de cloture simplifie sans HT/TVA/marge imprimee,
-- aide marge affichee 35%, 45%, 55% avec calcul interne conserve,
+- aide marge 35%, 45%, 55% avec calcul par diviseur et mode manuel,
 - paiement cheque avec numero optionnel,
 - version desktop Windows 11 avec PHP portable,
 - donnees desktop dans AppData via `SIMAUTO_DATA_DIR`,
@@ -1551,39 +1623,22 @@ L'application est fonctionnelle avec:
 - generation facture,
 - generation receipt,
 
-## Evolutions marge, stock et impression (septembre 2026)
+## Synthese des evolutions recentes — septembre 2026
 
-- `PricingCalculator` est l'unique point de calcul du prix par marge et applique la formule par diviseur documentee ci-dessus.
-- `LineMarginCalculator` est l'unique point d'extension de la marge de gestion. Un produit stockable utilise le TTC direct: total TTC moins achat TTC fois quantite. Pour un service ou une ligne libre, la marge vaut strictement 100% du montant saisi visible (`quantite x prix`, remise deduite), sans extraction de TVA, avec un cout nul. Les ecrans operation affichent la marge par ligne et son total, jamais les documents client.
-- Le formulaire d'operation accepte dans un meme devis plusieurs lignes stockables et plusieurs lignes service. Chaque ligne conserve son `line_type`; les services libres ne subissent ni validation de produit stockable ni controle/decrement de stock.
-- Le recu thermique reste sur un rouleau continu de 80 mm : son pied est indivisible et le chrome applicatif ainsi que les hauteurs d'ecran sont neutralises uniquement a l'impression.
-- La saisie d'operation comporte deux sections: produits stockables (selection obligatoire, marge et stock) et services (service catalogue ou libelle libre, prix libre, aucun mouvement de stock).
-- Le filtre Twig `money` encapsule les montants dans un isolat LTR afin que les chiffres latins restent lisibles dans l'interface arabe RTL.
-- `/stock` propose une situation filtree par periode, categorie, etat de stock et statut actif. L'export Excel est un CSV UTF-8 BOM au separateur `;`, volontairement choisi pour eviter une dependance PHP lourde; l'export PDF est une vue A4 paysage imprimable/enregistrable en PDF par le navigateur.
-- Le reçu est universel (devis, bon de commande, facture), utilise le numero du document et reste en TTC direct.
-- Le ticket thermique cible 80 mm avec `@page { size: 80mm auto; margin: 0; }`; la classe `ticket-72mm` facilite le passage a 72 mm. Sous Windows, choisir dans le pilote WD LINK le papier `80(80) x 3276 mm` ou equivalent, sans marge, echelle 100 %. Voir `IMPRESSION_TICKET.txt`.
+- **Prix et marges TTC**: prix d'achat/vente explicitement libelles TTC dans le catalogue. `PricingCalculator` centralise la formule par diviseur; `LineMarginCalculator` calcule le cout TTC et la marge sans extraction de TVA. Les services ont un cout nul et une marge egale au montant TTC apres remise. Le serveur et l'apercu JavaScript arrondissent les calculs par ligne.
+- **Operations mixtes**: sections produits et services independantes, plusieurs lignes de chaque type, devis de services seuls, creation/reutilisation automatique des services libres et conservation des types lors de l'ajout dynamique.
+- **Suivi documentaire**: devis modifiable tant qu'il est brouillon, progression avec CSRF, sortie transactionnelle au bon de commande et protection contre le double decrement lors de la facturation. Les erreurs de workflow sont visibles dans l'interface.
+- **Historique et facturation**: marge totale visible, colonne client regroupant nom et marque/modele du vehicule. La plaque reste dans la fiche detail. Les documents client ne montrent aucune marge.
+- **Factures et tickets**: lignes A4 en TTC, decomposition fiscale uniquement au pied de facture, ticket universel pour les trois types de documents, references produit masquees, contraste thermique renforce et impression 80 mm isolee du layout applicatif.
+- **Stock**: alertes de stock critique sur le dashboard avec liste repliable, ajustements admin traces, diagnostic `app:stock:check`, situation filtree et exports CSV/Excel et vue PDF.
+- **Interface AR/FR**: filtre Twig `money` avec isolat LTR pour les montants dans les vues RTL, y compris les montants des fiches produit, client et vehicule dans l'etat local actuel.
+- **Deploiement**: cache Docker dans le volume `simauto_var`, preparation des dossiers et droits au demarrage, procedure d'installation et mise a jour client dans [INSTALL_CLIENT_PROD.txt](INSTALL_CLIENT_PROD.txt). La version desktop conserve ses donnees et sauvegardes hors du dossier d'installation.
 
-### Correctifs operations et ticket continu
+Les regles detaillees, routes et commandes de verification figurent dans les sections correspondantes ci-dessus.
 
-- Une operation est valide des qu'elle contient au moins une ligne produit ou service dont le montant est positif. Le prototype produit vide du formulaire est ignore et ne rend jamais un produit stockable obligatoire lorsqu'un service est saisi.
-- Un libelle libre de service cree automatiquement un produit catalogue de type `service`, sans stock ni prix impose. La resolution normalisee (casse et espaces ignores) reutilise un service existant et evite les doublons. Les services sont exclus des controles et mouvements de stock.
-- La formule de reference reste `prix_base / ((100 - marge) / 100)`, dans l'unique helper PHP et l'unique fonction JavaScript. Une marge numerique invalide, notamment 100, est refusee; le mode manuel conserve le prix saisi.
-- Le ticket est un template HTML autonome, sans layout applicatif ni CSS A4. Son flux continu utilise une largeur de 80 mm, une marge de page nulle, aucun `min-height` et interdit les coupures internes.
-- Les listes `/operations/history` et `/billing` montrent la marge totale calculee par le helper partage, mais pas l'immatriculation. Leur colonne client combine le nom du client avec la marque et le modele; la fiche detail conserve toutes les informations, dont la plaque et les marges. Aucun document client n'imprime la marge.
-- A l'ecran, `/receipt/{id}` utilise le layout normal avec topbar et actions Retour/Imprimer. A l'impression seulement, le CSS masque tout le chrome et rend visible uniquement `#ticket` en flux continu 80 mm sans marge de page ni hauteur forcee; `ticket-72mm` reste disponible.
-- Le ticket utilise une police Arial/Tahoma de 13 px, en graisse 800 sur tout le contenu et 900 sur les lignes detaillees, le titre et le total, avec noir pur sur fond blanc et `print-color-adjust: exact` pour un contraste adapte aux imprimantes thermiques 203 dpi.
-- L'ajout dynamique de plusieurs lignes preserve les champs caches `line_type` et `line_margin_mode`: chaque clone produit reste `product`, chaque clone service reste `service`. Le serveur valide chaque famille separement; plusieurs produits stockables et plusieurs services peuvent coexister, et seuls les produits stockables generent des sorties de stock.
-- affichage utilisateurs admin,
-- tests PHPUnit.
+## Evolutions du 17 septembre 2026
 
-
-## Diagnostic TTC direct — 2026-09-08
-
-- `src/Service/LineMarginCalculator.php`: suppression du facteur TVA et de la division du cout achat; suppression de la base `total_ht` pour la marge et le taux. Services deja corrects en TTC avant correction; produits corriges.
-- `public/scripts/app.js`, `syncOperationLines`: suppression des deux divisions TVA (cout achat et total ligne). Arrondis au centime par ligne et cout pour correspondre au serveur. Cache navigateur invalide par version du script.
-- `src/Service/AppDatabase.php`: `getFinancialSummary`, `getFinancialOperations`, `getOperationMarginDetails` divisent maintenant la marge par le total TTC. La requete `financialLinesForOperations` ne faisait aucune extraction SQL; elle reutilise le helper, comme `operation` et `decorateOperationsWithMargins` pour l'historique et la facturation. Couts renommes `cost_ttc`/`total_cost_ttc`.
-- `DashboardController.php`, formulaires, fiche et historique: aucune division TVA locale; les valeurs viennent du helper commun ou de l'apercu corrige.
-- `templates/app/report_finance_operation.html.twig`: totaux et couts affiches en TTC; `report_finance.html.twig`: retrait des KPI HT/TVA.
-- `templates/documents/_operation_doc.html.twig`: lignes et somme du tableau TTC pour tous les documents; decomposition HT/TVA uniquement dans le pied de facture. `invoice.html.twig` inclut ce partiel sans calcul duplique.
-- Les extractions restantes dans `splitIncludedTax`, la normalisation et les migrations conservent les champs fiscaux historiques pour le pied legal. Aucune ne nourrit une marge.
-- Validation: regressions rouges avant correction (produit et facture); services deja verts. Tests JavaScript executables avec `node tests/ttc-preview.cjs`.
+- Recu: graisse moyenne et nom du catalogue pour les produits; services conservant leur libelle.
+- BC: nouvelle action de remise en brouillon avec compensation transactionnelle du stock, reservee aux commandes confirmees non facturees.
+- Facturation: export CSV journalier des documents, traduit et accessible a l'admin comme au manager sans exposer les marges.
+- Stock: cases de selection partagees par l'export CSV et l'impression A4, avec conservation du comportement global si aucune case n'est cochee.
