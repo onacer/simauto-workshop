@@ -47,7 +47,7 @@
         </div>
 
         {% if can('import', user) or can('manage_users', user) or can('reports.view', user) %}
-            <div class="nav-dropdown {{ route starts with 'app_import' or route starts with 'app_user' or route == 'app_users' or route starts with 'app_report' or route starts with 'app_backups' ? 'is-current' : '' }}">
+            <div class="nav-dropdown {{ route starts with 'app_import' or route starts with 'app_user' or route == 'app_users' or route starts with 'app_report' or route starts with 'app_backups' or route == 'app_audit' ? 'is-current' : '' }}">
                 <a class="topbar-item dropdown-toggle" href="{{ can('reports.view', user) ? path('app_report_finance') : path('app_import') }}" aria-expanded="false">{{ 'nav.admin'|trans }}</a>
                 <div class="dropdown-menu">
                     {% if can('reports.view', user) %}
@@ -56,6 +56,9 @@
                     {% endif %}
                     {% if can('import', user) %}
                         <a href="{{ path('app_import') }}">{{ 'nav.imports'|trans }}</a>
+                    {% endif %}
+                    {% if can('audit.view', user) %}
+                        <a href="{{ path('app_audit') }}">{{ 'nav.audit'|trans }}</a>
                     {% endif %}
                     {% if can('manage_users', user) %}
                         <a href="{{ path('app_users') }}">{{ 'nav.users'|trans }}</a>

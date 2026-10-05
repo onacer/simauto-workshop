@@ -1,0 +1,51 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ 'audit.title'|trans }} - SIM Auto{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head"><h1>{{ 'audit.title'|trans }}</h1></section>
+    {% for message in app.flashes('warning') %}<div class="alert alert-warning">{{ message|trans }}</div>{% endfor %}
+    <section class="panel">
+        <form method="get" class="form-grid history-filters">
+            <label>{{ 'audit.search'|trans }}<input name="q" value="{{ filters.q }}"></label>
+            <label>{{ 'audit.action'|trans }}
+                <select name="action_type">
+                    <option value="">{{ 'ui.all'|trans }}</option>
+                    {% for type in action_types %}<option value="{{ type }}" {{ filters.action_type == type ? 'selected' : '' }}>{{ ('audit.action.' ~ type)|trans }}</option>{% endfor %}
+                </select>
+            </label>
+            <label>{{ 'audit.user'|trans }}
+                <select name="user_id">
+                    <option value="">{{ 'ui.all'|trans }}</option>
+                    {% for actor in actors %}<option value="{{ actor.user_id }}" {{ filters.user_id == actor.user_id ? 'selected' : '' }}>{{ actor.user_name }}</option>{% endfor %}
+                </select>
+            </label>
+            <label>{{ 'reports.date_from'|trans }}<input type="date" name="from" value="{{ filters.from }}"></label>
+            <label>{{ 'reports.date_to'|trans }}<input type="date" name="to" value="{{ filters.to }}"></label>
+            <button class="btn btn-primary" type="submit">{{ 'operations.history.submit'|trans }}</button>
+            <a class="btn btn-dark" href="{{ path('app_audit') }}">{{ 'operations.history.reset'|trans }}</a>
+        </form>
+    </section>
+    <section class="panel">
+        <div class="panel-title-row">
+            <h2>{{ 'audit.results'|trans({'%count%': result.total}) }}</h2>
+            {% if result.limited %}<small class="badge badge-disabled">{{ 'audit.limit'|trans }}</small>{% endif %}
+        </div>
+        <div class="data-table audit-table">
+            <div class="table-head">
+                <span>{{ 'audit.date'|trans }}</span><span>{{ 'audit.user'|trans }}</span>
+                <span>{{ 'audit.action'|trans }}</span><span>{{ 'audit.entity'|trans }}</span><span>{{ 'audit.description'|trans }}</span>
+            </div>
+            {% for row in result.rows %}
+                <div>
+                    <span dir="ltr">{{ row.created_at|date('d/m/Y H:i:s') }}</span>
+                    <span>{{ row.user_id is null ? 'audit.system'|trans : row.user_name }}</span>
+                    <span>{{ ('audit.action.' ~ row.action_type)|trans }}</span>
+                    <span>{{ row.entity_type ? ('audit.entity.' ~ row.entity_type)|trans : '—' }} {% if row.entity_id %}<bdi>#{{ row.entity_id }}</bdi>{% endif %}</span>
+                    <span><bdi>{{ row.description }}</bdi></span>
+                </div>
+            {% else %}<p class="empty-state">{{ 'audit.empty'|trans }}</p>{% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

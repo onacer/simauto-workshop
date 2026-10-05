@@ -1772,3 +1772,15 @@ select.is-combobox-native {
 
 .stock-selection { display: flex; align-items: center; gap: 8px; }
 .stock-selection input[type="checkbox"] { width: auto; min-height: auto; flex: 0 0 auto; }
+
+.audit-table > div,
+.audit-table .table-head {
+    grid-template-columns: minmax(150px, 1fr) minmax(120px, 1fr) minmax(150px, 1fr) minmax(120px, 1fr) minmax(250px, 3fr);
+}
+.audit-table > div > span {
+    overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+    .audit-table > div { min-width: 850px; }
+    .audit-table { overflow-x: auto; }
+}

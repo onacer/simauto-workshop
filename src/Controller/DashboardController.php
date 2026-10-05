@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Service\AppDatabase;
+use App\Service\ActivityLogger;
 use App\Service\AccessControl;
 use App\Service\BackupManager;
 use App\Service\CompanyProfile;
@@ -1178,6 +1179,34 @@ class DashboardController extends AbstractController
             throw $this->createNotFoundException();
         }
         return $this->render('documents/receipt.html.twig', ['operation' => $operation, 'user' => $user, 'company' => $company->data()]);
+    }
+
+    #[Route('/audit', name: 'app_audit', methods: ['GET'])]
+    public function audit(Request $request, AppDatabase $db, AccessControl $access): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) {
+            return $user;
+        }
+        if ($denied = $this->denyUnlessCan($access, $user, 'audit.view', 'app_dashboard')) {
+            return $denied;
+        }
+        $filters = [
+            'q' => trim((string) $request->query->get('q', '')),
+            'action_type' => (string) $request->query->get('action_type', ''),
+            'user_id' => (string) $request->query->get('user_id', ''),
+            'from' => (string) $request->query->get('from', ''),
+            'to' => (string) $request->query->get('to', ''),
+        ];
+        if (!$this->validDateRange($filters['from'], $filters['to'])) {
+            $filters['from'] = $filters['to'] = '';
+            $this->addFlash('warning', 'audit.invalid_dates');
+        }
+        $logger = new ActivityLogger($db);
+        return $this->render('app/audit.html.twig', [
+            'user' => $user, 'filters' => $filters, 'result' => $logger->search($filters),
+            'actors' => $logger->actors(), 'action_types' => $logger->actionTypes(),
+        ]);
     }
 
     #[Route('/users', name: 'app_users')]
