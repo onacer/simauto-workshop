@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Service\AccessControl;
 use App\Service\AppDatabase;
+use App\Service\ActivityLogger;
 use App\Service\ImportService;
 use InvalidArgumentException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -63,6 +64,7 @@ class ImportController extends AbstractController
                 throw new InvalidArgumentException('المرجو اختيار ملف CSV صحيح');
             }
             $report = $imports->import($entity, $file->getPathname(), (int) $user['id']);
+            (new ActivityLogger($db))->log($user, 'import', $entity, null, sprintf('Import %s — %d créés, %d mis à jour', $entity, $report['created'], $report['updated']));
         } catch (Throwable $e) {
             $error = $e instanceof InvalidArgumentException ? $e->getMessage() : 'تعذر تنفيذ الاستيراد';
         }

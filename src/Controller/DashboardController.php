@@ -58,6 +58,7 @@ class DashboardController extends AbstractController
 
         try {
             $db->saveProduct($request->request->all(), (int) $user['id']);
+            (new ActivityLogger($db))->logRecord($user, 'product_create', 'product', null, 'Produit créé', $request->request->all());
             $this->addFlash('success', 'تم حفظ المنتج');
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
@@ -108,6 +109,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveProduct($request->request->all(), (int) $user['id'], $id);
+                (new ActivityLogger($db))->logRecord($user, 'product_update', 'product', $id, 'Produit modifié');
                 $this->addFlash('success', 'تم تحديث المنتج');
                 return $this->redirectToRoute('app_product_show', ['id' => $id]);
             } catch (Throwable $e) {
@@ -134,6 +136,7 @@ class DashboardController extends AbstractController
             return $this->redirectToRoute('app_products');
         }
         $db->deactivateProduct($id);
+        (new ActivityLogger($db))->logRecord($user, 'product_toggle', 'product', $id, 'Désactivation');
         $this->addFlash('success', 'تم تعطيل المنتج');
         return $this->redirectToRoute('app_products');
     }
@@ -234,6 +237,7 @@ class DashboardController extends AbstractController
                 (int) $request->request->get('supplier_id') ?: null,
                 $request->request->get('unit_cost') !== '' ? (float) $request->request->get('unit_cost') : null
             );
+            (new ActivityLogger($db))->logRecord($user, 'stock_in', 'stock_movement', null, 'Entrée de stock', $request->request->all());
             $this->addFlash('success', 'تم تحديث المخزون');
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
@@ -261,6 +265,7 @@ class DashboardController extends AbstractController
                 (string) $request->request->get('reason'),
                 (int) $user['id']
             );
+            (new ActivityLogger($db))->logRecord($user, 'stock_adjust', 'product', (int) $request->request->get('product_id'), 'Stock ajusté — ' . $delta);
             $this->addFlash('success', $delta === 0 ? 'stock.adjust_no_change' : 'stock.adjusted');
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
@@ -289,6 +294,7 @@ class DashboardController extends AbstractController
             try {
                 $this->verifyCsrf($request, 'stock_movement');
                 $db->updateStockMovement($id, $request->request->all(), (int) $user['id']);
+                (new ActivityLogger($db))->logRecord($user, 'stock_movement_update', 'stock_movement', $id, 'Mouvement modifié');
                 $this->addFlash('success', 'stock.movement_updated');
                 return $this->redirectToRoute('app_product_show', ['id' => $movement['product_id']]);
             } catch (Throwable $e) {
@@ -324,6 +330,7 @@ class DashboardController extends AbstractController
         try {
             $this->verifyCsrf($request, 'stock_movement');
             $db->deleteStockMovement($id);
+            (new ActivityLogger($db))->logRecord($user, 'stock_movement_delete', 'stock_movement', $id, 'Mouvement supprimé — ' . $movement['product_name'] . ' — ' . $movement['quantity']);
             $this->addFlash('success', 'stock.movement_deleted');
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
@@ -360,6 +367,7 @@ class DashboardController extends AbstractController
         try {
             $this->verifyCsrf($request, 'operation_form');
             $id = $db->createOperation($request->request->all(), (int) $user['id']);
+            (new ActivityLogger($db))->logOperation($user, 'operation_create', $id, 'Devis créé');
             return $this->redirectToRoute('app_invoice', ['id' => $id]);
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
@@ -387,6 +395,7 @@ class DashboardController extends AbstractController
             try {
                 $this->verifyCsrf($request, 'operation_form');
                 $db->updateDraftOperation($id, $request->request->all(), (int) $user['id']);
+                (new ActivityLogger($db))->logOperation($user, 'operation_edit', $id, 'Devis modifié');
                 $this->addFlash('success', 'operations.updated');
                 return $this->redirectToRoute('app_operation_show', ['id' => $id]);
             } catch (Throwable $e) {
@@ -565,6 +574,7 @@ class DashboardController extends AbstractController
             } else {
                 $db->deactivate($entity, $id);
             }
+            (new ActivityLogger($db))->logRecord($user, 'record_' . $action, $entity, $id, 'État du registre : ' . $action);
             $this->addFlash('success', 'تم تنفيذ العملية');
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
@@ -586,6 +596,7 @@ class DashboardController extends AbstractController
         try {
             $this->verifyCsrf($request, 'operation_action');
             $db->resetOrderToDraft($id, (int) $user['id']);
+            (new ActivityLogger($db))->logOperation($user, 'operation_reset_draft', $id, 'Remise en brouillon');
             $this->addFlash('success', 'operations.workflow.reset_done');
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
@@ -624,6 +635,7 @@ class DashboardController extends AbstractController
         try {
             $this->verifyCsrf($request, 'operation_action');
             $orderId = $db->confirmQuote($id, (int) $user['id']);
+            (new ActivityLogger($db))->logOperation($user, 'operation_confirm', $orderId, 'Bon de commande créé');
             $this->addFlash('success', 'operations.workflow.confirmed');
             return $this->redirectToRoute('app_operation_show', ['id' => $orderId]);
         } catch (Throwable $e) {
@@ -645,6 +657,7 @@ class DashboardController extends AbstractController
         try {
             $this->verifyCsrf($request, 'operation_action');
             $invoiceId = $db->invoiceDocument($id, (int) $user['id']);
+            (new ActivityLogger($db))->logOperation($user, 'operation_invoice', $invoiceId, 'Facture créée');
             $this->addFlash('success', 'operations.workflow.invoiced');
             return $this->redirectToRoute('app_operation_show', ['id' => $invoiceId]);
         } catch (Throwable $e) {
@@ -674,6 +687,7 @@ class DashboardController extends AbstractController
             }
 
             $invoiceId = $db->invoiceDocument($id, (int) $user['id']);
+            (new ActivityLogger($db))->logOperation($user, 'operation_invoice', $invoiceId, 'Facture créée');
             $this->addFlash('success', 'operations.workflow.invoiced');
             return $this->redirectToRoute('app_operation_show', ['id' => $invoiceId]);
         } catch (Throwable $e) {
@@ -696,6 +710,7 @@ class DashboardController extends AbstractController
             }
             try {
                 $db->saveCategory($request->request->all());
+                (new ActivityLogger($db))->logRecord($user, 'category_create', 'category', null, 'Catégorie créée', $request->request->all());
                 $this->addFlash('success', 'تم حفظ الصنف');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
@@ -727,6 +742,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveCategory($request->request->all(), $id);
+                (new ActivityLogger($db))->logRecord($user, 'category_update', 'category', $id, 'Catégorie modifiée');
                 $this->addFlash('success', 'تم تحديث الصنف');
                 return $this->redirectToRoute('app_categories');
             } catch (Throwable $e) {
@@ -766,6 +782,7 @@ class DashboardController extends AbstractController
             return $this->redirectToRoute('app_categories');
         }
         $db->deactivateCategory($id);
+        (new ActivityLogger($db))->logRecord($user, 'category_toggle', 'category', $id, 'Désactivation');
         return $this->redirectToRoute('app_categories');
     }
 
@@ -782,6 +799,7 @@ class DashboardController extends AbstractController
             }
             try {
                 $db->saveSupplier($request->request->all());
+                (new ActivityLogger($db))->logRecord($user, 'supplier_create', 'supplier', null, 'Fournisseur créé', $request->request->all());
                 $this->addFlash('success', 'تم حفظ المورد');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
@@ -812,6 +830,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveSupplier($request->request->all(), $id);
+                (new ActivityLogger($db))->logRecord($user, 'supplier_update', 'supplier', $id, 'Fournisseur modifié');
                 return $this->redirectToRoute('app_suppliers');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
@@ -850,6 +869,7 @@ class DashboardController extends AbstractController
             return $this->redirectToRoute('app_suppliers');
         }
         $db->deactivateSupplier($id);
+        (new ActivityLogger($db))->logRecord($user, 'supplier_toggle', 'supplier', $id, 'Désactivation');
         return $this->redirectToRoute('app_suppliers');
     }
 
@@ -866,6 +886,7 @@ class DashboardController extends AbstractController
             }
             try {
                 $db->saveClient($request->request->all());
+                (new ActivityLogger($db))->logRecord($user, 'client_create', 'client', null, 'Client créé', $request->request->all());
                 $this->addFlash('success', 'تم حفظ العميل');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
@@ -896,6 +917,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveClient($request->request->all(), $id);
+                (new ActivityLogger($db))->logRecord($user, 'client_update', 'client', $id, 'Client modifié');
                 return $this->redirectToRoute('app_clients');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
@@ -936,6 +958,7 @@ class DashboardController extends AbstractController
             }
             try {
                 $db->saveVehicle($request->request->all());
+                (new ActivityLogger($db))->logRecord($user, 'vehicle_create', 'vehicle', null, 'Véhicule créé', $request->request->all());
                 $this->addFlash('success', 'تم حفظ السيارة');
             } catch (Throwable $e) {
                 $this->addFlash('error', $this->safeMessage($e));
@@ -988,6 +1011,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->saveVehicle($request->request->all(), $id);
+                (new ActivityLogger($db))->logRecord($user, 'vehicle_update', 'vehicle', $id, 'Véhicule modifié');
                 $this->addFlash('success', 'تم حفظ السيارة');
                 return $this->redirectToRoute('app_vehicle_show', ['id' => $id]);
             } catch (Throwable $e) {
@@ -1018,8 +1042,10 @@ class DashboardController extends AbstractController
             try {
                 if ($request->request->get('kind') === 'brand') {
                     $db->saveVehicleBrand((string) $request->request->get('name'));
+                    (new ActivityLogger($db))->logRecord($user, 'vehicle_brand_create', 'vehicle_brand', null, 'Marque créée', $request->request->all());
                 } else {
                     $db->saveVehicleModel((int) $request->request->get('brand_id'), (string) $request->request->get('name'));
+                    (new ActivityLogger($db))->logRecord($user, 'vehicle_model_create', 'vehicle_model', null, 'Modèle créé', $request->request->all());
                 }
                 $this->addFlash('success', 'تم الحفظ');
             } catch (Throwable $e) {
@@ -1075,6 +1101,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->updateVehicleBrand($id, (string) $request->request->get('name'));
+                (new ActivityLogger($db))->logRecord($user, 'vehicle_brand_update', 'vehicle_brand', $id, 'Marque modifiée');
                 $this->addFlash('success', 'تم الحفظ');
                 return $this->redirectToRoute('app_vehicle_brand_show', ['id' => $id]);
             } catch (Throwable $e) {
@@ -1119,6 +1146,7 @@ class DashboardController extends AbstractController
         if ($request->isMethod('POST')) {
             try {
                 $db->updateVehicleModel($id, (int) $request->request->get('brand_id'), (string) $request->request->get('name'));
+                (new ActivityLogger($db))->logRecord($user, 'vehicle_model_update', 'vehicle_model', $id, 'Modèle modifié');
                 $this->addFlash('success', 'تم الحفظ');
                 return $this->redirectToRoute('app_vehicle_model_show', ['id' => $id]);
             } catch (Throwable $e) {
@@ -1238,6 +1266,7 @@ class DashboardController extends AbstractController
             try {
                 $this->verifyCsrf($request, 'user_new');
                 $db->createUser($form);
+                (new ActivityLogger($db))->logRecord($user, 'user_create', 'user', null, 'Utilisateur créé', $request->request->all());
                 $this->addFlash('success', 'تم إنشاء المستخدم');
                 return $this->redirectToRoute('app_users');
             } catch (Throwable $e) {
@@ -1274,6 +1303,7 @@ class DashboardController extends AbstractController
             try {
                 $this->verifyCsrf($request, 'user_edit_' . $id);
                 $db->updateUser($id, $form, (int) $user['id']);
+                (new ActivityLogger($db))->logRecord($user, 'user_update', 'user', $id, 'Utilisateur modifié');
                 $this->addFlash('success', 'تم تحديث المستخدم');
                 return $this->redirectToRoute('app_users');
             } catch (Throwable $e) {
@@ -1313,6 +1343,7 @@ class DashboardController extends AbstractController
                     (string) $request->request->get('password', ''),
                     (string) $request->request->get('password_confirm', '')
                 );
+                (new ActivityLogger($db))->logRecord($user, 'user_update', 'user', $id, 'Mot de passe modifié');
                 $this->addFlash('success', 'تم تغيير كلمة المرور');
                 return $this->redirectToRoute('app_users');
             } catch (Throwable $e) {
@@ -1340,6 +1371,7 @@ class DashboardController extends AbstractController
         try {
             $this->verifyCsrf($request, 'users_toggle');
             $db->toggleUser($id, (int) $user['id']);
+            (new ActivityLogger($db))->logRecord($user, 'user_toggle', 'user', $id, 'État utilisateur modifié');
             $this->addFlash('success', 'تم تحديث حالة المستخدم');
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
@@ -1366,6 +1398,7 @@ class DashboardController extends AbstractController
                     (string) $request->request->get('password', ''),
                     (string) $request->request->get('password_confirm', '')
                 );
+                (new ActivityLogger($db))->logRecord($user, 'user_update', 'user', (int) $user['id'], 'Mot de passe modifié');
                 $this->addFlash('success', 'تم تغيير كلمة المرور');
                 return $this->redirectToRoute('app_dashboard');
             } catch (Throwable $e) {

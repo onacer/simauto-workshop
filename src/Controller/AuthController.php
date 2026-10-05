@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Service\AppDatabase;
+use App\Service\ActivityLogger;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -48,6 +49,7 @@ class AuthController extends AbstractController
                     'role' => $user['role'],
                 ]);
 
+                (new ActivityLogger($db))->log($user, 'login', 'user', (int) $user['id'], 'Connexion réussie');
                 return $this->redirectToRoute('app_dashboard');
             } else {
                 $failures = (int) $session->get('login_failures', 0) + 1;
