@@ -1642,3 +1642,28 @@ Les regles detaillees, routes et commandes de verification figurent dans les sec
 - BC: nouvelle action de remise en brouillon avec compensation transactionnelle du stock, reservee aux commandes confirmees non facturees.
 - Facturation: export CSV journalier des documents, traduit et accessible a l'admin comme au manager sans exposer les marges.
 - Stock: cases de selection partagees par l'export CSV et l'impression A4, avec conservation du comportement global si aucune case n'est cochee.
+
+
+## Journal d’activité administrateur
+
+- Table SQLite `activity_logs`, créée par migration idempotente : `id`, `user_id` nullable, `user_name` figé au moment de l’action, `action_type`, `entity_type`, `entity_id`, `description`, `created_at` (UTC). Index sur date, utilisateur et type. Aucun lien contraignant vers les utilisateurs : les événements restent lisibles après renommage ou suppression.
+- Service `App\Service\ActivityLogger` : écritures additives après réussite et hors transaction métier, erreurs absorbées (best effort). Journalise stock, produits, cycle devis/BC/facture, clients, fournisseurs, véhicules, marques/modèles, catégories, utilisateurs, imports (synthèse) et connexions réussies. Aucun mot de passe ou contenu de fichier importé enregistré.
+- Route GET `/audit`, permission `audit.view` réservée à l’admin par `AccessControl`. Sans session : `/login` ; manager : redirection et message de refus.
+- Topbar → Administration → Journal d’activité / سجل النشاط, visible uniquement pour l’admin. Page et types traduits FR/AR, recherche description/auteur, filtre type/auteur et dates inclusives. Dates invalides ou inversées ignorées avec avertissement. Tri date/id décroissant, limite 200 et compteur total.
+- Tests `tests/ActivityLoggerTest.php` : branchements réels des contrôleurs, accès, filtres, migration, conservation des noms, erreur d’audit sans régression métier/stock.
+
+Validation : `docker-compose exec -T php php bin/phpunit`
+
+```text
+PHPUnit 9.6.35 by Sebastian Bergmann and contributors.
+
+Testing
+................................................................. 65 / 84 ( 77%)
+...................                                               84 / 84 (100%)
+
+Time: 01:17.415, Memory: 24.00 MB
+
+OK (84 tests, 908 assertions)
+```
+
+`app:stock:check` : Stock is consistent. Vérifications Twig, YAML, route `/audit` et conteneur Symfony réussies.
