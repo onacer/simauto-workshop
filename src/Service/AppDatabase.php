@@ -641,8 +641,11 @@ class AppDatabase
         }
     }
 
-    public function addStock(int $productId, int $quantity, string $note, int $userId, ?int $supplierId = null, ?float $unitCost = null): void
+    public function addStock(int $productId, int $quantity, string $note, int $userId, ?int $supplierId = null, ?float $unitCost = null, ?float $salePrice = null, bool $updateSalePrice = false): void
     {
+        if ($salePrice !== null && (!is_finite($salePrice) || $salePrice < 0)) {
+            throw new InvalidArgumentException("stock.invalid_sale_price");
+        }
         if ($productId <= 0 || $quantity <= 0) {
             throw new InvalidArgumentException('المنتج والكمية إجبارية');
         }
@@ -657,7 +660,10 @@ class AppDatabase
             if ($stmt->rowCount() === 0) {
                 throw new RuntimeException('المنتج غير موجود');
             }
-            $this->addMovement($productId, 'in', $quantity, $note ?: 'إدخال مخزون', $userId, $supplierId, $unitCost);
+            $this->addMovement($productId, 'in', $quantity, $note ?: 'إدخال مخزون', $userId, $supplierId, $unitCost, null, $salePrice);
+            if ($updateSalePrice && $salePrice !== null) {
+                $this->pdo->prepare('UPDATE products SET sale_price = :price WHERE id = :id')->execute(['price' => $salePrice, 'id' => $productId]);
+            }
             $this->pdo->commit();
         } catch (Throwable $e) {
             $this->pdo->rollBack();
@@ -2091,11 +2097,11 @@ class AppDatabase
         return $operation;
     }
 
-    private function addMovement(int $productId, string $type, int $quantity, string $note, int $userId, ?int $supplierId = null, ?float $unitCost = null, ?int $operationId = null): void
+    private function addMovement(int $productId, string $type, int $quantity, string $note, int $userId, ?int $supplierId = null, ?float $unitCost = null, ?int $operationId = null, ?float $salePrice = null): void
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_by, supplier_id, unit_cost, operation_id, created_at)
-             VALUES (:product_id, :movement_type, :quantity, :note, :created_by, :supplier_id, :unit_cost, :operation_id, datetime("now"))'
+            'INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_by, supplier_id, unit_cost, operation_id, sale_price, created_at)
+             VALUES (:product_id, :movement_type, :quantity, :note, :created_by, :supplier_id, :unit_cost, :operation_id, :sale_price, datetime("now"))'
         );
         $stmt->execute([
             'product_id' => $productId,
@@ -2106,6 +2112,7 @@ class AppDatabase
             'supplier_id' => $supplierId,
             'unit_cost' => $unitCost,
             'operation_id' => $operationId,
+            'sale_price' => $salePrice,
         ]);
     }
 
@@ -2318,6 +2325,7 @@ SQL);
         $this->addColumnIfMissing('vehicle_models', 'active', 'INTEGER NOT NULL DEFAULT 1');
         $this->addColumnIfMissing('stock_movements', 'supplier_id', 'INTEGER');
         $this->addColumnIfMissing('stock_movements', 'unit_cost', 'REAL');
+        $this->addColumnIfMissing('stock_movements', 'sale_price', 'REAL');
         $this->addColumnIfMissing('operations', 'client_id', 'INTEGER');
         $this->addColumnIfMissing('operations', 'vehicle_id', 'INTEGER');
         $this->addColumnIfMissing('operations', 'check_number', 'TEXT');

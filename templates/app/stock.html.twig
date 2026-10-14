@@ -38,6 +38,7 @@
 
     <section class="panel">
         <form action="{{ path('app_stock_in') }}" method="post" class="form-grid stock-form">
+            <input type="hidden" name="_token" value="{{ stock_in_token|default('') }}">
             <label>{{ 'products.product'|trans }}
                 <select name="product_id" required data-combobox>
                     {% for product in products %}
@@ -56,6 +57,8 @@
             </label>
             <label>{{ 'stock.quantity'|trans }}<input name="quantity" type="number" step="1" min="1" value="1" required></label>
             <label>{{ 'stock.unit_cost'|trans }}<input name="unit_cost" type="number" step="0.01" min="0"></label>
+            <label>{{ 'products.sale_price'|trans }}<input name="sale_price" type="number" step="0.01" min="0"></label>
+            <label><input name="update_sale_price" type="checkbox" value="1">{{ 'stock.update_sale_price'|trans }}</label>
             <label>{{ 'stock.note'|trans }}<input name="note"></label>
             <button class="btn btn-primary" type="submit">{{ 'ui.update'|trans }}</button>
         </form>

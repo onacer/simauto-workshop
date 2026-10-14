@@ -484,3 +484,6 @@ audit.action.record_deactivate: 'Désactivation de registre'
 audit.action.record_reactivate: 'Réactivation de registre'
 audit.action.login: 'Connexion'
 audit.action.import: 'Import en masse'
+
+stock.update_sale_price: 'Mettre à jour le prix de vente du produit'
+stock.invalid_sale_price: 'Le prix de vente doit être un nombre positif ou nul'

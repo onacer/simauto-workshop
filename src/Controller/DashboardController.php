@@ -155,6 +155,7 @@ class DashboardController extends AbstractController
             'stock_rows' => $db->stockSituation($filters),
             'stock_filters' => $filters,
             'stock_focus' => (int) $request->query->get('product', 0),
+            'stock_in_token' => $this->csrfToken($request, 'stock_in'),
             'stock_adjust_token' => $this->csrfToken($request, 'stock_adjust'),
             'stock_movement_token' => $this->csrfToken($request, 'stock_movement'),
         ]);
@@ -229,13 +230,23 @@ class DashboardController extends AbstractController
         }
 
         try {
+            // Keep legacy entry clients compatible; all new price fields require CSRF.
+            if ($request->request->has('sale_price') || $request->request->has('update_sale_price')) {
+                $this->verifyCsrf($request, 'stock_in');
+            }
+            $salePrice = $request->request->get('sale_price', '');
+            if ($salePrice !== '' && !is_numeric($salePrice)) {
+                throw new InvalidArgumentException('stock.invalid_sale_price');
+            }
             $db->addStock(
                 (int) $request->request->get('product_id'),
                 (int) $request->request->get('quantity'),
                 (string) $request->request->get('note'),
                 (int) $user['id'],
                 (int) $request->request->get('supplier_id') ?: null,
-                $request->request->get('unit_cost') !== '' ? (float) $request->request->get('unit_cost') : null
+                $request->request->get('unit_cost') !== '' ? (float) $request->request->get('unit_cost') : null,
+                $request->request->get('sale_price', '') !== '' ? (float) $request->request->get('sale_price') : null,
+                $request->request->getBoolean('update_sale_price')
             );
             (new ActivityLogger($db))->logRecord($user, 'stock_in', 'stock_movement', null, 'Entrée de stock', $request->request->all());
             $this->addFlash('success', 'تم تحديث المخزون');

@@ -427,3 +427,6 @@ audit.action.record_deactivate: 'تعطيل سجل'
 audit.action.record_reactivate: 'إعادة تفعيل سجل'
 audit.action.login: 'تسجيل الدخول'
 audit.action.import: 'استيراد جماعي'
+
+stock.update_sale_price: 'تحديث ثمن بيع المنتج'
+stock.invalid_sale_price: 'يجب أن يكون ثمن البيع رقماً موجباً أو صفراً'
