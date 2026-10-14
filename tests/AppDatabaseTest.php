@@ -36,6 +36,211 @@ use Twig\TwigFunction;
 
 final class AppDatabaseTest extends TestCase
 {
+    public function testSupplierEntrySalePriceThroughPostIsOptionalAndExplicit(): void
+    {
+        $db = $this->database();
+        $category = $this->id($db->pdo(), 'SELECT id FROM categories LIMIT 1');
+        $db->saveProduct(['sku' => 'SUP-PRICE', 'name' => 'Price history', 'category_id' => $category, 'sale_price' => 90], 1);
+        $id = (int) $db->productBySku('SUP-PRICE')['id'];
+        $db->saveSupplier(['name' => 'Price supplier']);
+        $supplier = (int) $db->supplierByName('Price supplier')['id'];
+        foreach ([[120, false, 90], [130, true, 130], ['', true, 130], [0, true, 0]] as [$price, $checked, $expected]) {
+            $request = $this->requestWithUser('/stock/in', 'POST', ['_token' => 'entry-token', 'product_id' => $id, 'quantity' => 2, 'unit_cost' => 45, 'sale_price' => $price, 'supplier_id' => $supplier, 'update_sale_price' => $checked ? '1' : '0'], ['id' => 2, 'role' => 'manager']);
+            $request->getSession()->set('csrf_tokens', ['stock_in' => 'entry-token']);
+            $controller = new DashboardController();
+            $controller->setContainer($this->controllerContainer($request));
+            $controller->stockIn($request, $db, new AccessControl());
+            $entry = $db->productSupplierEntries($id)[0];
+            self::assertSame('in', $entry['movement_type']);
+            self::assertSame($supplier, (int) $entry['supplier_id']);
+            self::assertSame(45.0, (float) $entry['unit_cost']);
+            self::assertSame($price === '' ? null : (float) $price, $entry['sale_price'] === null ? null : (float) $entry['sale_price']);
+            self::assertSame((float) $expected, (float) $db->product($id)['sale_price']);
+        }
+        self::assertSame(8, (int) $db->product($id)['stock_qty']);
+        $checker = new CommandTester(new StockCheckCommand($db));
+        self::assertSame(0, $checker->execute([]));
+        self::assertStringContainsString('Stock is consistent.', $checker->getDisplay());
+    }
+
+    public function testSupplierEntryRejectsInvalidCsrfAndNegativeSalePrice(): void
+    {
+        $db = $this->database();
+        $id = $this->id($db->pdo(), "SELECT id FROM products WHERE product_type = 'stockable' LIMIT 1");
+        $before = $db->product($id);
+        $request = $this->requestWithUser('/stock/in', 'POST', ['product_id' => $id, 'quantity' => 1, 'sale_price' => 100], ['id' => 1, 'role' => 'admin']);
+        $controller = new DashboardController();
+        $controller->setContainer($this->controllerContainer($request));
+        $controller->stockIn($request, $db, new AccessControl());
+        self::assertSame($before, $db->product($id));
+        try {
+            $db->addStock($id, 1, '', 1, null, 10, -1, true);
+            self::fail('Negative sale price must be rejected.');
+        } catch (InvalidArgumentException $e) {
+            self::assertSame('stock.invalid_sale_price', $e->getMessage());
+        }
+        self::assertSame($before, $db->product($id));
+    }
+
+    public function testSupplierHistoryAndSuppliedProductsAreReadOnlyAndComplete(): void
+    {
+        $db = $this->database();
+        $category = $this->id($db->pdo(), 'SELECT id FROM categories LIMIT 1');
+        foreach (['SUPPLIED', 'NEVER-SUPPLIED'] as $sku) {
+            $db->saveProduct(['sku' => $sku, 'ref_company' => 'INTERNAL-' . $sku, 'name' => $sku, 'category_id' => $category], 1);
+        }
+        $id = (int) $db->productBySku('SUPPLIED')['id'];
+        $db->saveSupplier(['name' => 'History supplier']);
+        $supplier = $db->supplierByName('History supplier');
+        $db->saveSupplier(['name' => 'Other supplier']);
+        $other = (int) $db->supplierByName('Other supplier')['id'];
+        $db->addStock($id, 3, 'first', 1, $supplier['id'], 11, 21);
+        $db->addStock($id, 5, 'second', 1, $supplier['id'], 12, 22);
+        $db->addStock($id, 7, 'other', 1, $other, 13, 23);
+        $entries = $db->productSupplierEntries($id);
+        self::assertCount(3, $entries);
+        self::assertSame([7, 5, 3], array_map(static fn (array $entry): int => (int) $entry['quantity'], $entries));
+        $products = $db->supplierProducts($supplier['id']);
+        self::assertCount(1, $products);
+        self::assertSame(5, (int) $products[0]['quantity']);
+        self::assertSame(12.0, (float) $products[0]['unit_cost']);
+        self::assertSame(22.0, (float) $products[0]['sale_price']);
+        foreach (['admin', 'manager'] as $role) {
+            $context = ['user' => ['role' => $role, 'name' => $role]];
+            $html = $this->renderTemplate('app/product_show.html.twig', $context + ['product' => $db->product($id), 'movements' => [], 'supplier_entries' => $entries, 'stock_adjust_token' => 'token', 'stock_movement_token' => 'token']);
+            self::assertStringContainsString('products.supplier_prices', $html);
+            self::assertSame(2, substr_count($html, '>History supplier</a>'));
+            foreach ([11, 21, 12, 22] as $price) self::assertStringContainsString(number_format($price, 2, ',', ' '), $html);
+            $html = $this->renderTemplate('app/supplier_show.html.twig', $context + ['supplier' => $supplier, 'movements' => [], 'supplied_products' => $products]);
+            self::assertStringContainsString('suppliers.supplied_products', $html);
+            self::assertStringContainsString('INTERNAL-SUPPLIED', $html);
+            self::assertStringNotContainsString('NEVER-SUPPLIED', $html);
+            self::assertStringContainsString('22,00', $html);
+            self::assertStringContainsString('dir="ltr"', $html);
+        }
+        $request = $this->requestWithUser('/suppliers?supplier_id=' . $supplier['id'], 'GET', [], ['id' => 2, 'role' => 'manager']);
+        $controller = new DashboardController();
+        $controller->setContainer($this->controllerContainer($request));
+        self::assertSame('/app_supplier_show/' . $supplier['id'], $controller->suppliers($request, $db, new AccessControl())->getTargetUrl());
+    }
+
+    public function testMultipleReferenceFormsRequireCsrfForCreateAndEdit(): void
+    {
+        $db = $this->database();
+        $payload = ['sku' => 'FORM-MULTI', 'name' => 'Form multiple', 'category_id' => $this->id($db->pdo(), 'SELECT id FROM categories LIMIT 1'), 'ref_universal' => ['FORM-A', 'FORM-B', 'FORM-C']];
+        $request = $this->requestWithUser('/products/new', 'POST', $payload, ['id' => 2, 'role' => 'manager']);
+        $controller = new DashboardController();
+        $controller->setContainer($this->controllerContainer($request));
+        $controller->newProduct($request, $db, new AccessControl());
+        self::assertNull($db->productBySku('FORM-MULTI'));
+        $request->getSession()->set('csrf_tokens', ['product_new' => 'new-token']);
+        $request->request->set('_token', 'new-token');
+        $controller->newProduct($request, $db, new AccessControl());
+        $id = (int) $db->productBySku('FORM-MULTI')['id'];
+        self::assertSame(['FORM-A', 'FORM-B', 'FORM-C'], $db->productReferences($id));
+        $payload['ref_universal'] = ['FORM-B', 'FORM-D'];
+        $request = $this->requestWithUser('/products/' . $id . '/edit', 'POST', $payload + ['_token' => 'edit-token'], ['id' => 2, 'role' => 'manager']);
+        $request->getSession()->set('csrf_tokens', ['product_edit_' . $id => 'edit-token']);
+        $controller->setContainer($this->controllerContainer($request));
+        $controller->productEdit($id, $request, $db, new AccessControl());
+        self::assertSame(['FORM-B', 'FORM-D'], $db->productReferences($id));
+    }
+
+    public function testMultipleUniversalReferencesAreStoredRenderedSearchedAndReplaceable(): void
+    {
+        $db = $this->database();
+        $data = ['sku' => 'MULTI', 'ref_company' => 'UNIQUE-MULTI', 'ref_universal' => ['A123', 'B456', 'C789'], 'name' => 'Multi product', 'category_id' => $this->id($db->pdo(), 'SELECT id FROM categories LIMIT 1')];
+        $db->saveProduct($data, 1);
+        $product = $db->productBySku('MULTI');
+        $id = (int) $product['id'];
+        self::assertSame(['A123', 'B456', 'C789'], $db->productReferences($id));
+        foreach (['b456', 'B45', 'C789'] as $q) self::assertSame($id, (int) $db->products(['q' => $q])[0]['id']);
+        $context = $db->dashboardData() + ['user' => ['role' => 'manager', 'name' => 'Manager'], 'filters' => []];
+        $list = $this->renderTemplate('app/products.html.twig', $context);
+        $show = $this->renderTemplate('app/product_show.html.twig', ['user' => $context['user'], 'product' => $product, 'movements' => []]);
+        $edit = $this->renderTemplate('app/product_edit.html.twig', ['user' => $context['user'], 'product' => $product, 'references' => $db->productReferences($id), 'categories' => $db->categories()]);
+        foreach (['A123', 'B456', 'C789'] as $ref) {
+            foreach ([$list, $show, $edit] as $html) self::assertStringContainsString($ref, $html);
+        }
+        self::assertSame(3, substr_count($edit, 'name="ref_universal[]"'));
+        $shared = $data;
+        $shared['sku'] = 'SHARED'; $shared['ref_company'] = 'OTHER-INTERNAL';
+        $db->saveProduct($shared, 1);
+        self::assertCount(2, $db->products(['q' => 'B456']));
+        $shared['sku'] = 'DUPLICATE'; $shared['ref_company'] = 'unique-multi';
+        try { $db->saveProduct($shared, 1); self::fail('Internal references remain unique.'); }
+        catch (InvalidArgumentException $e) { self::assertSame('مرجع الشركة مستعمل مسبقا', $e->getMessage()); }
+        $data['ref_universal'] = ['B456', 'NEW', 'NEW', ''];
+        $db->saveProduct($data, 1, $id);
+        self::assertSame(['B456', 'NEW'], $db->productReferences($id));
+        self::assertSame('B456', $db->pdo()->query('SELECT ref_universal FROM products WHERE id = ' . $id)->fetchColumn());
+        $data['ref_universal'] = [''];
+        $db->saveProduct($data, 1, $id);
+        self::assertSame([], $db->productReferences($id));
+        self::assertNull($db->product($id)['ref_universal']);
+    }
+
+    public function testUniversalReferenceSearchRetainsExistingRelevanceOrder(): void
+    {
+        $db = $this->database();
+        $base = ['category_id' => $this->id($db->pdo(), 'SELECT id FROM categories LIMIT 1')];
+        $rows = [
+            ['sku' => 'R-INTERNAL', 'ref_company' => 'QREF', 'name' => 'Z internal'],
+            ['sku' => 'R-UNIVERSAL', 'ref_universal' => ['FIRST', 'QREF'], 'name' => 'Y universal'],
+            ['sku' => 'QREF', 'name' => 'X sku'],
+            ['sku' => 'R-IPREFIX', 'ref_company' => 'QREF-extra', 'name' => 'W internal prefix'],
+            ['sku' => 'R-UPREFIX', 'ref_universal' => ['OTHER', 'QREF-prefix'], 'name' => 'V universal prefix'],
+            ['sku' => 'QREF-sku', 'name' => 'U sku prefix'],
+            ['sku' => 'R-NAME', 'name' => 'T QREF name'],
+        ];
+        foreach ($rows as $row) $db->saveProduct($base + $row, 1);
+        self::assertSame(array_column($rows, 'sku'), array_column($db->products(['q' => 'QREF']), 'sku'));
+    }
+
+    public function testLegacyUniversalReferencesMigrationIsIdempotentAndDoesNotResurrectRemovedValues(): void
+    {
+        $directory = $this->temporaryDirectory();
+        $path = $directory . '/legacy.sqlite';
+        $db = new AppDatabase($directory, $path);
+        $db->saveProduct(['sku' => 'LEGACY-REF', 'ref_universal' => 'OLD-OEM', 'name' => 'Legacy', 'category_id' => $this->id($db->pdo(), 'SELECT id FROM categories LIMIT 1')], 1);
+        $id = (int) $db->productBySku('LEGACY-REF')['id'];
+        $db->saveSupplier(['name' => 'Legacy supplier']);
+        $supplier = (int) $db->supplierByName('Legacy supplier')['id'];
+        $db->addStock($id, 2, 'legacy entry', 1, $supplier, 15);
+        $db->pdo()->exec("DROP TABLE product_references; DELETE FROM app_migrations WHERE name = 'universal_references_v1'; ALTER TABLE stock_movements DROP COLUMN sale_price");
+        unset($db);
+        $db = new AppDatabase($directory, $path);
+        $entry = $db->productSupplierEntries($id)[0];
+        self::assertNull($entry['sale_price']);
+        self::assertSame(15.0, (float) $entry['unit_cost']);
+        self::assertSame(2, (int) $entry['quantity']);
+        self::assertSame(['OLD-OEM'], $db->productReferences($id));
+        self::assertSame('OLD-OEM', $db->pdo()->query('SELECT ref_universal FROM products WHERE id = ' . $id)->fetchColumn());
+        unset($db);
+        $db = new AppDatabase($directory, $path);
+        self::assertSame(['OLD-OEM'], $db->productReferences($id));
+        $db->pdo()->exec('DELETE FROM product_references WHERE product_id = ' . $id);
+        unset($db);
+        $db = new AppDatabase($directory, $path);
+        self::assertSame([], $db->productReferences($id));
+    }
+
+    public function testCsvMultipleUniversalReferencesAndReimportAreIdempotent(): void
+    {
+        $db = $this->database();
+        $imports = new ImportService($db);
+        $path = $this->csv([
+            ['sku', 'ref_universal', 'ref_company', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
+            ['CSV-MULTI', ' A123 | B456 ', 'CSV-INTERNAL', 'CSV multiple', 'CSV category', '3', '0', '10', '20'],
+        ]);
+        self::assertSame(1, $imports->import('products', $path, 1)['created']);
+        $product = $db->productBySku('CSV-MULTI');
+        self::assertSame(['A123', 'B456'], $db->productReferences($product['id']));
+        self::assertSame(1, $imports->import('products', $path, 1)['ignored']);
+        self::assertSame(3, (int) $db->product($product['id'])['stock_qty']);
+        self::assertStringContainsString('OEM-AIR-001|OEM-AIR-002', $imports->template('products'));
+    }
+
     public function testReceiptMediumWeightUsesProductNameWithoutChangingStoredLabelsOrA4(): void
     {
         $db = $this->database();
