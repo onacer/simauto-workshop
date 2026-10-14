@@ -818,6 +818,10 @@ class DashboardController extends AbstractController
             }
             return $this->redirectToRoute('app_suppliers');
         }
+        if ((int) $request->query->get('supplier_id', 0) > 0) {
+            return $this->redirectToRoute('app_supplier_show', ['id' => (int) $request->query->get('supplier_id')]);
+        }
+
         return $this->render('app/suppliers.html.twig', [
             'user' => $user,
             'suppliers' => $db->suppliers(false),
@@ -866,6 +870,8 @@ class DashboardController extends AbstractController
             'user' => $user,
             'supplier' => $supplier,
             'movements' => $db->supplierMovements($id),
+            'supplied_products' => $db->supplierProducts($id),
+            'suppliers' => $db->suppliers(false),
         ]);
     }
 

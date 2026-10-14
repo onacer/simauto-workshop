@@ -489,3 +489,5 @@ stock.update_sale_price: 'Mettre à jour le prix de vente du produit'
 stock.invalid_sale_price: 'Le prix de vente doit être un nombre positif ou nul'
 
 products.supplier_prices: 'Fournisseurs et prix'
+
+suppliers.supplied_products: 'Produits fournis'

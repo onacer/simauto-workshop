@@ -536,6 +536,20 @@ class AppDatabase
         return $stmt->fetchAll();
     }
 
+    public function supplierProducts(int $supplierId): array
+    {
+        $stmt = $this->pdo->prepare("SELECT p.id, p.name, p.sku, p.ref_company,
+            sm.quantity, sm.unit_cost, sm.sale_price, sm.created_at
+            FROM products p JOIN stock_movements sm ON sm.product_id = p.id
+            WHERE sm.supplier_id = :supplier AND sm.movement_type = 'in'
+              AND sm.id = (SELECT latest.id FROM stock_movements latest
+                  WHERE latest.product_id = p.id AND latest.supplier_id = :supplier AND latest.movement_type = 'in'
+                  ORDER BY latest.created_at DESC, latest.id DESC LIMIT 1)
+            ORDER BY p.name, p.id");
+        $stmt->execute(['supplier' => $supplierId]);
+        return $stmt->fetchAll();
+    }
+
     public function productMovements(int $productId): array
     {
         $stmt = $this->pdo->prepare(

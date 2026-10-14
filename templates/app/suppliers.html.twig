@@ -7,6 +7,15 @@
     {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message|trans }}</div>{% endfor %}
     {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
     <section class="panel">
+        <form method="get" class="form-grid">
+            <label>{{ 'stock.supplier'|trans }}<select name="supplier_id" required>
+                <option value="">{{ 'ui.all'|trans }}</option>
+                {% for supplier in suppliers %}<option value="{{ supplier.id }}">{{ supplier.name }}</option>{% endfor %}
+            </select></label>
+            <button class="btn btn-dark" type="submit">{{ 'suppliers.supplied_products'|trans }}</button>
+        </form>
+    </section>
+    <section class="panel">
         <form method="post" class="form-grid">
             <label>{{ 'ui.name'|trans }}<input name="name" required></label>
             <label>{{ 'ui.phone'|trans }}<input name="phone"></label>
