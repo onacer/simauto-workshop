@@ -1,0 +1,12 @@
+<fieldset data-product-references>
+    <legend>{{ 'products.ref_universal'|trans }}</legend>
+    <div data-reference-rows>
+        {% for value in references is empty ? [''] : references %}
+            <div data-reference-row>
+                <input name="ref_universal[]" value="{{ value }}" aria-label="{{ 'products.ref_universal'|trans }}" dir="ltr">
+                <button type="button" data-remove-reference hidden>{{ 'products.remove_reference'|trans }}</button>
+            </div>
+        {% endfor %}
+    </div>
+    <button type="button" data-add-reference hidden>{{ 'products.add_reference'|trans }}</button>
+</fieldset>

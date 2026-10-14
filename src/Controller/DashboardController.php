@@ -41,6 +41,7 @@ class DashboardController extends AbstractController
         return $this->render('app/products.html.twig', $db->dashboardData($request->query->all()) + [
             'user' => $user,
             'filters' => $request->query->all(),
+            'product_token' => $this->csrfToken($request, 'product_new'),
             'record_token' => $this->csrfToken($request, 'record_state'),
         ]);
     }
@@ -57,6 +58,9 @@ class DashboardController extends AbstractController
         }
 
         try {
+            if (is_array($request->request->all()['ref_universal'] ?? null)) {
+                $this->verifyCsrf($request, 'product_new');
+            }
             $db->saveProduct($request->request->all(), (int) $user['id']);
             (new ActivityLogger($db))->logRecord($user, 'product_create', 'product', null, 'Produit créé', $request->request->all());
             $this->addFlash('success', 'تم حفظ المنتج');
@@ -109,6 +113,9 @@ class DashboardController extends AbstractController
 
         if ($request->isMethod('POST')) {
             try {
+                if (is_array($request->request->all()['ref_universal'] ?? null)) {
+                    $this->verifyCsrf($request, 'product_edit_' . $id);
+                }
                 $db->saveProduct($request->request->all(), (int) $user['id'], $id);
                 (new ActivityLogger($db))->logRecord($user, 'product_update', 'product', $id, 'Produit modifié');
                 $this->addFlash('success', 'تم تحديث المنتج');
@@ -121,6 +128,8 @@ class DashboardController extends AbstractController
         return $this->render('app/product_edit.html.twig', [
             'user' => $user,
             'product' => $product,
+            'references' => $db->productReferences($id),
+            'product_token' => $this->csrfToken($request, 'product_edit_' . $id),
             'categories' => $db->categories(false),
         ]);
     }

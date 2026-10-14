@@ -46,8 +46,9 @@
     <section class="panel">
         <h2>{{ 'products.new'|trans }}</h2>
         <form action="{{ path('app_product_new') }}" method="post" class="form-grid product-pricing-form">
+            <input type="hidden" name="_token" value="{{ product_token|default('') }}">
             <label>{{ 'ui.code'|trans }}<input name="sku" required></label>
-            <label>{{ 'products.ref_universal'|trans }}<input name="ref_universal"></label>
+            {% include 'app/_product_references.html.twig' with {references: ['']} only %}
             <label>{{ 'products.ref_company'|trans }}<input name="ref_company"></label>
             <label>{{ 'products.name'|trans }}<input name="name" required></label>
             <label>{{ 'products.type'|trans }}

@@ -49,7 +49,7 @@ class ImportService
             'label' => 'import.entities.products',
             'headers' => ['sku', 'ref_universal', 'ref_company', 'name', 'category_name', 'stock_qty', 'min_qty', 'purchase_price', 'sale_price'],
             'examples' => [
-                ['FILT-AIR-001', 'OEM-AIR-001', 'SIM-AIR-001', 'FILTRE A AIR', 'Filtres', '10', '2', '35', '60'],
+                ['FILT-AIR-001', 'OEM-AIR-001|OEM-AIR-002', 'SIM-AIR-001', 'FILTRE A AIR', 'Filtres', '10', '2', '35', '60'],
                 ['HUILE-5W30-001', 'OEM-5W30-001', 'SIM-HUILE-001', 'HUILE MOTEUR 5W30', 'Huiles', '5', '1', '250', '400'],
             ],
         ],
@@ -269,6 +269,7 @@ class ImportService
             'purchase_price' => (float) $row['purchase_price'],
             'sale_price' => (float) $row['sale_price'],
         ];
+        $payload['ref_universal'] = implode(' | ', array_values(array_unique(array_filter(array_map('trim', explode('|', $payload['ref_universal'])), static fn (string $value): bool => $value !== ''))));
         $existing = $this->db->productBySku($row['sku']);
         if ($existing) {
             $compare = $payload;

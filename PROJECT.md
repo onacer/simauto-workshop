@@ -1667,3 +1667,15 @@ OK (84 tests, 908 assertions)
 ```
 
 `app:stock:check` : Stock is consistent. Vérifications Twig, YAML, route `/audit` et conteneur Symfony réussies.
+
+
+## Prix par fournisseur et références universelles multiples (14 octobre 2026)
+
+- `stock_movements.sale_price REAL NULL` conserve le prix de vente saisi à chaque entrée, avec `unit_cost`, `supplier_id`, quantité et date. Migration idempotente, anciens mouvements inchangés (prix inconnu affiché « — »).
+- `/stock` : prix de vente optionnel ; case « Mettre à jour le prix de vente du produit » non cochée par défaut. Seule cette case avec un prix renseigné actualise `products.sale_price`. Le prix d'achat courant, la marge et les sorties documentaires gardent leurs règles existantes. Les nouveaux champs de prix sont protégés par le token CSRF de session `stock_in` ; les anciens clients sans ces champs restent compatibles.
+- `/products/{id}` : section « Fournisseurs et prix », toutes les entrées fournisseur triées par date puis identifiant décroissants, lecture seule pour admin et manager.
+- `/suppliers/{id}` : section « Produits fournis », une ligne par produit avec quantité, prix d'achat et prix de vente de la dernière entrée de ce fournisseur. Un prix non renseigné sur cette entrée reste inconnu. Le sélecteur fournisseur de cette fiche et de `/suppliers` permet de consulter un autre fournisseur.
+- `product_references` : `id`, `product_id` (FK vers products, suppression en cascade), `ref_value`, `ref_type` (défaut `universal`). Index non uniques : deux produits peuvent partager une référence OEM. La migration `universal_references_v1` copie les valeurs historiques une seule fois, sans perte et sans recréer les références retirées après migration.
+- `products.ref_universal` reste une colonne de compatibilité contenant la première référence ; la table enfant conserve toutes les références. Les vues et exports reçoivent toutes les valeurs, séparées par ` | `. Création/édition : lignes ajoutables et supprimables en JavaScript, au moins un champ utilisable sans JavaScript. `ref_company` reste un champ unique. Les formulaires multivaleurs utilisent les tokens CSRF `product_new` et `product_edit_{id}` ; les appels historiques avec une référence texte simple gardent leur comportement.
+- Recherche : toutes les références universelles participent au classement existant : exact interne, universel, SKU ; puis préfixe interne, universel, SKU ; puis nom et catégorie.
+- CSV produits : la colonne `ref_universal` accepte `A123|B456`. Les espaces périphériques et valeurs vides sont retirés ; le modèle CSV contient un exemple à deux références. Réimporter le même fichier est idempotent ; mettre à jour un produit ne remplace pas son stock.

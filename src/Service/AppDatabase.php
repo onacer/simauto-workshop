@@ -401,10 +401,10 @@ class AppDatabase
             $search = $this->normalizeSearchTerm((string) $filters['q']);
             $where[] = '(
                 lower(trim(COALESCE(p.ref_company, ""))) = :q_exact
-                OR lower(trim(COALESCE(p.ref_universal, ""))) = :q_exact
+                OR EXISTS (SELECT 1 FROM product_references pr WHERE pr.product_id = p.id AND pr.ref_type = "universal" AND lower(trim(pr.ref_value)) = :q_exact)
                 OR lower(trim(p.sku)) = :q_exact
                 OR lower(trim(COALESCE(p.ref_company, ""))) LIKE :q_prefix
-                OR lower(trim(COALESCE(p.ref_universal, ""))) LIKE :q_prefix
+                OR EXISTS (SELECT 1 FROM product_references pr WHERE pr.product_id = p.id AND pr.ref_type = "universal" AND lower(trim(pr.ref_value)) LIKE :q_prefix)
                 OR lower(trim(p.sku)) LIKE :q_prefix
                 OR lower(p.name) LIKE :q_contains
                 OR lower(COALESCE(c.name, p.category, "")) LIKE :q_contains
@@ -414,10 +414,10 @@ class AppDatabase
             $params['q_contains'] = '%' . $search . '%';
             $order = 'CASE
                 WHEN lower(trim(COALESCE(p.ref_company, ""))) = :q_exact THEN 1
-                WHEN lower(trim(COALESCE(p.ref_universal, ""))) = :q_exact THEN 2
+                WHEN EXISTS (SELECT 1 FROM product_references pr WHERE pr.product_id = p.id AND pr.ref_type = "universal" AND lower(trim(pr.ref_value)) = :q_exact) THEN 2
                 WHEN lower(trim(p.sku)) = :q_exact THEN 3
                 WHEN lower(trim(COALESCE(p.ref_company, ""))) LIKE :q_prefix THEN 4
-                WHEN lower(trim(COALESCE(p.ref_universal, ""))) LIKE :q_prefix THEN 5
+                WHEN EXISTS (SELECT 1 FROM product_references pr WHERE pr.product_id = p.id AND pr.ref_type = "universal" AND lower(trim(pr.ref_value)) LIKE :q_prefix) THEN 5
                 WHEN lower(trim(p.sku)) LIKE :q_prefix THEN 6
                 WHEN lower(p.name) LIKE :q_contains THEN 7
                 WHEN lower(COALESCE(c.name, p.category, "")) LIKE :q_contains THEN 8
@@ -435,7 +435,7 @@ class AppDatabase
             $where[] = "p.product_type = 'stockable' AND p.stock_qty <= 0";
         }
 
-        $sql = 'SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE ' . implode(' AND ', $where) . ' ORDER BY ' . $order;
+        $sql = 'SELECT p.*, COALESCE((SELECT group_concat(ref_value, " | ") FROM (SELECT ref_value FROM product_references WHERE product_id = p.id AND ref_type = "universal" ORDER BY id)), p.ref_universal) AS ref_universal, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE ' . implode(' AND ', $where) . ' ORDER BY ' . $order;
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
@@ -502,13 +502,13 @@ class AppDatabase
 
     public function product(int $id): ?array
     {
-        return $this->row('SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE p.id = :id', ['id' => $id]);
+        return $this->row('SELECT p.*, COALESCE((SELECT group_concat(ref_value, " | ") FROM (SELECT ref_value FROM product_references WHERE product_id = p.id AND ref_type = "universal" ORDER BY id)), p.ref_universal) AS ref_universal, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE p.id = :id', ['id' => $id]);
     }
 
     public function productBySku(string $sku): ?array
     {
         return $this->row(
-            'SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE lower(trim(p.sku)) = lower(trim(:sku))',
+            'SELECT p.*, COALESCE((SELECT group_concat(ref_value, " | ") FROM (SELECT ref_value FROM product_references WHERE product_id = p.id AND ref_type = "universal" ORDER BY id)), p.ref_universal) AS ref_universal, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE lower(trim(p.sku)) = lower(trim(:sku))',
             ['sku' => $sku]
         );
     }
@@ -521,7 +521,7 @@ class AppDatabase
         }
 
         return $this->row(
-            'SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE lower(trim(COALESCE(p.ref_company, ""))) = lower(trim(:reference))',
+            'SELECT p.*, COALESCE((SELECT group_concat(ref_value, " | ") FROM (SELECT ref_value FROM product_references WHERE product_id = p.id AND ref_type = "universal" ORDER BY id)), p.ref_universal) AS ref_universal, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE lower(trim(COALESCE(p.ref_company, ""))) = lower(trim(:reference))',
             ['reference' => $reference]
         );
     }
@@ -579,13 +579,22 @@ class AppDatabase
     public function saveProduct(array $data, int $userId, ?int $id = null): void
     {
         $payload = $this->validateProduct($data, $id);
+        $references = $this->universalReferences($data);
 
         if ($id) {
             $payload['id'] = $id;
             $stmt = $this->pdo->prepare(
                 'UPDATE products SET sku=:sku, ref_universal=:ref_universal, ref_company=:ref_company, name=:name, category_id=:category_id, category=:category, min_qty=:min_qty, purchase_price=:purchase_price, sale_price=:sale_price, product_type=:product_type, margin_rate=:margin_rate WHERE id=:id'
             );
-            $stmt->execute($payload);
+            $this->pdo->beginTransaction();
+            try {
+                $stmt->execute($payload);
+                $this->replaceProductReferences($id, $references);
+                $this->pdo->commit();
+            } catch (Throwable $e) {
+                $this->pdo->rollBack();
+                throw $e;
+            }
             return;
         }
 
@@ -602,6 +611,7 @@ class AppDatabase
             );
             $stmt->execute($payload);
             $productId = (int) $this->pdo->lastInsertId();
+            $this->replaceProductReferences($productId, $references);
             if ($payload['product_type'] === 'stockable' && $payload['stock_qty'] > 0) {
                 $this->addMovement($productId, 'in', $payload['stock_qty'], 'رصيد البداية', $userId, null, $payload['purchase_price']);
             }
@@ -1753,10 +1763,37 @@ class AppDatabase
         return (int) $this->pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin' AND active = 1")->fetchColumn();
     }
 
+    private function universalReferences(array $data): array
+    {
+        $values = $data['ref_universal'] ?? '';
+        if (!is_array($values)) {
+            $values = explode('|', (string) $values);
+        }
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($value): string => trim((string) $value), $values
+        ), static fn (string $value): bool => $value !== '')));
+    }
+
+    public function productReferences(int $productId): array
+    {
+        $stmt = $this->pdo->prepare("SELECT ref_value FROM product_references WHERE product_id = :id AND ref_type = 'universal' ORDER BY id");
+        $stmt->execute(['id' => $productId]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    private function replaceProductReferences(int $productId, array $references): void
+    {
+        $this->pdo->prepare("DELETE FROM product_references WHERE product_id = :id AND ref_type = 'universal'")->execute(['id' => $productId]);
+        $stmt = $this->pdo->prepare("INSERT INTO product_references (product_id, ref_value, ref_type) VALUES (:id, :value, 'universal')");
+        foreach ($references as $reference) {
+            $stmt->execute(['id' => $productId, 'value' => $reference]);
+        }
+    }
+
     private function validateProduct(array $data, ?int $id): array
     {
         $sku = trim((string) ($data['sku'] ?? ''));
-        $refUniversal = trim((string) ($data['ref_universal'] ?? ''));
+        $refUniversal = $this->universalReferences($data)[0] ?? '';
         $refCompany = trim((string) ($data['ref_company'] ?? ''));
         $name = trim((string) ($data['name'] ?? ''));
         $categoryId = (int) ($data['category_id'] ?? 0);
@@ -2378,6 +2415,28 @@ SQL);
         $this->pdo->exec("UPDATE operations SET subtotal_ht = ROUND(COALESCE(total_ttc, total) / 1.2, 2) WHERE subtotal_ht IS NULL");
         $this->pdo->exec("UPDATE operations SET vat_amount = ROUND(COALESCE(total_ttc, total) - subtotal_ht, 2) WHERE vat_amount IS NULL");
         $this->pdo->exec("UPDATE operation_items SET total_ht = total WHERE total_ht IS NULL");
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS product_references (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            ref_value TEXT NOT NULL,
+            ref_type TEXT NOT NULL DEFAULT 'universal'
+        )");
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_product_references_product ON product_references(product_id)');
+        $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_product_references_value ON product_references(ref_value)');
+        if (!$this->pdo->query("SELECT 1 FROM app_migrations WHERE name = 'universal_references_v1'")->fetchColumn()) {
+            $this->pdo->beginTransaction();
+            try {
+                $this->pdo->exec("INSERT INTO product_references (product_id, ref_value)
+                    SELECT p.id, trim(p.ref_universal) FROM products p
+                    WHERE p.ref_universal IS NOT NULL AND trim(p.ref_universal) <> ''
+                      AND NOT EXISTS (SELECT 1 FROM product_references pr WHERE pr.product_id = p.id AND pr.ref_type = 'universal' AND pr.ref_value = trim(p.ref_universal))");
+                $this->pdo->exec("INSERT INTO app_migrations (name, applied_at) VALUES ('universal_references_v1', datetime('now'))");
+                $this->pdo->commit();
+            } catch (Throwable $e) {
+                $this->pdo->rollBack();
+                throw $e;
+            }
+        }
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_products_ref_universal ON products(ref_universal)');
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS idx_products_ref_company ON products(ref_company)');
         $this->pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_ref_company_unique ON products(ref_company) WHERE ref_company IS NOT NULL AND trim(ref_company) <> ''");

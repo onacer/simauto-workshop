@@ -7,8 +7,9 @@
     {% for message in app.flashes('error') %}<div class="alert alert-error">{{ message|trans }}</div>{% endfor %}
     <section class="panel">
         <form method="post" class="form-grid product-pricing-form">
+            <input type="hidden" name="_token" value="{{ product_token|default('') }}">
             <label>{{ 'ui.code'|trans }}<input name="sku" value="{{ product.sku }}" required></label>
-            <label>{{ 'products.ref_universal'|trans }}<input name="ref_universal" value="{{ product.ref_universal }}"></label>
+            {% include 'app/_product_references.html.twig' with {references: references|default([product.ref_universal])} only %}
             <label>{{ 'products.ref_company'|trans }}<input name="ref_company" value="{{ product.ref_company }}"></label>
             <label>{{ 'products.name'|trans }}<input name="name" value="{{ product.name }}" required></label>
             <label>{{ 'products.type'|trans }}

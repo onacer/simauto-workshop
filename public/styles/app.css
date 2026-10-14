@@ -1785,7 +1785,10 @@ select.is-combobox-native {
     .audit-table { overflow-x: auto; }
 }
 
-/* Supplier price history. */
+/* Supplier price history and repeatable OEM reference fields. */
 .table-scroll { overflow-x: auto; }
 .table-scroll table { width: 100%; border-collapse: collapse; }
 .table-scroll th, .table-scroll td { padding: 12px; text-align: start; border-bottom: 1px solid #ddd; }
+[data-product-references] { min-width: 0; border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+[data-reference-row] { display: flex; gap: 8px; margin-bottom: 8px; }
+[data-reference-row] input { min-width: 0; flex: 1; }

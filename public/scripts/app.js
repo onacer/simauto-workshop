@@ -498,3 +498,24 @@ document.addEventListener("DOMContentLoaded", () => {
         syncOperationLines(form);
     });
 });
+
+// Universal OEM references: repeatable fields, with one usable field without JavaScript.
+document.querySelectorAll('[data-product-references]').forEach((fieldset) => {
+    const rows = fieldset.querySelector('[data-reference-rows]');
+    const add = fieldset.querySelector('[data-add-reference]');
+    add.hidden = false;
+    rows.querySelectorAll('[data-remove-reference]').forEach((button) => { button.hidden = false; });
+    add.addEventListener('click', () => {
+        const row = rows.firstElementChild.cloneNode(true);
+        row.querySelector('input').value = '';
+        rows.appendChild(row);
+        row.querySelector('input').focus();
+    });
+    rows.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-remove-reference]');
+        if (!button) return;
+        const row = button.closest('[data-reference-row]');
+        if (rows.children.length > 1) row.remove();
+        else row.querySelector('input').value = '';
+    });
+});
