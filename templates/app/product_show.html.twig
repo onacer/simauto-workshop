@@ -30,6 +30,18 @@
         {label: 'ui.created_at'|trans, value: product.created_at}
     ]} %}
 
+    {% if can('view.products', user) %}
+    <section class="panel">
+        <h2>{{ 'products.supplier_prices'|trans }}</h2>
+        <div class="table-scroll"><table>
+            <thead><tr><th>{{ 'stock.supplier'|trans }}</th><th>{{ 'ui.date'|trans }}</th><th>{{ 'stock.quantity'|trans }}</th><th>{{ 'products.purchase_price'|trans }}</th><th>{{ 'products.sale_price'|trans }}</th></tr></thead>
+            <tbody>{% for entry in supplier_entries|default([]) %}
+                <tr><td><a href="{{ path('app_supplier_show', {id: entry.supplier_id}) }}">{{ entry.supplier_name }}</a></td><td>{{ entry.created_at }}</td><td>{{ entry.quantity }}</td><td>{{ entry.unit_cost is same as(null) ? '—' : entry.unit_cost|money }}</td><td>{{ entry.sale_price is same as(null) ? '—' : entry.sale_price|money }}</td></tr>
+            {% else %}<tr><td colspan="5">{{ 'suppliers.no_related_entries'|trans }}</td></tr>{% endfor %}</tbody>
+        </table></div>
+    </section>
+    {% endif %}
+
     {% if can('stock.adjust', user) %}
         <section class="panel">
             <h2>{{ 'stock.adjust_title'|trans }}</h2>

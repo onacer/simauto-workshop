@@ -1784,3 +1784,8 @@ select.is-combobox-native {
     .audit-table > div { min-width: 850px; }
     .audit-table { overflow-x: auto; }
 }
+
+/* Supplier price history. */
+.table-scroll { overflow-x: auto; }
+.table-scroll table { width: 100%; border-collapse: collapse; }
+.table-scroll th, .table-scroll td { padding: 12px; text-align: start; border-bottom: 1px solid #ddd; }

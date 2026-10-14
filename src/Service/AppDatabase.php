@@ -526,6 +526,16 @@ class AppDatabase
         );
     }
 
+    public function productSupplierEntries(int $productId): array
+    {
+        $stmt = $this->pdo->prepare("SELECT sm.*, s.name AS supplier_name FROM stock_movements sm
+            JOIN suppliers s ON s.id = sm.supplier_id
+            WHERE sm.product_id = :id AND sm.movement_type = 'in'
+            ORDER BY sm.created_at DESC, sm.id DESC");
+        $stmt->execute(['id' => $productId]);
+        return $stmt->fetchAll();
+    }
+
     public function productMovements(int $productId): array
     {
         $stmt = $this->pdo->prepare(

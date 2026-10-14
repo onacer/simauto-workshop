@@ -430,3 +430,5 @@ audit.action.import: 'استيراد جماعي'
 
 stock.update_sale_price: 'تحديث ثمن بيع المنتج'
 stock.invalid_sale_price: 'يجب أن يكون ثمن البيع رقماً موجباً أو صفراً'
+
+products.supplier_prices: 'الموردون والأسعار'

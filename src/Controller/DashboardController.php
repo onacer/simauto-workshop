@@ -84,6 +84,7 @@ class DashboardController extends AbstractController
             'user' => $user,
             'product' => $product,
             'movements' => $db->productMovements($id),
+            'supplier_entries' => $db->productSupplierEntries($id),
             'suppliers' => $db->suppliers(false),
             'stock_adjust_token' => $this->csrfToken($request, 'stock_adjust'),
             'stock_movement_token' => $this->csrfToken($request, 'stock_movement'),
