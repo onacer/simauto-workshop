@@ -318,6 +318,99 @@ final class ActivityLoggerTest extends TestCase
         self::assertSame(0, (int) $this->db->userById($target)['active']);
     }
 
+    public function testAuditLinksResolveExistingRecordsAndStockMovementAnchors(): void
+    {
+        $product = $this->db->products()[0];
+        $quote = $this->db->createOperation($this->operationPayload((int) $product['id']), 1);
+        $operation = $this->db->operation($quote);
+        $this->db->saveSupplier(['name' => 'Linked supplier']);
+        $supplier = (int) $this->db->supplierByName('Linked supplier')['id'];
+        $this->db->addStock((int) $product['id'], 1, 'Linked entry', 1, $supplier, 12, 24);
+        $movement = (int) $this->db->pdo()->query('SELECT MAX(id) FROM stock_movements')->fetchColumn();
+        $targets = [
+            ['operation', $quote, 'app_operation_show', '/operations/' . $quote],
+            ['product', $product['id'], 'app_product_show', '/products/' . $product['id']],
+            ['client', $operation['client_id'], 'app_client_show', '/clients/' . $operation['client_id']],
+            ['supplier', $supplier, 'app_supplier_show', '/suppliers/' . $supplier],
+            ['vehicle', $operation['vehicle_id'], 'app_vehicle_show', '/vehicles/' . $operation['vehicle_id']],
+            ['category', $product['category_id'], 'app_category_show', '/categories/' . $product['category_id']],
+            ['user', 1, 'app_users', '/users'],
+            ['stock_movement', $movement, 'app_product_show', '/products/' . $product['id'] . '#mouvement-' . $movement],
+        ];
+        $routes = new \Symfony\Component\Routing\RouteCollection();
+        foreach ($targets as [$type, $id, $route, $url]) {
+            $path = $type === 'stock_movement' ? '/products/{id}' : ($type === 'user' ? '/users' : substr($url, 0, strrpos($url, '/')) . '/{id}');
+            $routes->add($route, new \Symfony\Component\Routing\Route($path));
+        }
+        $router = new \Symfony\Component\Routing\Generator\UrlGenerator($routes, new RequestContext());
+        $resolver = new \App\Service\AuditRecordLinkResolver($this->db, $router, new AccessControl());
+        $logger = new ActivityLogger($this->db);
+        foreach ($targets as [$type, $id, $route, $url]) {
+            self::assertSame($url, $resolver->resolve($type, (int) $id, ['role' => 'admin']));
+            self::assertNull($resolver->resolve($type, (int) $id, ['role' => 'manager']));
+            $logger->log(['id' => 1, 'name' => 'Admin'], 'linked_record', $type, (int) $id, 'Linked ' . $type);
+        }
+        foreach (['fr' => 'Voir', 'ar' => 'عرض'] as $locale => $label) {
+            [$controller, $request] = $this->controller('/audit', 'GET', [], 1, $locale);
+            $html = $controller->audit($request, $this->db, new AccessControl())->getContent();
+            foreach ($targets as [$type, $id, $route, $url]) {
+                $expected = '/' . $route . ($type === 'user' ? '' : '/' . ($type === 'stock_movement' ? $product['id'] : $id));
+                if ($type === 'stock_movement') $expected .= '#mouvement-' . $movement;
+                self::assertStringContainsString('href="' . $expected . '"', $html);
+            }
+            self::assertStringContainsString($label, $html);
+            self::assertSame(8, $controller->context['result']['total']);
+        }
+        [$controller, $request] = $this->controller('/products/' . $product['id'], 'GET', [], 1);
+        self::assertStringContainsString('id="mouvement-' . $movement . '"', $controller->productShow((int) $product['id'], $request, $this->db)->getContent());
+        $tester = new CommandTester(new StockCheckCommand($this->db));
+        self::assertSame(0, $tester->execute([]), $tester->getDisplay());
+    }
+
+    public function testAuditMissingDeletedNullAndUnknownTargetsStayPlainText(): void
+    {
+        $this->db->saveSupplier(['name' => 'Deleted link supplier']);
+        $supplier = (int) $this->db->supplierByName('Deleted link supplier')['id'];
+        $logger = new ActivityLogger($this->db);
+        $logger->log(null, 'missing_link', 'supplier', $supplier, 'Deleted supplier entry');
+        $this->db->pdo()->prepare('DELETE FROM suppliers WHERE id = ?')->execute([$supplier]);
+        $logger->log(null, 'missing_link', 'product', null, 'Null identifier entry');
+        $logger->log(null, 'missing_link', null, 1, 'Null entity entry');
+        $logger->log(null, 'missing_link', 'unknown', 1, 'Unknown entity entry');
+        foreach (['operation', 'product', 'client', 'supplier', 'vehicle', 'category', 'user', 'stock_movement'] as $type) {
+            $logger->log(null, 'missing_link', $type, 999999999, 'Missing ' . $type);
+        }
+        [$controller, $request] = $this->controller('/audit', 'GET', [], 1);
+        $html = $controller->audit($request, $this->db, new AccessControl())->getContent();
+        foreach ($controller->context['result']['rows'] as $row) {
+            self::assertNull($row['target_url']);
+            self::assertStringContainsString('<span><bdi>' . $row['description'] . '</bdi></span>', $html);
+        }
+        self::assertStringNotContainsString('class="audit-record-link"', $html);
+        self::assertSame(12, $logger->search([])['total']);
+        self::assertArrayNotHasKey('target_url', $logger->search([])['rows'][0]);
+    }
+
+    public function testAuditLinksPreserveFiltersAndAdminOnlyAccess(): void
+    {
+        $product = $this->db->products()[0];
+        $logger = new ActivityLogger($this->db);
+        $logger->log(['id' => 1, 'name' => 'Admin'], 'product_update', 'product', $product['id'], 'Selected linked product');
+        $logger->log(['id' => 1, 'name' => 'Admin'], 'product_create', 'product', $product['id'], 'Other linked product');
+        [$controller, $request] = $this->controller('/audit?q=Selected&action_type=product_update&user_id=1', 'GET', [], 1);
+        $html = $controller->audit($request, $this->db, new AccessControl())->getContent();
+        self::assertSame(1, $controller->context['result']['total']);
+        self::assertStringContainsString('Selected linked product', $html);
+        self::assertStringNotContainsString('Other linked product', $html);
+        self::assertStringContainsString('href="/app_product_show/' . $product['id'] . '"', $html);
+        foreach ([0 => '/app_login', 2 => '/app_dashboard'] as $user => $location) {
+            [$controller, $request] = $this->controller('/audit', 'GET', [], $user);
+            $response = $controller->audit($request, $this->db, new AccessControl());
+            self::assertSame($location, $response->getTargetUrl());
+            self::assertSame([], $controller->context);
+        }
+    }
+
     private function operationPayload(int $productId): array
     {
         $this->db->saveClient(['name' => 'Audit operation client']);
