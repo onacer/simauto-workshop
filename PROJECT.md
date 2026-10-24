@@ -1679,3 +1679,21 @@ OK (84 tests, 908 assertions)
 - `products.ref_universal` reste une colonne de compatibilité contenant la première référence ; la table enfant conserve toutes les références. Les vues et exports reçoivent toutes les valeurs, séparées par ` | `. Création/édition : lignes ajoutables et supprimables en JavaScript, au moins un champ utilisable sans JavaScript. `ref_company` reste un champ unique. Les formulaires multivaleurs utilisent les tokens CSRF `product_new` et `product_edit_{id}` ; les appels historiques avec une référence texte simple gardent leur comportement.
 - Recherche : toutes les références universelles participent au classement existant : exact interne, universel, SKU ; puis préfixe interne, universel, SKU ; puis nom et catégorie.
 - CSV produits : la colonne `ref_universal` accepte `A123|B456`. Les espaces périphériques et valeurs vides sont retirés ; le modèle CSV contient un exemple à deux références. Réimporter le même fichier est idempotent ; mettre à jour un produit ne remplace pas son stock.
+
+
+## Raccourcis du journal d’audit (24 octobre 2026)
+
+Sur `/audit`, la description de chaque ligne devient un lien « Voir » (FR) / « عرض » (AR) quand sa cible existe encore. Sans type connu, sans identifiant ou après suppression de l’enregistrement, la description reste du texte échappé sans lien. Aucune URL n’est stockée en base : `AuditRecordLinkResolver` vérifie les cibles au moment de la consultation. Les écritures best-effort du journal, colonnes, filtres, tri et limite de 200 lignes restent inchangés ; aucune migration n’est nécessaire.
+
+| entity_type | Route cible |
+| --- | --- |
+| `operation` | `app_operation_show` — `/operations/{id}` (devis, BC et facture) |
+| `product` | `app_product_show` — `/products/{id}` |
+| `client` | `app_client_show` — `/clients/{id}` |
+| `supplier` | `app_supplier_show` — `/suppliers/{id}` |
+| `vehicle` | `app_vehicle_show` — `/vehicles/{id}` |
+| `category` | `app_category_show` — `/categories/{id}` |
+| `user` | `app_users` — `/users`, après vérification de l’existence de l’utilisateur |
+| `stock_movement` | `app_product_show` — `/products/{product_id}#mouvement-{id}`, après résolution du produit du mouvement |
+
+Les anciens événements stock dont `entity_type = product` ciblent directement la fiche produit. Un identifiant de mouvement supprimé n’est jamais interprété comme un identifiant de produit. Les mouvements sont consultables sur la fiche produit existante, sans nouvelle page ni action de modification. Le journal et la résolution de ses liens exigent `audit.view` (admin uniquement) ; les droits des fiches métier pour les managers restent inchangés.

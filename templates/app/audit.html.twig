@@ -42,7 +42,9 @@
                     <span>{{ row.user_id is null ? 'audit.system'|trans : row.user_name }}</span>
                     <span>{{ ('audit.action.' ~ row.action_type)|trans }}</span>
                     <span>{{ row.entity_type ? ('audit.entity.' ~ row.entity_type)|trans : '—' }} {% if row.entity_id %}<bdi>#{{ row.entity_id }}</bdi>{% endif %}</span>
-                    <span><bdi>{{ row.description }}</bdi></span>
+                    {% if row.target_url|default(null) %}
+                        <span><a class="audit-record-link" href="{{ row.target_url }}"><bdi>{{ row.description }}</bdi> <small>{{ 'audit.view_record'|trans }}</small></a></span>
+                    {% else %}<span><bdi>{{ row.description }}</bdi></span>{% endif %}
                 </div>
             {% else %}<p class="empty-state">{{ 'audit.empty'|trans }}</p>{% endfor %}
         </div>

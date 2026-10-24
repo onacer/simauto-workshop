@@ -60,7 +60,7 @@
         <div class="data-table">
             <div class="table-head"><span>{{ 'ui.type'|trans }}</span><span>{{ 'stock.quantity'|trans }}</span><span>{{ 'stock.note'|trans }}</span><span>{{ 'ui.actions'|trans }}</span></div>
             {% for movement in movements %}
-                <div>
+                <div id="mouvement-{{ movement.id }}">
                     <strong>
                         <span class="badge badge-movement badge-movement-{{ movement.movement_type }}">{{ ('stock.movement.' ~ movement.movement_type)|trans }}</span>
                         <br><small>{{ movement.created_at }}</small>

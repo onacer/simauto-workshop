@@ -491,3 +491,5 @@ products.supplier_prices: 'Fournisseurs et prix'
 suppliers.supplied_products: 'Produits fournis'
 products.add_reference: 'Ajouter une référence'
 products.remove_reference: 'Retirer la référence'
+
+audit.view_record: 'Voir'

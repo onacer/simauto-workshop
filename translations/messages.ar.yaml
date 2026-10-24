@@ -434,3 +434,5 @@ products.supplier_prices: 'الموردون والأسعار'
 suppliers.supplied_products: 'المنتجات الموردة'
 products.add_reference: 'إضافة مرجع'
 products.remove_reference: 'إزالة المرجع'
+
+audit.view_record: 'عرض'

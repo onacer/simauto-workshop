@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Service\AppDatabase;
 use App\Service\ActivityLogger;
+use App\Service\AuditRecordLinkResolver;
 use App\Service\AccessControl;
 use App\Service\BackupManager;
 use App\Service\CompanyProfile;
@@ -1258,8 +1259,14 @@ class DashboardController extends AbstractController
             $this->addFlash('warning', 'audit.invalid_dates');
         }
         $logger = new ActivityLogger($db);
+        $result = $logger->search($filters);
+        $links = new AuditRecordLinkResolver($db, $this->container->get('router'), $access);
+        foreach ($result['rows'] as &$row) {
+            $row['target_url'] = $links->resolve($row['entity_type'], $row['entity_id'] === null ? null : (int) $row['entity_id'], $user);
+        }
+        unset($row);
         return $this->render('app/audit.html.twig', [
-            'user' => $user, 'filters' => $filters, 'result' => $logger->search($filters),
+            'user' => $user, 'filters' => $filters, 'result' => $result,
             'actors' => $logger->actors(), 'action_types' => $logger->actionTypes(),
         ]);
     }
