@@ -24,6 +24,7 @@ class AccessControl
             'view.suppliers',
             'view.clients',
             'view.vehicles',
+            'view.knowledge',
             'view.vehicle_settings',
             'view.operations',
             'view.billing',

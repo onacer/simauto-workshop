@@ -1,0 +1,20 @@
+.knowledge-table-wrap { overflow-x: auto; }
+.knowledge-table { width: 100%; border-collapse: collapse; margin-block-end: 1rem; }
+.knowledge-table th, .knowledge-table td { border: 1px solid #ccc; padding: .6rem; text-align: start; overflow-wrap: anywhere; }
+.knowledge-table th { background: #f4f4f4; color: #111; }
+.knowledge-model summary { cursor: pointer; padding-block: .75rem; font-weight: bold; }
+.knowledge-operation { border-block-start: 1px solid #ddd; margin-block-start: 1rem; }
+.knowledge-export-sheet { box-sizing: border-box; width: 194mm; max-width: 100%; padding: 6mm; margin: auto; background: white; color: #111; }
+.knowledge-export-filters { display: grid; grid-template-columns: max-content 1fr; gap: .2rem 1rem; }
+.knowledge-export-filters dd { margin: 0; overflow-wrap: anywhere; }
+.knowledge-export-sheet footer { margin-block-start: 8mm; text-align: center; }
+@page { size: A4 portrait; margin: 8mm; }
+@media print {
+    .knowledge-export-sheet { width: auto; max-width: none; padding: 0; }
+    .knowledge-export-sheet .doc-actions { display: none; }
+    .knowledge-export-sheet h2, .knowledge-export-sheet h3 { break-after: avoid; }
+    .knowledge-export-sheet tr { break-inside: avoid; }
+    .knowledge-export-sheet thead { display: table-header-group; }
+    .knowledge-export-sheet .knowledge-table-wrap { overflow: visible; }
+    .knowledge-export-sheet .knowledge-table { font-size: 10pt; }
+}

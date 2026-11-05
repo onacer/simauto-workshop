@@ -1,0 +1,45 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ 'knowledge.title'|trans }} - SIM Auto{% endblock %}
+{% block stylesheets %}<link rel="stylesheet" href="{{ asset('styles/knowledge.css') }}">{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head">
+        <h1>{{ 'knowledge.title'|trans }}</h1>
+
+    </section>
+    <p>{{ 'knowledge.rule'|trans }}</p>
+    {% if invalid_dates %}<div class="alert alert-warning" role="alert">{{ 'knowledge.invalid_dates'|trans }}</div>{% endif %}
+    <section class="panel">
+        <form method="get" action="{{ path('app_knowledge') }}" class="form-grid">
+            <label>{{ 'vehicles.brand'|trans }}<select name="brand" data-combobox><option value="">{{ 'knowledge.all'|trans }}</option>{% for brand in brands %}<option value="{{ brand }}" {{ filters.brand == brand ? 'selected' : '' }}>{{ brand }}</option>{% endfor %}</select></label>
+            <label>{{ 'vehicles.model'|trans }}<select name="model" data-combobox><option value="">{{ 'knowledge.all'|trans }}</option>{% for model in models %}<option value="{{ model }}" {{ filters.model == model ? 'selected' : '' }}>{{ model }}</option>{% endfor %}</select></label>
+            <label>{{ 'knowledge.search'|trans }}<input type="search" name="q" value="{{ filters.q }}"></label>
+            <label>{{ 'knowledge.from'|trans }}<input type="date" name="from" value="{{ filters.from }}"></label>
+            <label>{{ 'knowledge.to'|trans }}<input type="date" name="to" value="{{ filters.to }}"></label>
+            <label>{{ 'vehicles.plate'|trans }}<input name="plate" value="{{ filters.plate }}"></label>
+            <button class="btn btn-primary" type="submit">{{ 'knowledge.filter'|trans }}</button>
+            <a href="{{ path('app_knowledge') }}">{{ 'knowledge.reset'|trans }}</a>
+        </form>
+    </section>
+    {% for group in groups %}
+        <section class="panel knowledge-model">
+            <h2>{{ group.brand ?: 'knowledge.unknown_brand'|trans }} {{ group.model ?: 'knowledge.unknown_model'|trans }}</h2>
+            <p>{{ 'knowledge.invoice_count'|trans({'%count%': group.uses}) }}</p>
+            {% include 'app/_knowledge_items.html.twig' with {group: group} only %}
+            <details>
+                <summary>{{ 'knowledge.details'|trans }}</summary>
+                {% for operation in group.operations %}
+                    <article class="knowledge-operation">
+                        <h3><a href="{{ path('app_operation_show', {id: operation.id}) }}"><bdi>{{ operation.number ?: operation.id }}</bdi></a> · {{ operation.date|date('d/m/Y') }}</h3>
+                        <p>{{ 'vehicles.plate'|trans }} : <bdi>{{ operation.plate }}</bdi> · {{ 'ui.client'|trans }} : {{ operation.client }}</p>
+                        <ul>{% for line in operation.lines %}<li>{{ line.label }} — {{ 'knowledge.line_quantity'|trans }} : {{ line.quantity }} ({{ ('knowledge.' ~ line.line_type)|trans }})</li>{% endfor %}</ul>
+                    </article>
+                {% endfor %}
+            </details>
+        </section>
+    {% else %}
+        <section class="panel"><p class="empty-state">{{ 'knowledge.empty'|trans }}</p></section>
+    {% endfor %}
+</main>
+{% endblock %}

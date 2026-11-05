@@ -9,17 +9,33 @@ use App\Service\AccessControl;
 use App\Service\BackupManager;
 use App\Service\CompanyProfile;
 use App\Service\FrenchNumberFormatter;
+use App\Service\TechnicalKnowledge;
 use InvalidArgumentException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Throwable;
 
 class DashboardController extends AbstractController
 {
+    #[Route('/knowledge', name: 'app_knowledge', methods: ['GET'])]
+    public function knowledge(Request $request, AppDatabase $db, AccessControl $access, TechnicalKnowledge $knowledge): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) return $user;
+        if (!$access->can('view.knowledge', $user)) throw new AccessDeniedHttpException();
+
+        $result = $knowledge->filters($request->query->all());
+        return $this->render('app/knowledge.html.twig', $result + $knowledge->options() + [
+            'user' => $user,
+            'groups' => $knowledge->search($result['filters']),
+        ]);
+    }
+
     #[Route('/', name: 'app_dashboard')]
     public function index(Request $request, AppDatabase $db): Response
     {

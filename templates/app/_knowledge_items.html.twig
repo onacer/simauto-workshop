@@ -1,0 +1,15 @@
+{% for type, rows in {products: group.products, services: group.services} %}
+    <h3>{{ ('knowledge.' ~ type)|trans({}, null, export_locale|default(null)) }}</h3>
+    <div class="knowledge-table-wrap">
+        <table class="knowledge-table">
+            <thead><tr><th>{{ 'knowledge.name'|trans({}, null, export_locale|default(null)) }}</th><th>{{ 'knowledge.reference'|trans({}, null, export_locale|default(null)) }}</th><th>{{ 'knowledge.uses'|trans({}, null, export_locale|default(null)) }}</th><th>{{ 'knowledge.quantity'|trans({}, null, export_locale|default(null)) }}</th></tr></thead>
+            <tbody>
+            {% for item in rows %}
+                <tr><td>{{ item.name }}</td><td><bdi>{{ item.reference }}</bdi></td><td>{{ item.uses }}</td><td>{{ item.quantity }}</td></tr>
+            {% else %}
+                <tr><td colspan="4">{{ 'knowledge.empty_items'|trans({}, null, export_locale|default(null)) }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endfor %}
