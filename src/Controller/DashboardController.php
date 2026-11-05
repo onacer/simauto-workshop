@@ -36,6 +36,22 @@ class DashboardController extends AbstractController
         ]);
     }
 
+    #[Route('/knowledge/export/pdf', name: 'app_knowledge_export_pdf', methods: ['GET'])]
+    public function knowledgeExportPdf(Request $request, AppDatabase $db, AccessControl $access, TechnicalKnowledge $knowledge, CompanyProfile $company): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) return $user;
+        if (!$access->can('knowledge.export', $user)) throw new AccessDeniedHttpException();
+
+        $result = $knowledge->filters($request->query->all());
+        $request->setLocale('fr');
+        return $this->render('documents/knowledge.html.twig', $result + [
+            'user' => $user,
+            'company' => $company->data(),
+            'groups' => $knowledge->search($result['filters']),
+        ]);
+    }
+
     #[Route('/', name: 'app_dashboard')]
     public function index(Request $request, AppDatabase $db): Response
     {

@@ -1,0 +1,24 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ 'knowledge.title'|trans({}, null, 'fr') }} - SIM Auto{% endblock %}
+{% block stylesheets %}<link rel="stylesheet" href="{{ asset('styles/knowledge.css') }}">{% endblock %}
+{% block body %}
+<main class="knowledge-export-sheet" dir="ltr">
+    <div class="doc-actions"><button class="btn btn-primary" onclick="window.print()">{{ 'documents.print'|trans({}, null, 'fr') }}</button></div>
+    <header><h1>SIM Auto — {{ 'knowledge.title'|trans({}, null, 'fr') }}</h1><p>{{ 'knowledge.exported_at'|trans({}, null, 'fr') }} : {{ 'now'|date('d/m/Y H:i') }}</p></header>
+    <p>{{ 'knowledge.rule'|trans({}, null, 'fr') }}</p>
+    {% if invalid_dates %}<p role="alert">{{ 'knowledge.invalid_dates'|trans({}, null, 'fr') }}</p>{% endif %}
+    <dl class="knowledge-export-filters">
+        {% for key, label in {brand: 'vehicles.brand', model: 'vehicles.model', q: 'knowledge.search', from: 'knowledge.from', to: 'knowledge.to', plate: 'vehicles.plate'} %}
+            <dt>{{ label|trans({}, null, 'fr') }}</dt><dd>{{ attribute(filters, key) ?: 'knowledge.all'|trans({}, null, 'fr') }}</dd>
+        {% endfor %}
+    </dl>
+    {% for group in groups %}
+        <section class="knowledge-model">
+            <h2>{{ group.brand ?: 'knowledge.unknown_brand'|trans({}, null, 'fr') }} {{ group.model ?: 'knowledge.unknown_model'|trans({}, null, 'fr') }}</h2>
+            <p>{{ 'knowledge.invoice_count'|trans({'%count%': group.uses}, null, 'fr') }}</p>
+            {% include 'app/_knowledge_items.html.twig' with {group: group, export_locale: 'fr'} only %}
+        </section>
+    {% else %}<p>{{ 'knowledge.empty'|trans({}, null, 'fr') }}</p>{% endfor %}
+    <footer>{{ company.address }} · {{ company.contact }}</footer>
+</main>
+{% endblock %}

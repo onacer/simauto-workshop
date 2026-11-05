@@ -6,7 +6,9 @@
 <main class="main-board">
     <section class="page-head">
         <h1>{{ 'knowledge.title'|trans }}</h1>
-
+        {% if can('knowledge.export', user) %}
+            <a class="btn btn-dark" href="{{ path('app_knowledge_export_pdf', filters) }}" target="_blank" rel="noopener">{{ 'knowledge.export'|trans }}</a>
+        {% endif %}
     </section>
     <p>{{ 'knowledge.rule'|trans }}</p>
     {% if invalid_dates %}<div class="alert alert-warning" role="alert">{{ 'knowledge.invalid_dates'|trans }}</div>{% endif %}
