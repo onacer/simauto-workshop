@@ -1,5 +1,18 @@
 # SIM Auto Workshop - Documentation Projet
 
+## Base technique par modèle (5 novembre 2026)
+
+- Menu : **Véhicules → Base technique / المرجع التقني**, accessible à admin et manager.
+- `GET /knowledge` : consultation et filtres via `view.knowledge` (admin et manager).
+- `GET /knowledge/export/pdf` : export A4 imprimable via `knowledge.export` (admin uniquement ; accès forcé manager refusé avec HTTP 403). Le bouton reprend les filtres actifs ; le navigateur permet d’imprimer ou d’enregistrer en PDF, comme l’export stock existant. Document en français LTR avec en-tête SIM Auto, date d’export et filtres.
+- `TechnicalKnowledge` lit uniquement `operations` et `operation_items`, avec jointures sur les véhicules, marques, modèles, clients et produits. Aucune table ni migration supplémentaire, aucune écriture métier, aucun changement du cycle documentaire, du stock, des marges ou des documents existants.
+- Agrégation : **factures uniquement** (`doc_type = 'invoice'`), sans compter les devis ni les BC copiés au cours du cycle. Regroupement par marque + modèle normalisés du véhicule ; repli champ par champ sur `vehicle_brand` / `vehicle_model` des anciennes opérations. Références inactives incluses. Les noms sont regroupés sans tenir compte de la casse et des espaces périphériques ; les valeurs manquantes sont indiquées comme non renseignées.
+- Chaque pièce/produit est regroupé par identifiant (désignation texte pour une ancienne ligne libre), avec référence interne ou SKU, nombre de **factures distinctes** et somme des quantités. Les services sont séparés. Deux lignes identiques dans une facture ajoutent leurs quantités mais comptent une seule utilisation. Modèles et articles triés par fréquence décroissante, puis par nom.
+- Le détail déroulant affiche les factures concernées (numéro, date, immatriculation, client et lignes correspondantes) avec liens vers `/operations/{id}`. Les quantités sont techniques ; aucun prix ni marge n’est exposé.
+- Filtres GET combinables : `brand`, `model` (combobox existante, incluant les valeurs historiques), `q` (sous-chaîne littérale du nom produit ou libellé historique, services inclus), `from`, `to` (dates inclusives), `plate` (immatriculation exacte sans tenir compte de la casse). Sans période, tout l’historique est consulté. Les dates invalides ou inversées sont ignorées avec avertissement ; les autres filtres restent actifs. La recherche conserve uniquement les lignes correspondantes dans les totaux et détails.
+- Une requête préparée parcourt les lignes filtrées pour calculer agrégats et détails sans requêtes par modèle/opération ; une requête distincte fournit les options des combobox. La vue et l’export utilisent le même service et les mêmes filtres validés.
+- Tests déterministes : `tests/TechnicalKnowledgeTest.php` (agrégats, services, filtres combinés, dates, liens réels, AR/FR, consultation admin/manager, export admin et refus manager, anciens véhicules, références inactives, absence d’écriture et contrôle stock).
+
 Derniere mise a jour: 17 septembre 2026. Documentation alignee sur les evolutions du prompt `p.md`: recu, remise en brouillon des BC et exports de gestion.
 
 ## Objectif
