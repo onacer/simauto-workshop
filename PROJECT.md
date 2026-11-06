@@ -1,19 +1,31 @@
 # SIM Auto Workshop - Documentation Projet
 
-## Base technique par modèle (5 novembre 2026)
+## Base technique par marque (6 novembre 2026)
 
 - Menu : **Véhicules → Base technique / المرجع التقني**, accessible à admin et manager.
 - `GET /knowledge` : consultation et filtres via `view.knowledge` (admin et manager).
 - `GET /knowledge/export/pdf` : export A4 imprimable via `knowledge.export` (admin uniquement ; accès forcé manager refusé avec HTTP 403). Le bouton reprend les filtres actifs ; le navigateur permet d’imprimer ou d’enregistrer en PDF, comme l’export stock existant. Document en français LTR avec en-tête SIM Auto, date d’export et filtres.
 - `TechnicalKnowledge` lit uniquement `operations` et `operation_items`, avec jointures sur les véhicules, marques, modèles, clients et produits. Aucune table ni migration supplémentaire, aucune écriture métier, aucun changement du cycle documentaire, du stock, des marges ou des documents existants.
-- Agrégation : **factures uniquement** (`doc_type = 'invoice'`), sans compter les devis ni les BC copiés au cours du cycle. Regroupement par marque + modèle normalisés du véhicule ; repli champ par champ sur `vehicle_brand` / `vehicle_model` des anciennes opérations. Références inactives incluses. Les noms sont regroupés sans tenir compte de la casse et des espaces périphériques ; les valeurs manquantes sont indiquées comme non renseignées.
-- Chaque pièce/produit est regroupé par identifiant (désignation texte pour une ancienne ligne libre), avec référence interne ou SKU, nombre de **factures distinctes** et somme des quantités. Les services sont séparés. Deux lignes identiques dans une facture ajoutent leurs quantités mais comptent une seule utilisation. Modèles et articles triés par fréquence décroissante, puis par nom.
-- Le détail déroulant affiche les factures concernées (numéro, date, immatriculation, client et lignes correspondantes) avec liens vers `/operations/{id}`. Les quantités sont techniques ; aucun prix ni marge n’est exposé.
-- Filtres GET combinables : `brand`, `model` (combobox existante, incluant les valeurs historiques), `q` (sous-chaîne littérale du nom produit ou libellé historique, services inclus), `from`, `to` (dates inclusives), `plate` (immatriculation exacte sans tenir compte de la casse). Sans période, tout l’historique est consulté. Les dates invalides ou inversées sont ignorées avec avertissement ; les autres filtres restent actifs. La recherche conserve uniquement les lignes correspondantes dans les totaux et détails.
-- Une requête préparée parcourt les lignes filtrées pour calculer agrégats et détails sans requêtes par modèle/opération ; une requête distincte fournit les options des combobox. La vue et l’export utilisent le même service et les mêmes filtres validés.
+- Agrégation : **marque principale, modèle facultatif**. Le lien véhicule normalisé est prioritaire, avec repli champ par champ sur `vehicle_brand` / `vehicle_model` / `vehicle_plate`. Une marque sans modèle et une opération sans véhicule normalisé restent incluses. Les comparaisons et regroupements ignorent la casse Unicode, les espaces multiples/périphériques (y compris insécables) et les accents via ICU/Normalizer. Aucune correction approximative des noms n’est imposée aux données.
+- L’historique couvre les devis, BC et factures, en ne conservant que les documents sans successeur dans la chaîne `parent_id` : une intervention devis → BC → facture ne compte qu’une fois. Ce choix est appliqué avant les filtres ; un parent ne réapparaît pas si son successeur est hors période. Les devis sont explicitement identifiés comme des pièces/services **prévus**, les BC comme commandés et les factures comme facturés. Ces quantités historiques ne sont pas une statistique de consommation effective.
+- Chaque article est regroupé par identifiant (désignation normalisée pour une ligne libre), avec référence interne ou SKU, nombre d’interventions distinctes et somme des quantités. Les services sont séparés ; deux lignes identiques d’un document comptent une occurrence et additionnent leurs quantités. Les marques et articles sont triés par fréquence décroissante puis par nom. Les modèles concernés sont indiqués sans être nécessaires à la recherche.
+- Le détail affiche numéro, type, date, modèle, immatriculation, client et lignes correspondantes, avec liens vers `/operations/{id}`. Aucun prix ni marge n’est exposé. Les références inactives restent incluses.
+- Filtres GET combinables : `brand` (principal), `model` (optionnel), `q` (sous-chaîne littérale normalisée du nom produit ou libellé), `from`, `to` (inclusifs), `plate` (exacte normalisée). Les dates invalides/inversées sont ignorées avec avertissement ; les autres filtres sont conservés. Les combobox incluent les marques/modèles du référentiel et les valeurs historiques de toutes les opérations, même sans facture ou sans lignes.
+- Requêtes en nombre constant, sans requête par marque/opération ; lecture des lignes filtrées pour calculer agrégats et détails. Vue et export partagent le même service et les mêmes filtres.
 - Tests déterministes : `tests/TechnicalKnowledgeTest.php` (agrégats, services, filtres combinés, dates, liens réels, AR/FR, consultation admin/manager, export admin et refus manager, anciens véhicules, références inactives, absence d’écriture et contrôle stock).
 
-Derniere mise a jour: 17 septembre 2026. Documentation alignee sur les evolutions du prompt `p.md`: recu, remise en brouillon des BC et exports de gestion.
+Diagnostic production en lecture seule, sans migration ni seed : `php scripts/diagnose-knowledge.php /chemin/simauto.sqlite Hyundai "Ounaceur Abdessamad"`. Le script indique les types de documents, sources normalisées/textuelles, nombres de lignes, successeurs et éligibilité à l’ancienne règle « factures uniquement ». Le cas Hyundai n’existe pas dans la base du dépôt examinée ; la cause exacte en production doit être confirmée sur sa base réelle. Les limitations corrigées sont le périmètre factures uniquement, les marques absentes des choix sans facture et la normalisation Unicode insuffisante.
+
+## BC direct pour le gestionnaire et historique (6 novembre 2026)
+
+- `POST /operations/new` crée directement un BC confirmé pour le manager. `createPurchaseOrder()` réutilise intégralement la confirmation devis → BC dans une transaction : un brouillon technique temporaire est supprimé avant commit, sans devis conservé, `parent_id` ni `quote_no` artificiels. Les lignes, contrôles de stock, marges et mouvements sont ceux du mécanisme existant. Stock insuffisant, CSRF invalide ou erreur : aucun document, ligne, mouvement ou événement d’audit n’est conservé. La facturation du BC ne décrémente pas à nouveau le stock.
+- L’admin conserve la création d’un devis et le cycle complet. Permissions `create.quote` et `edit.quote_draft` admin uniquement ; le manager ne peut pas forcer `doc_type=quote`, ni éditer un devis par GET/POST. Le formulaire manager indique « Créer un bon de commande ».
+- Les numéros de reçu gardent le format `REC-YYYYmmdd-HHMMSS-NNNN`, avec vérification d’unicité pour éviter une collision après suppression du brouillon technique ou reconfirmation dans la même seconde.
+- La remise en brouillon `order.reset_draft` reste ouverte aux deux rôles, avec compensation du stock inchangée. Elle produit toujours un devis brouillon : **seul l’admin peut ensuite l’éditer** ; le manager peut le reconfirmer, comme auparavant. Les BC confirmés et factures restent verrouillés.
+- `/operations/history` sans filtre et `/billing` listent uniquement BC et factures. L’admin peut demander `doc_type=quote` ou `doc_type=all` explicitement dans l’historique. Le manager ne dispose pas de ces choix et les paramètres forcés sont ramenés à BC + factures côté serveur. Aucun devis existant n’est supprimé ; ses fiches et documents restent accessibles.
+- Les tests existants portant sur l’ancien droit d’édition manager et l’ancien défaut de liste sont mis à jour pour la nouvelle règle ; les autres scénarios restent conservés.
+
+Derniere mise a jour: 6 novembre 2026. Recherche technique par marque, BC direct gestionnaire, devis et edition reserves admin, historique BC/factures par defaut.
 
 ## Objectif
 
@@ -246,7 +258,7 @@ Routes principales:
 - `GET /operations`: page de creation d'une operation garage.
 - `GET /operations/history`: historique filtrable des devis, bons de commande et factures.
 - `GET /operations/{id}`: fiche detail lecture seule d'une operation avec lignes, totaux et chaine documentaire.
-- `GET|POST /operations/{id}/edit`: modification d'un devis brouillon uniquement pour admin et manager; refuse les bons de commande et factures.
+- `GET|POST /operations/{id}/edit`: modification d'un devis brouillon uniquement pour admin ; refuse le manager, les bons de commande et factures.
 - `GET /billing`: page des factures et receipts, avec choix de date et export journalier.
 - `GET /billing/export/day?date=Y-m-d`: CSV des documents du jour, admin et manager via `export.day_situation`.
 - `GET /reports/finance`: situation financiere jour, semaine, mois ou periode libre.
@@ -269,7 +281,7 @@ Routes d'action:
 
 - `POST /products/new`: ajoute un produit.
 - `POST /stock/in`: ajoute une entree de stock.
-- `POST /operations/new`: cree un devis avec ses lignes produits et/ou services.
+- `POST /operations/new`: cree un devis pour l'admin, un BC confirme avec sortie de stock pour le manager.
 - `POST /operations/{id}/confirm`: confirme un devis brouillon en bon de commande, avec CSRF, controle et sortie de stock transactionnels.
 - `POST /operations/{id}/invoice`: transforme un bon de commande confirme en facture, avec CSRF, sans double sortie si le BC a deja applique le stock.
 - `POST /operations/{id}/invoice-direct`: transforme directement un devis brouillon en bon de commande puis facture, avec un seul decrement de stock.
@@ -631,7 +643,7 @@ La saisie d'operation reprend la meme convention par ligne de produit:
 - si le prix est modifie a la main, la ligne repasse en manuel;
 - les services, lignes libres et produits sans prix d'achat restent en prix manuel;
 - le serveur recalcule toujours le prix final depuis le produit et le mode de marge poste, le JavaScript ne sert qu'a l'apercu.
-- un devis brouillon peut etre modifie par admin et manager avec les memes regles; une commande confirmee ou une facture est verrouillee pour tous.
+- un devis brouillon peut etre modifie uniquement par l'admin ; une commande confirmee ou une facture est verrouillee pour tous.
 
 ### 2. Gestion Stock
 
@@ -703,7 +715,7 @@ Page:
 /operations
 ```
 
-L'utilisateur cree un devis avec:
+L'admin cree un devis ; le gestionnaire cree directement un BC avec:
 
 - client existant,
 - vehicule existant,
@@ -756,7 +768,7 @@ L'action `Remettre en brouillon` est proposee sur les BC confirmes non factures 
 
 Dans une transaction PDO, `resetOrderToDraft` transforme le BC existant en `quote` / `draft`, lui attribue un nouveau numero de devis et remet `stock_decremented_at` a `NULL`. Si le stock avait ete retire, les mouvements `out` enregistres pour ce BC sont compenses par des mouvements `in` notes `Annulation BC {numero}`, avec restitution exacte des quantites. Les prix et marges ne sont pas recalcules par cette action. Une migration idempotente ajoute `stock_movements.operation_id` et rattache les anciennes sorties identifiables par leur note documentaire; les nouvelles sorties et compensations sont liees directement au document. Modifier la note ne casse donc plus le lien de compensation.
 
-L'ancien `order_no` est conserve pour la tracabilite et le lien au devis parent reste present. Le nouveau brouillon utilise le formulaire de modification existant; sa confirmation cree un nouveau BC avec une seule sortie de stock. La facturation conserve la protection contre le double decrement. Un BC ayant deja un document enfant ne peut pas etre remis en brouillon.
+L'ancien `order_no` est conserve pour la tracabilite et le lien au devis parent, s'il existe, reste present. Le nouveau brouillon utilise le formulaire de modification existant pour l'admin uniquement ; sa confirmation cree un nouveau BC avec une seule sortie de stock. La facturation conserve la protection contre le double decrement. Un BC ayant deja un document enfant ne peut pas etre remis en brouillon.
 
 ### 4. Factures et Receipts
 
@@ -766,7 +778,7 @@ Page:
 /billing
 ```
 
-Liste les derniers documents et donne les actions:
+Liste les derniers BC et factures et donne les actions ; les devis restent accessibles dans l'historique sur filtre explicite de l'admin et par leurs liens directs :
 
 - afficher la fiche detail de l'operation,
 - ouvrir le document imprimable: devis, bon de commande ou facture,
@@ -806,12 +818,12 @@ Page:
 /operations/history
 ```
 
-L'historique affiche tous les documents `quote`, `order` et `invoice` avec un badge distinctif.
+L'historique affiche par defaut les documents `order` et `invoice` avec un badge distinctif. Les devis ne sont listes que sur choix explicite `quote` ou `all` de l'admin ; les parametres forces du manager ne les affichent pas.
 
 Filtres serveur:
 
 - recherche texte sur numero de devis, bon de commande, facture, client ou immatriculation;
-- type de document: devis, bon de commande, facture ou tous;
+- type de document: BC et factures par defaut, BC, facture ; devis et tous reserves a l'admin;
 - dates inclusives `from` et `to` sur la date de creation;
 - mode de paiement: `ESP`, `CHQ`, `CB`, `VIR`.
 
@@ -1302,7 +1314,7 @@ Permissions centralisees:
 
 - admin: `can(...)` retourne vrai pour toutes les permissions;
 - manager autorise en lecture: `view`, `view.dashboard`, `view.products`, `view.stock`, `view.categories`, `view.suppliers`, `view.clients`, `view.vehicles`, `view.vehicle_settings`, `view.operations`, `view.billing`, `view.documents`;
-- manager autorise en action quotidienne: `create`, `progress_document`, `edit.reference`, `edit.quote_draft`, `order.reset_draft`, `export.day_situation`;
+- manager autorise en action quotidienne: `create` (BC direct), `progress_document`, `edit.reference`, `order.reset_draft`, `export.day_situation` ; `create.quote` et `edit.quote_draft` reserves admin;
 - `canEditDocument(user, operation)` refuse toujours si `doc_type != quote` ou `status != draft`, meme pour admin;
 - manager interdit: `edit`, `edit.stock`, `edit.operation`, `stock.adjust`, `delete`, `toggle`, `import`, `imports`, `manage_users`, `reports.view`.
 

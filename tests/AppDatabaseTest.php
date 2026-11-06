@@ -286,7 +286,7 @@ final class AppDatabaseTest extends TestCase
             self::assertSame('draft', $draft['status']);
             self::assertNull($draft['stock_decremented_at']);
             self::assertSame(10, (int) $db->product($product['id'])['stock_qty']);
-            self::assertTrue((new AccessControl())->canEditDocument(['role' => $role], $draft));
+            self::assertSame($role === 'admin', (new AccessControl())->canEditDocument(['role' => $role], $draft));
             $movements = array_values(array_filter($db->productMovements($product['id']), fn (array $m) => $m['note'] === 'Annulation BC ' . $orderNo));
             self::assertCount(1, $movements);
             self::assertSame('in', $movements[0]['movement_type']);
@@ -295,7 +295,7 @@ final class AppDatabaseTest extends TestCase
             $controller->resetOrderDraft($order, $request, $db, new AccessControl());
             self::assertSame(10, (int) $db->product($product['id'])['stock_qty']);
             $payload['product_qty_1'] = 3;
-            $db->updateDraftOperation($order, $payload, $userId);
+            $db->updateDraftOperation($order, $payload, 1); // Only the admin edits the resulting quote.
             $newOrder = $db->confirmQuote($order, $userId);
             self::assertNotSame($orderNo, $db->operation($newOrder)['document_no']);
             self::assertSame(7, (int) $db->product($product['id'])['stock_qty']);
@@ -669,8 +669,9 @@ final class AppDatabaseTest extends TestCase
         self::assertInstanceOf(RedirectResponse::class, $response);
         self::assertCount(3, $operation['items']);
         self::assertSame(['product', 'product', 'service'], array_column($operation['items'], 'line_type'));
-        self::assertSame(10, (int) $db->product($productA)['stock_qty']);
-        self::assertSame(10, (int) $db->product($productB)['stock_qty']);
+        self::assertSame('order', $operation['doc_type']);
+        self::assertSame(9, (int) $db->product($productA)['stock_qty']);
+        self::assertSame(8, (int) $db->product($productB)['stock_qty']);
     }
 
     public function testInvalidNumericMarginIsRejectedByServerAndManualPriceIsPreserved(): void
@@ -1462,13 +1463,13 @@ SQL);
         self::assertSame($invoiceId, (int) $byNumber['rows'][0]['id']);
 
         $byClient = $db->searchOperations(['q' => 'client sim']);
-        self::assertGreaterThanOrEqual(3, $byClient['total']);
+        self::assertSame(2, $byClient['total']);
 
         $byType = $db->searchOperations(['doc_type' => 'invoice']);
         self::assertSame([$invoiceId], array_map('intval', array_column($byType['rows'], 'id')));
 
         $byPayment = $db->searchOperations(['payment_method' => 'CHQ', 'date_from' => $date, 'date_to' => $date]);
-        self::assertCount(3, $byPayment['rows']);
+        self::assertCount(2, $byPayment['rows']);
         self::assertContains($invoiceId, array_map('intval', array_column($byPayment['rows'], 'id')));
     }
 
@@ -1514,7 +1515,7 @@ SQL);
             'chain' => $db->operationDocumentChain($draftQuoteId),
             'back_query' => ['doc_type' => 'quote'],
         ]);
-        self::assertStringContainsString('/app_operation_edit/' . $draftQuoteId, $draftQuoteHtml);
+        self::assertStringNotContainsString('/app_operation_edit/' . $draftQuoteId, $draftQuoteHtml);
         self::assertStringContainsString('method="post"', $draftQuoteHtml);
         self::assertStringContainsString('/app_operation_confirm/' . $draftQuoteId, $draftQuoteHtml);
         self::assertStringContainsString('/app_operation_invoice_direct/' . $draftQuoteId, $draftQuoteHtml);
@@ -1541,7 +1542,7 @@ SQL);
         $quoteId = $this->operationWithService($db, 'ESP');
         $quote = $db->operation($quoteId);
 
-        self::assertTrue($access->canEditDocument($manager, $quote));
+        self::assertFalse($access->canEditDocument($manager, $quote));
         self::assertTrue($access->canEditDocument($admin, $quote));
 
         $draftPost = $this->requestWithUser('/operations/' . $quoteId . '/edit', 'POST', [
@@ -1564,6 +1565,9 @@ SQL);
         $response = $controller->operationEdit($quoteId, $draftPost, $db, $access);
 
         self::assertInstanceOf(RedirectResponse::class, $response);
+        self::assertSame($quote['items'][0]['label'], $db->operation($quoteId)['items'][0]['label']);
+        $draftPost->getSession()->set('user', $admin);
+        $controller->operationEdit($quoteId, $draftPost, $db, $access);
         self::assertSame('Diagnostic modifie', $db->operation($quoteId)['items'][0]['label']);
 
         $orderId = $db->confirmQuote($quoteId, 1);
@@ -2216,7 +2220,7 @@ SQL);
         self::assertTrue($access->can('create', $manager));
         self::assertTrue($access->can('progress_document', $manager));
         self::assertTrue($access->can('edit.reference', $manager));
-        self::assertTrue($access->can('edit.quote_draft', $manager));
+        self::assertFalse($access->can('edit.quote_draft', $manager));
         self::assertTrue($access->can('clients', $manager));
         self::assertTrue($access->can('stock.adjust', $admin));
         self::assertTrue($access->can('unknown.future.permission', $admin));
