@@ -495,8 +495,11 @@ products.remove_reference: 'Retirer la référence'
 audit.view_record: 'Voir'
 knowledge:
   menu: "Base technique"
-  title: "Base technique par modèle"
-  rule: "Factures uniquement ; devis et bons de commande exclus. Une utilisation correspond à une facture distincte. La recherche ne conserve que les lignes correspondantes."
+  title: "Base technique par marque"
+  brand_filter: "Marque (recherche principale)"
+  model_filter: "Modèle (facultatif)"
+  planned: "Devis : pièces et services prévus, utilisation non confirmée."
+  rule: "Historique par marque : devis, bons de commande et factures. Une seule version par chaîne documentaire, sans doublon. Les devis indiquent des pièces prévues, les BC des pièces commandées et les factures des pièces facturées. Les totaux reprennent uniquement les lignes correspondant aux filtres."
   export: "Exporter PDF"
   exported_at: "Date d’export"
   all: "Tous"
@@ -511,13 +514,17 @@ knowledge:
   service: "Service"
   name: "Désignation"
   reference: "Référence interne / SKU"
-  uses: "Utilisations (factures)"
+  uses: "Occurrences (interventions)"
   quantity: "Quantité totale"
   line_quantity: "Quantité"
   details: "Voir les opérations et les lignes correspondantes"
-  invoice_count: "%count% facture(s)"
-  empty: "Aucune ligne de facture ne correspond à ces filtres."
+  invoice_count: "%count% intervention(s)"
+  empty: "Aucune ligne d’opération ne correspond à ces filtres. Vérifiez les filtres ou la présence de pièces et services dans l’historique du véhicule."
   empty_items: "Aucune ligne"
   unknown_brand: "Marque non renseignée"
   unknown_model: "Modèle non renseigné"
   invalid_dates: "Dates invalides ou inversées : la période a été ignorée, les autres filtres sont conservés."
+
+operations.order_title: 'Créer un bon de commande'
+operations.save_order: 'Créer le bon de commande'
+operations.history.orders_invoices: 'Bons de commande et factures'

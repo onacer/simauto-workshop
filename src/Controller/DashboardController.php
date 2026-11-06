@@ -30,7 +30,7 @@ class DashboardController extends AbstractController
         if (!$access->can('view.knowledge', $user)) throw new AccessDeniedHttpException();
 
         $result = $knowledge->filters($request->query->all());
-        return $this->render('app/knowledge.html.twig', $result + $knowledge->options() + [
+        return $this->render('app/knowledge.html.twig', $result + $knowledge->options($result['filters']) + [
             'user' => $user,
             'groups' => $knowledge->search($result['filters']),
         ]);

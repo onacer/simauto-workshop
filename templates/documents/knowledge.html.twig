@@ -14,7 +14,8 @@
     </dl>
     {% for group in groups %}
         <section class="knowledge-model">
-            <h2>{{ group.brand ?: 'knowledge.unknown_brand'|trans({}, null, 'fr') }} {{ group.model ?: 'knowledge.unknown_model'|trans({}, null, 'fr') }}</h2>
+            <h2>{{ group.brand ?: 'knowledge.unknown_brand'|trans({}, null, 'fr') }}</h2>
+            {% if group.model %}<p>{{ 'vehicles.model'|trans({}, null, 'fr') }} : {{ group.model }}</p>{% endif %}
             <p>{{ 'knowledge.invoice_count'|trans({'%count%': group.uses}, null, 'fr') }}</p>
             {% include 'app/_knowledge_items.html.twig' with {group: group, export_locale: 'fr'} only %}
         </section>

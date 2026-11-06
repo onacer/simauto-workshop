@@ -2,11 +2,21 @@
 
 namespace App\Service;
 
-/** Read-only reference derived exclusively from invoice lines. */
+/** Read-only history, one surviving document per chain, grouped primarily by brand. */
 class TechnicalKnowledge
 {
     public function __construct(private AppDatabase $db)
     {
+        $db->pdo()->sqliteCreateFunction('knowledge_normalize', self::normalize(...), 1, \PDO::SQLITE_DETERMINISTIC);
+    }
+
+    public static function normalize(?string $value): string
+    {
+        $value = mb_strtolower(preg_replace('/\s+/u', ' ', trim($value ?? '')));
+        if (class_exists(\Normalizer::class)) {
+            $value = preg_replace('/\p{Mn}/u', '', \Normalizer::normalize($value, \Normalizer::FORM_D));
+        }
+        return trim($value);
     }
 
     public function filters(array $query): array
@@ -32,10 +42,10 @@ class TechnicalKnowledge
         return ['filters' => $filters, 'invalid_dates' => !$valid];
     }
 
-    private function invoiceLinesSql(): string
+    private function historyLinesSql(): string
     {
-        return <<<'SQL'
-SELECT o.id AS operation_id, o.invoice_no, o.created_at,
+        $sql = <<<'SQL'
+SELECT o.id AS operation_id, o.doc_type, o.invoice_no, o.created_at,
        COALESCE(NULLIF(trim(vb.name), ''), trim(o.vehicle_brand), '') AS brand,
        COALESCE(NULLIF(trim(vm.name), ''), trim(o.vehicle_model), '') AS model,
        COALESCE(NULLIF(trim(v.plate), ''), o.vehicle_plate, '') AS plate,
@@ -51,21 +61,36 @@ LEFT JOIN vehicle_brands vb ON vb.id = v.brand_id
 LEFT JOIN vehicle_models vm ON vm.id = v.model_id
 LEFT JOIN clients c ON c.id = o.client_id
 LEFT JOIN products p ON p.id = i.product_id
-WHERE o.doc_type = 'invoice'
+WHERE o.doc_type IN ('quote', 'order', 'invoice')
 SQL;
+        // Do not count quote + order + invoice copies of the same intervention.
+        // Apply this before dates/search so a filtered-out child never resurrects its parent.
+        $sql .= " AND NOT EXISTS (SELECT 1 FROM operations child WHERE child.parent_id = o.id AND child.doc_type IN ('quote', 'order', 'invoice'))";
+        return $sql;
     }
 
-    public function options(): array
+    public function options(array $filters = []): array
     {
-        $rows = $this->db->pdo()->query('SELECT DISTINCT brand, model FROM (' . $this->invoiceLinesSql() . ') ORDER BY brand, model')->fetchAll();
+        // Master records and historical text both participate, even without an invoice or a model.
+        $rows = $this->db->pdo()->query("SELECT name AS brand, '' AS model FROM vehicle_brands ORDER BY name")->fetchAll();
+        $rows = array_merge($rows, $this->db->pdo()->query('SELECT vb.name AS brand, vm.name AS model FROM vehicle_models vm LEFT JOIN vehicle_brands vb ON vb.id = vm.brand_id ORDER BY vm.name')->fetchAll(),
+            $this->db->pdo()->query("SELECT DISTINCT COALESCE(NULLIF(trim(vb.name), ''), o.vehicle_brand, '') AS brand,
+                COALESCE(NULLIF(trim(vm.name), ''), o.vehicle_model, '') AS model
+                FROM operations o LEFT JOIN vehicles v ON v.id = o.vehicle_id
+                LEFT JOIN vehicle_brands vb ON vb.id = v.brand_id LEFT JOIN vehicle_models vm ON vm.id = v.model_id
+                ORDER BY brand, model")->fetchAll());
         $brands = $models = [];
         foreach ($rows as $row) {
-            if ($row['brand'] !== '') $brands[$row['brand']] = $row['brand'];
-            if ($row['model'] !== '') $models[$row['model']] = $row['model'];
+            $brand = trim(preg_replace('/\s+/u', ' ', $row['brand'] ?? ''));
+            $model = trim(preg_replace('/\s+/u', ' ', $row['model'] ?? ''));
+            if ($brand !== '') $brands[self::normalize($brand)] ??= $brand;
+            if ($model !== '') $models[self::normalize($model)] ??= $model;
         }
         natcasesort($brands);
         natcasesort($models);
-        return ['brands' => array_values($brands), 'models' => array_values($models)];
+        return ['brands' => array_values($brands), 'models' => array_values($models),
+            'brand_selected' => $brands[self::normalize($filters['brand'] ?? '')] ?? ($filters['brand'] ?? ''),
+            'model_selected' => $models[self::normalize($filters['model'] ?? '')] ?? ($filters['model'] ?? '')];
     }
 
     public function search(array $query = []): array
@@ -75,14 +100,14 @@ SQL;
         $params = [];
         foreach (['brand', 'model', 'plate'] as $key) {
             if ($filters[$key] !== '') {
-                $where[] = 'lower(trim(' . $key . ')) = lower(:' . $key . ')';
-                $params[$key] = $filters[$key];
+                $where[] = 'knowledge_normalize(' . $key . ') = :' . $key;
+                $params[$key] = self::normalize($filters[$key]);
             }
         }
         if ($filters['q'] !== '') {
             // Escape LIKE wildcards: a part name is a literal substring.
-            $where[] = "(name LIKE :q ESCAPE '!' OR label LIKE :q ESCAPE '!')";
-            $params['q'] = '%' . strtr($filters['q'], ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
+            $where[] = "(knowledge_normalize(name) LIKE :q ESCAPE '!' OR knowledge_normalize(label) LIKE :q ESCAPE '!')";
+            $params['q'] = '%' . strtr(self::normalize($filters['q']), ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
         }
         if ($filters['from'] !== '') {
             $where[] = 'created_at >= :from';
@@ -92,19 +117,22 @@ SQL;
             $where[] = 'created_at < :until';
             $params['until'] = (new \DateTimeImmutable($filters['to']))->modify('+1 day')->format('Y-m-d');
         }
-        $stmt = $this->db->pdo()->prepare('SELECT * FROM (' . $this->invoiceLinesSql() . ')'
+        $stmt = $this->db->pdo()->prepare('SELECT * FROM (' . $this->historyLinesSql() . ')'
             . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY created_at DESC, operation_id DESC, item_id');
         $stmt->execute($params);
         $groups = [];
+        $canonicalBrands = [];
+        foreach ($this->options()['brands'] as $brand) $canonicalBrands[self::normalize($brand)] = $brand;
         // Stream one query for both totals and detail, without per-model or per-operation queries.
         while ($row = $stmt->fetch()) {
-            $key = json_encode([mb_strtolower($row['brand']), mb_strtolower($row['model'])]);
+            $key = self::normalize($row['brand']);
             if (!isset($groups[$key])) {
-                $groups[$key] = ['brand' => $row['brand'], 'model' => $row['model'], 'products' => [], 'services' => [], 'operations' => []];
+                $groups[$key] = ['brand' => $canonicalBrands[$key] ?? $row['brand'], 'model' => '', 'models' => [], 'products' => [], 'services' => [], 'operations' => []];
             }
             $group = &$groups[$key];
+            if (self::normalize($row['model']) !== '') $group['models'][self::normalize($row['model'])] = $row['model'];
             $bucket = $row['line_type'] === 'service' ? 'services' : 'products';
-            $itemKey = $row['product_id'] !== null ? 'id:' . $row['product_id'] : 'label:' . mb_strtolower(trim($row['label']));
+            $itemKey = $row['product_id'] !== null ? 'id:' . $row['product_id'] : 'label:' . self::normalize($row['label']);
             if (!isset($group[$bucket][$itemKey])) {
                 $group[$bucket][$itemKey] = ['name' => $row['name'], 'reference' => $row['reference'], 'quantity' => 0, 'operation_ids' => []];
             }
@@ -113,12 +141,15 @@ SQL;
             $item['operation_ids'][$row['operation_id']] = true;
             $id = (int) $row['operation_id'];
             if (!isset($group['operations'][$id])) {
-                $group['operations'][$id] = ['id' => $id, 'number' => $row['invoice_no'], 'date' => $row['created_at'], 'plate' => $row['plate'], 'client' => $row['client_name'], 'lines' => []];
+                $group['operations'][$id] = ['id' => $id, 'number' => $row['invoice_no'], 'doc_type' => $row['doc_type'], 'model' => $row['model'], 'date' => $row['created_at'], 'plate' => $row['plate'], 'client' => $row['client_name'], 'lines' => []];
             }
             $group['operations'][$id]['lines'][] = ['label' => $row['label'], 'quantity' => (float) $row['quantity'], 'line_type' => $row['line_type']];
             unset($item, $group);
         }
         foreach ($groups as &$group) {
+            natcasesort($group['models']);
+            $group['models'] = array_values($group['models']);
+            $group['model'] = implode(' / ', $group['models']);
             $group['uses'] = count($group['operations']);
             foreach (['products', 'services'] as $bucket) {
                 foreach ($group[$bucket] as &$item) {
