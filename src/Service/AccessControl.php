@@ -35,7 +35,6 @@ class AccessControl
             'create',
             'progress_document',
             'edit.reference',
-            'edit.quote_draft',
             'order.reset_draft',
             'export.day_situation',
         ];

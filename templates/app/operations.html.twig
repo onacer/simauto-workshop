@@ -11,7 +11,7 @@
 
 <main class="main-board">
     <section class="page-head">
-        <h1>{{ is_edit ? 'operations.edit_quote'|trans : 'operations.quote_title'|trans }}</h1>
+        <h1>{{ is_edit ? 'operations.edit_quote'|trans : (can('create.quote', user) ? 'operations.quote_title'|trans : 'operations.order_title'|trans) }}</h1>
         <span class="row-actions">
             <a class="btn btn-primary" href="{{ path('app_operations_history') }}">{{ 'operations.history.title'|trans }}</a>
             <a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a>
@@ -23,6 +23,7 @@
     <section class="panel">
         <form action="{{ is_edit ? path('app_operation_edit', {id: operation.id}) : path('app_operation_new') }}" method="post" class="operation-form dynamic-operation-form">
             <input type="hidden" name="_token" value="{{ operation_token }}">
+            <input type="hidden" name="doc_type" value="{{ can('create.quote', user) ? 'quote' : 'order' }}">
             <div class="form-grid">
                 <label>{{ 'ui.client'|trans }}
                     <select name="client_id" required data-combobox>
@@ -135,7 +136,7 @@
                 <span>{{ 'operations.total_margin'|trans }}: <strong class="money" dir="ltr" data-total-margin>0.00 DH</strong></span>
             </div>
 
-            <button class="btn btn-primary" type="submit">{{ is_edit ? 'ui.update'|trans : 'operations.save_quote'|trans }}</button>
+            <button class="btn btn-primary" type="submit">{{ is_edit ? 'ui.update'|trans : (can('create.quote', user) ? 'operations.save_quote'|trans : 'operations.save_order'|trans) }}</button>
         </form>
     </section>
 </main>

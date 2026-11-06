@@ -818,7 +818,7 @@ class AppDatabase
         }
     }
 
-    public function createOperation(array $data, int $userId): int
+    public function createOperation(array $data, int $userId, bool $insideTransaction = false): int
     {
         $clientId = (int) ($data['client_id'] ?? 0);
         $vehicleId = (int) ($data['vehicle_id'] ?? 0);
@@ -836,7 +836,7 @@ class AppDatabase
         $paymentMethod = $this->normalizePaymentMethod((string) ($data['payment_method'] ?? 'ESP'));
         $checkNumber = $paymentMethod === 'CHQ' ? trim((string) ($data['check_number'] ?? '')) : '';
 
-        $this->pdo->beginTransaction();
+        if (!$insideTransaction) $this->pdo->beginTransaction();
         try {
             foreach ([] as $line) {
                 if ($line['product_id']) {
@@ -847,10 +847,9 @@ class AppDatabase
                 }
             }
 
-            $count = (int) $this->pdo->query('SELECT COUNT(*) + 1 FROM operations')->fetchColumn();
             $quoteNo = $this->nextDocumentNumber('quote');
             $invoiceNo = $quoteNo;
-            $receiptNo = 'REC-' . date('Ymd-His') . '-' . str_pad((string) $count, 4, '0', STR_PAD_LEFT);
+            $receiptNo = $this->nextReceiptNumber();
 
             $client = $this->client($clientId);
             $vehicle = $this->vehicle($vehicleId);
@@ -910,8 +909,25 @@ class AppDatabase
                 throw new RuntimeException('Simulated failure');
             }
 
-            $this->pdo->commit();
+            if (!$insideTransaction) $this->pdo->commit();
             return $operationId;
+        } catch (Throwable $e) {
+            if (!$insideTransaction) $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /** Reuse quote confirmation atomically; no intermediate quote is retained. */
+    public function createPurchaseOrder(array $data, int $userId): int
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $temporaryQuote = $this->createOperation($data, $userId, true);
+            $order = $this->copyDocument($temporaryQuote, 'order', $userId, true, true);
+            $this->pdo->prepare('UPDATE operations SET parent_id = NULL, quote_no = NULL WHERE id = :id')->execute(['id' => $order]);
+            $this->pdo->prepare('DELETE FROM operations WHERE id = :id')->execute(['id' => $temporaryQuote]);
+            $this->pdo->commit();
+            return $order;
         } catch (Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
@@ -1355,7 +1371,7 @@ class AppDatabase
             }
 
             $documentNo = $this->nextDocumentNumber($targetType);
-            $receiptNo = 'REC-' . date('Ymd-His') . '-' . str_pad((string) ((int) $this->pdo->query('SELECT COUNT(*) + 1 FROM operations')->fetchColumn()), 4, '0', STR_PAD_LEFT);
+            $receiptNo = $this->nextReceiptNumber();
             $quoteNo = $targetType === 'order' ? (string) $source['quote_no'] : (string) ($source['quote_no'] ?: null);
             $orderNo = $targetType === 'order' ? $documentNo : (string) ($source['order_no'] ?: null);
             if ($targetType === 'invoice' && $source['doc_type'] === 'order') {
@@ -2593,6 +2609,16 @@ SQL);
             'all' => '',
             default => ' WHERE ' . $prefix . 'active = 1',
         };
+    }
+
+    private function nextReceiptNumber(): string
+    {
+        $prefix = 'REC-' . date('Ymd-His') . '-';
+        $next = (int) $this->pdo->query('SELECT COUNT(*) + 1 FROM operations')->fetchColumn();
+        do {
+            $number = $prefix . str_pad((string) $next++, 4, '0', STR_PAD_LEFT);
+        } while ($this->row('SELECT id FROM operations WHERE receipt_no = :number', ['number' => $number]));
+        return $number;
     }
 
     private function nextDocumentNumber(string $type): string

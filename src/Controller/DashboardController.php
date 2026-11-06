@@ -418,10 +418,17 @@ class DashboardController extends AbstractController
             return $denied;
         }
 
+        $docType = (string) $request->request->get('doc_type', $access->can('create.quote', $user) ? 'quote' : 'order');
+        if ($docType === 'quote' && !$access->can('create.quote', $user)) {
+            throw new AccessDeniedHttpException();
+        }
         try {
             $this->verifyCsrf($request, 'operation_form');
-            $id = $db->createOperation($request->request->all(), (int) $user['id']);
-            (new ActivityLogger($db))->logOperation($user, 'operation_create', $id, 'Devis créé');
+            if (!in_array($docType, ['quote', 'order'], true)) throw new InvalidArgumentException('access.denied');
+            $id = $docType === 'order'
+                ? $db->createPurchaseOrder($request->request->all(), (int) $user['id'])
+                : $db->createOperation($request->request->all(), (int) $user['id']);
+            (new ActivityLogger($db))->logOperation($user, 'operation_create', $id, $docType === 'order' ? 'Bon de commande créé' : 'Devis créé');
             return $this->redirectToRoute('app_invoice', ['id' => $id]);
         } catch (Throwable $e) {
             $this->addFlash('error', $this->safeMessage($e));
