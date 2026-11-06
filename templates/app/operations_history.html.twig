@@ -25,8 +25,11 @@
             </label>
             <label>{{ 'operations.history.doc_type'|trans }}
                 <select name="doc_type">
-                    <option value="">{{ 'ui.all'|trans }}</option>
+                    <option value="">{{ 'operations.history.orders_invoices'|trans }}</option>
+                    {% if can('create.quote', user) %}
+                    <option value="all" {{ filters.doc_type == 'all' ? 'selected' : '' }}>{{ 'ui.all'|trans }}</option>
                     <option value="quote" {{ filters.doc_type == 'quote' ? 'selected' : '' }}>{{ 'documents.type.quote'|trans }}</option>
+                    {% endif %}
                     <option value="order" {{ filters.doc_type == 'order' ? 'selected' : '' }}>{{ 'documents.type.order'|trans }}</option>
                     <option value="invoice" {{ filters.doc_type == 'invoice' ? 'selected' : '' }}>{{ 'documents.type.invoice'|trans }}</option>
                 </select>

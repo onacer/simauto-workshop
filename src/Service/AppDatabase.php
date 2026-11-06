@@ -1030,6 +1030,7 @@ class AppDatabase
              LEFT JOIN vehicles v ON v.id = o.vehicle_id
              LEFT JOIN vehicle_brands vb ON vb.id = v.brand_id
              LEFT JOIN vehicle_models vm ON vm.id = v.model_id
+             WHERE o.doc_type IN ("order", "invoice")
              ORDER BY o.id DESC LIMIT 25'
         )->fetchAll();
 
@@ -1055,6 +1056,8 @@ class AppDatabase
         if (in_array($docType, ['quote', 'order', 'invoice'], true)) {
             $where[] = 'o.doc_type = :doc_type';
             $params['doc_type'] = $docType;
+        } elseif ($docType !== 'all') {
+            $where[] = 'o.doc_type IN ("order", "invoice")';
         }
 
         $paymentMethod = $this->normalizePaymentMethod((string) ($filters['payment_method'] ?? ''));

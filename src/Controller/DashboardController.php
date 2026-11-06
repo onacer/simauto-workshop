@@ -561,6 +561,9 @@ class DashboardController extends AbstractController
             'date_to' => (string) $request->query->get('to', ''),
             'payment_method' => (string) $request->query->get('payment', ''),
         ];
+        if (!$access->can('create.quote', $user) && !in_array($filters['doc_type'], ['order', 'invoice'], true)) {
+            $filters['doc_type'] = '';
+        }
 
         if (!$this->validDateRange($filters['date_from'], $filters['date_to'])) {
             $filters['date_from'] = '';
