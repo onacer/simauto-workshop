@@ -1926,7 +1926,7 @@ SQL);
                 $requestedType = (string) ($lineTypes[$i] ?? '');
 
                 // The blank product prototype has quantity 1 in the UI; it is not a business line.
-                if ($productId <= 0 && $label === '' && $price <= 0) {
+                if ($productId <= 0 && $label === '' && $price === 0.0 && $discount === 0.0 && $qty >= 0) {
                     continue;
                 }
 
