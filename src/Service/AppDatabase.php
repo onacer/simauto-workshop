@@ -705,8 +705,8 @@ SQL);
         if ($productId <= 0 || $quantity <= 0) {
             throw new InvalidArgumentException('المنتج والكمية إجبارية');
         }
-        if ($unitCost !== null && $unitCost < 0) {
-            throw new InvalidArgumentException('ثمن الشراء يجب أن يكون 0 أو أكثر');
+        if ($unitCost !== null && (!is_finite($unitCost) || $unitCost < 0)) {
+            throw new InvalidArgumentException('stock.invalid_unit_cost');
         }
 
         $this->pdo->beginTransaction();
@@ -717,6 +717,9 @@ SQL);
                 throw new RuntimeException('المنتج غير موجود');
             }
             $this->addMovement($productId, 'in', $quantity, $note ?: 'إدخال مخزون', $userId, $supplierId, $unitCost, null, $salePrice);
+            if ($unitCost !== null) {
+                $this->pdo->prepare('UPDATE products SET purchase_price = :cost WHERE id = :id')->execute(['cost' => $unitCost, 'id' => $productId]);
+            }
             if ($updateSalePrice && $salePrice !== null) {
                 $this->pdo->prepare('UPDATE products SET sale_price = :price WHERE id = :id')->execute(['price' => $salePrice, 'id' => $productId]);
             }

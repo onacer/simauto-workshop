@@ -299,10 +299,9 @@ class DashboardController extends AbstractController
         }
 
         try {
-            // Keep legacy entry clients compatible; all new price fields require CSRF.
-            if ($request->request->has('sale_price') || $request->request->has('update_sale_price')) {
-                $this->verifyCsrf($request, 'stock_in');
-            }
+            $this->verifyCsrf($request, 'stock_in');
+            $rawCost = trim((string) $request->request->get('unit_cost', ''));
+            if ($rawCost !== '' && !is_numeric($rawCost)) throw new InvalidArgumentException('stock.invalid_unit_cost');
             $salePrice = $request->request->get('sale_price', '');
             if ($salePrice !== '' && !is_numeric($salePrice)) {
                 throw new InvalidArgumentException('stock.invalid_sale_price');
@@ -313,7 +312,7 @@ class DashboardController extends AbstractController
                 (string) $request->request->get('note'),
                 (int) $user['id'],
                 (int) $request->request->get('supplier_id') ?: null,
-                $request->request->get('unit_cost') !== '' ? (float) $request->request->get('unit_cost') : null,
+                $rawCost !== '' ? (float) $rawCost : null,
                 $request->request->get('sale_price', '') !== '' ? (float) $request->request->get('sale_price') : null,
                 $request->request->getBoolean('update_sale_price')
             );
