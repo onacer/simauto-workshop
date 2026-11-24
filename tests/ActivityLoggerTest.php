@@ -447,7 +447,7 @@ final class ActivityLoggerTest extends TestCase
         $request->setLocale($locale);
         $session = new Session(new MockArraySessionStorage());
         if ($user > 0) { $session->set('user', ['id' => $user]); }
-        $tokens = array_fill_keys(['operation_form', 'operation_action', 'stock_adjust', 'stock_movement', 'record_state', 'import_clients', 'user_new', 'user_edit_2', 'users_toggle'], 'valid-token');
+        $tokens = array_fill_keys(['operation_form', 'operation_action', 'stock_in', 'stock_adjust', 'stock_movement', 'record_state', 'import_clients', 'user_new', 'user_edit_2', 'users_toggle'], 'valid-token');
         $session->set('csrf_tokens', $tokens);
         $request->setSession($session);
         if ($method === 'POST') { $request->request->set('_token', 'valid-token'); }

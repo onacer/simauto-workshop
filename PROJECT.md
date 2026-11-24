@@ -1,5 +1,17 @@
 # SIM Auto Workshop - Documentation Projet
 
+## Coûts fournisseurs et produits sans service (24 novembre 2026)
+
+- `/stock` : la sélection d’un produit affiche le **dernier coût connu par fournisseur**, trié du moins cher au plus cher, avec fournisseur et date. Ces prix sont historiques ; le fournisseur le moins cher n’est jamais sélectionné automatiquement. Le bouton « Choisir ce fournisseur et ce coût » renseigne le formulaire, avec possibilité de modifier le coût réel.
+- `supplierCostsForProduct()` lit `stock_movements` avec une seule requête : entrées positives, fournisseur renseigné, coût fini positif ou nul, sans `operation_id` et hors compensations historiques `Annulation BC …`. La dernière valeur connue est déterminée par `created_at DESC, id DESC` pour chaque couple produit/fournisseur. Les coûts absents sont ignorés ; zéro reste un coût explicite. Aucun schéma ou historique n’est modifié.
+- `GET /stock/supplier-costs?product_id=…` : fragment HTML traduit, échappé, protégé par session et `view.stock` (admin/manager), sans cache partagé. Produit absent, inactif ou service : HTTP 404 ; permission refusée : HTTP 403. Les comparaisons ne modifient aucune donnée métier.
+- Changer de produit/fournisseur efface le coût du choix précédent. Les réponses réseau périmées sont ignorées et une saisie manuelle effectuée pendant le chargement est conservée. Une erreur réseau permet toujours la saisie manuelle. Sans JavaScript, un formulaire GET permet de choisir le produit à comparer ; le fournisseur et le coût restent saisissables manuellement.
+- Chaque entrée réussie avec `unit_cost` explicite actualise **`products.purchase_price` avec ce coût réel**, dans la même transaction que la quantité et le mouvement `in`. Exemple : A à 100 DH, B à 90 DH, puis A à 105 DH → référence produit 105 DH, référence A 105 DH, référence B 90 DH. La comparaison peut donc afficher un fournisseur moins cher que le coût de référence.
+- Coût vide/omis : `NULL` dans le mouvement, sans effacer le dernier coût fournisseur connu ni la référence produit. Coût zéro : enregistré comme zéro. Sans fournisseur : le coût réel explicite actualise la référence produit, sans inventer de référence fournisseur. Coût négatif, non numérique ou non fini : refus sans écriture partielle. Toutes les entrées HTTP exigent désormais le token CSRF `stock_in`, même sans champ de prix ; les clients qui omettaient ce token doivent le fournir.
+- `sale_price` reste indépendant : seule la case existante avec un prix renseigné le met à jour. Les formules TTC restent identiques. Les écrans qui calculent les marges et la valorisation avec le coût courant utilisent la nouvelle référence, y compris pour les marges historiques calculées à la consultation ; aucun total ni ligne de document passé n’est réécrit. Pas de moyenne pondérée, ni de sélection automatique du coût minimum, ni de reprise rétroactive des coûts existants.
+- `/operations` indique « Services (facultatifs) ». Les produits seuls restent acceptés, sans création de produit service ou de ligne vide ; une ligne prototype vide avec quantité 1 est ignorée. Les lignes partielles invalides (prix négatif, remise sans désignation, quantité négative) sont refusées. Les services seuls et opérations mixtes restent possibles. Client et véhicule restent obligatoires.
+- Workflows inchangés : manager → BC direct avec sortie de stock ; admin → devis sans sortie puis BC ; facture du BC sans double sortie. Tests : `tests/SupplierCostsTest.php`, `node tests/stock-supplier-costs.cjs` et `node tests/ttc-preview.cjs`. Contrôle navigateur effectué sur une base isolée avec les fournisseurs A/B et une vente d’huile sans service.
+
 ## Base technique par marque (6 novembre 2026)
 
 - Menu : **Véhicules → Base technique / المرجع التقني**, accessible à admin et manager.
@@ -25,7 +37,7 @@ Diagnostic production en lecture seule, sans migration ni seed : `php scripts/di
 - `/operations/history` sans filtre et `/billing` listent uniquement BC et factures. L’admin peut demander `doc_type=quote` ou `doc_type=all` explicitement dans l’historique. Le manager ne dispose pas de ces choix et les paramètres forcés sont ramenés à BC + factures côté serveur. Aucun devis existant n’est supprimé ; ses fiches et documents restent accessibles.
 - Les tests existants portant sur l’ancien droit d’édition manager et l’ancien défaut de liste sont mis à jour pour la nouvelle règle ; les autres scénarios restent conservés.
 
-Derniere mise a jour: 6 novembre 2026. Recherche technique par marque, BC direct gestionnaire, devis et edition reserves admin, historique BC/factures par defaut.
+Derniere mise a jour: 24 novembre 2026. Comparaison des coûts fournisseurs, référence au dernier achat enregistré et services facultatifs.
 
 ## Objectif
 
@@ -660,7 +672,7 @@ L'application:
 1. Augmente `products.stock_qty`.
 2. Cree un mouvement `in` dans `stock_movements`.
 
-Chaque entree de stock peut etre liee a un fournisseur et a un prix d'achat reel. Les sorties de stock sont faites au moment de la confirmation du devis en bon de commande. La facture issue de ce BC ne retire pas le stock une deuxieme fois.
+Chaque entree de stock peut etre liee a un fournisseur et a un prix d'achat reel. Un cout explicite actualise le cout de reference du produit dans la transaction d'entree ; un cout absent le conserve. Les sorties de stock sont faites au moment de la confirmation du devis en bon de commande ou de la creation directe du BC manager. La facture issue de ce BC ne retire pas le stock une deuxieme fois.
 
 Controle de coherence:
 
@@ -1697,7 +1709,7 @@ OK (84 tests, 908 assertions)
 ## Prix par fournisseur et références universelles multiples (14 octobre 2026)
 
 - `stock_movements.sale_price REAL NULL` conserve le prix de vente saisi à chaque entrée, avec `unit_cost`, `supplier_id`, quantité et date. Migration idempotente, anciens mouvements inchangés (prix inconnu affiché « — »).
-- `/stock` : prix de vente optionnel ; case « Mettre à jour le prix de vente du produit » non cochée par défaut. Seule cette case avec un prix renseigné actualise `products.sale_price`. Le prix d'achat courant, la marge et les sorties documentaires gardent leurs règles existantes. Les nouveaux champs de prix sont protégés par le token CSRF de session `stock_in` ; les anciens clients sans ces champs restent compatibles.
+- `/stock` : prix de vente optionnel ; case « Mettre à jour le prix de vente du produit » non cochée par défaut. Seule cette case avec un prix renseigné actualise `products.sale_price`. Depuis le 24 novembre 2026, un coût d'achat explicite actualise `products.purchase_price` et le token CSRF `stock_in` est exigé pour toute entrée, même sans prix. Les formules de marge et les sorties documentaires restent inchangées.
 - `/products/{id}` : section « Fournisseurs et prix », toutes les entrées fournisseur triées par date puis identifiant décroissants, lecture seule pour admin et manager.
 - `/suppliers/{id}` : section « Produits fournis », une ligne par produit avec quantité, prix d'achat et prix de vente de la dernière entrée de ce fournisseur. Un prix non renseigné sur cette entrée reste inconnu. Le sélecteur fournisseur de cette fiche et de `/suppliers` permet de consulter un autre fournisseur.
 - `product_references` : `id`, `product_id` (FK vers products, suppression en cascade), `ref_value`, `ref_type` (défaut `universal`). Index non uniques : deux produits peuvent partager une référence OEM. La migration `universal_references_v1` copie les valeurs historiques une seule fois, sans perte et sans recréer les références retirées après migration.
