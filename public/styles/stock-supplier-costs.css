@@ -1,0 +1,3 @@
+.stock-cost-comparison { grid-column: 1 / -1; min-width: 0; }
+.stock-cost-comparison h3 { margin-block-start: 0; }
+[data-cost-reference] { display: block; margin-block-start: .4rem; color: #555; }

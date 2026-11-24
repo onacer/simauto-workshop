@@ -1,6 +1,7 @@
 {% extends 'base.html.twig' %}
 
 {% block title %}{{ 'stock.title'|trans }} - SIM Auto{% endblock %}
+{% block stylesheets %}<link rel="stylesheet" href="{{ asset('styles/stock-supplier-costs.css') }}?v=20261124">{% endblock %}
 
 {% block body %}
 {% include 'app/_topbar.html.twig' with {user: user} %}
@@ -37,16 +38,24 @@
     </section>
 
     <section class="panel">
-        <form action="{{ path('app_stock_in') }}" method="post" class="form-grid stock-form">
+        <noscript>
+            <form method="get" action="{{ path('app_stock') }}" class="form-grid">
+                <label>{{ 'products.product'|trans }}<select name="product">{% for product in stock_products %}<option value="{{ product.id }}" {{ cost_product and cost_product.id == product.id ? 'selected' : '' }}>{{ product.name }}</option>{% endfor %}</select></label>
+                <button type="submit">{{ 'stock.compare_costs'|trans }}</button>
+            </form>
+            <p>{{ 'stock.manual_cost_help'|trans }}</p>
+        </noscript>
+        <form action="{{ path('app_stock_in') }}" method="post" class="form-grid stock-form" data-stock-cost-form data-cost-url="{{ path('app_stock_supplier_costs') }}" data-loading="{{ 'stock.cost_loading'|trans }}" data-cost-error="{{ 'stock.cost_error'|trans }}" data-unknown-cost="{{ 'stock.unknown_supplier_cost'|trans }}" data-reference-label="{{ 'stock.suggested_cost'|trans }}" data-manual-cost="{{ 'stock.manual_cost'|trans }}">
             <input type="hidden" name="_token" value="{{ stock_in_token|default('') }}">
             <label>{{ 'products.product'|trans }}
                 <select name="product_id" required data-combobox>
-                    {% for product in products %}
+                    {% for product in stock_products %}
                         {% set product_ref = product.ref_company ?: (product.ref_universal ?: product.sku) %}
-                        <option value="{{ product.id }}" data-search="{{ (product.ref_company ~ ' ' ~ product.ref_universal ~ ' ' ~ product.sku ~ ' ' ~ product.name)|lower }}" {{ stock_focus|default(0) == product.id ? 'selected' : '' }}>[{{ product_ref }}] {{ product.name }} - {{ product.stock_qty }}</option>
+                        <option value="{{ product.id }}" data-search="{{ (product.ref_company ~ ' ' ~ product.ref_universal ~ ' ' ~ product.sku ~ ' ' ~ product.name)|lower }}" {{ cost_product and cost_product.id == product.id ? 'selected' : '' }}>[{{ product_ref }}] {{ product.name }} - {{ product.stock_qty }}</option>
                     {% endfor %}
                 </select>
             </label>
+            <div class="stock-cost-comparison" data-supplier-costs aria-live="polite">{% include 'app/_stock_supplier_costs.html.twig' %}</div>
             <label>{{ 'stock.supplier'|trans }}
                 <select name="supplier_id" data-combobox data-combobox-min="10">
                     <option value="">{{ 'ui.none'|trans }}</option>
@@ -56,7 +65,7 @@
                 </select>
             </label>
             <label>{{ 'stock.quantity'|trans }}<input name="quantity" type="number" step="1" min="1" value="1" required></label>
-            <label>{{ 'stock.unit_cost'|trans }}<input name="unit_cost" type="number" step="0.01" min="0"></label>
+            <label>{{ 'stock.unit_cost'|trans }}<input name="unit_cost" type="number" step="any" min="0" aria-describedby="stock-cost-reference"><small id="stock-cost-reference" data-cost-reference>{{ 'stock.unknown_supplier_cost'|trans }}</small></label>
             <label>{{ 'products.sale_price'|trans }}<input name="sale_price" type="number" step="0.01" min="0"></label>
             <label><input name="update_sale_price" type="checkbox" value="1">{{ 'stock.update_sale_price'|trans }}</label>
             <label>{{ 'stock.note'|trans }}<input name="note"></label>
@@ -115,4 +124,5 @@
         </div>
     </section>
 </main>
+<script src="{{ asset('scripts/stock-supplier-costs.js') }}?v=20261124"></script>
 {% endblock %}

@@ -193,15 +193,41 @@ class DashboardController extends AbstractController
         }
 
         $filters = $this->stockSituationFilters($request);
-        return $this->render('app/stock.html.twig', $db->dashboardData() + [
+        $data = $db->dashboardData();
+        $stockProducts = array_values(array_filter($data['products'], static fn (array $product): bool => $product['product_type'] === 'stockable'));
+        $focus = (int) $request->query->get('product', 0);
+        $selectedProduct = $stockProducts[0] ?? null;
+        foreach ($stockProducts as $product) {
+            if ((int) $product['id'] === $focus) $selectedProduct = $product;
+        }
+        return $this->render('app/stock.html.twig', $data + [
             'user' => $user,
             'stock_rows' => $db->stockSituation($filters),
             'stock_filters' => $filters,
             'stock_focus' => (int) $request->query->get('product', 0),
+            'stock_products' => $stockProducts,
+            'cost_product' => $selectedProduct,
+            'supplier_costs' => $selectedProduct ? $db->supplierCostsForProduct((int) $selectedProduct['id']) : [],
             'stock_in_token' => $this->csrfToken($request, 'stock_in'),
             'stock_adjust_token' => $this->csrfToken($request, 'stock_adjust'),
             'stock_movement_token' => $this->csrfToken($request, 'stock_movement'),
         ]);
+    }
+
+    #[Route('/stock/supplier-costs', name: 'app_stock_supplier_costs', methods: ['GET'])]
+    public function stockSupplierCosts(Request $request, AppDatabase $db, AccessControl $access): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) return $user;
+        if (!$access->can('view.stock', $user)) throw new AccessDeniedHttpException();
+        $product = $db->product((int) $request->query->get('product_id', 0));
+        if (!$product || !$product['active'] || $product['product_type'] !== 'stockable') throw $this->createNotFoundException();
+        $response = $this->render('app/_stock_supplier_costs.html.twig', [
+            'cost_product' => $product,
+            'supplier_costs' => $db->supplierCostsForProduct((int) $product['id']),
+        ]);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        return $response;
     }
 
     #[Route('/stock/export/excel', name: 'app_stock_export_excel', methods: ['GET'])]

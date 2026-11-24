@@ -1,0 +1,17 @@
+{% if cost_product %}
+    <h3>{{ 'stock.supplier_costs_title'|trans }} — {{ cost_product.name }}</h3>
+    <p>{{ 'stock.current_cost'|trans }} : {{ cost_product.purchase_price|money }}</p>
+    <p>{{ 'stock.supplier_costs_help'|trans }}</p>
+    <div class="table-scroll"><table>
+        <thead><tr><th>{{ 'stock.supplier'|trans }}</th><th>{{ 'stock.last_known_cost'|trans }}</th><th>{{ 'ui.date'|trans }}</th><th>{{ 'ui.actions'|trans }}</th></tr></thead>
+        <tbody>
+        {% for cost in supplier_costs %}
+            <tr data-supplier-cost data-supplier-id="{{ cost.supplier_id }}" data-cost="{{ cost.unit_cost }}" data-cost-date="{{ cost.created_at }}">
+                <td>{{ cost.supplier_name }}</td><td>{{ cost.unit_cost|money }} {% if loop.first %}<small class="badge">{{ 'stock.lowest_known_cost'|trans }}</small>{% endif %}</td>
+                <td><bdi>{{ cost.created_at|date('d/m/Y H:i') }}</bdi></td>
+                <td><button type="button" data-use-supplier-cost hidden>{{ 'stock.use_supplier_cost'|trans }}</button></td>
+            </tr>
+        {% else %}<tr><td colspan="4">{{ 'stock.no_supplier_cost'|trans }}</td></tr>{% endfor %}
+        </tbody>
+    </table></div>
+{% endif %}

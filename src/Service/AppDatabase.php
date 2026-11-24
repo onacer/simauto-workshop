@@ -536,6 +536,28 @@ class AppDatabase
         return $stmt->fetchAll();
     }
 
+    /** Latest known purchase cost per supplier, excluding document reversals. */
+    public function supplierCostsForProduct(int $productId): array
+    {
+        $stmt = $this->pdo->prepare(<<<'SQL'
+WITH purchases AS (
+    SELECT sm.supplier_id, sm.unit_cost, sm.created_at,
+           ROW_NUMBER() OVER (PARTITION BY sm.supplier_id ORDER BY sm.created_at DESC, sm.id DESC) AS position
+    FROM stock_movements sm
+    WHERE sm.product_id = :product AND sm.movement_type = 'in' AND sm.quantity > 0
+      AND sm.supplier_id IS NOT NULL AND sm.operation_id IS NULL
+      AND sm.unit_cost IS NOT NULL AND sm.unit_cost >= 0 AND sm.unit_cost <= 1.7976931348623157e308
+      AND COALESCE(sm.note, '') NOT LIKE 'Annulation BC %'
+)
+SELECT s.id AS supplier_id, s.name AS supplier_name, purchases.unit_cost, purchases.created_at
+FROM purchases JOIN suppliers s ON s.id = purchases.supplier_id
+WHERE purchases.position = 1
+ORDER BY purchases.unit_cost, s.name COLLATE NOCASE, s.id
+SQL);
+        $stmt->execute(['product' => $productId]);
+        return $stmt->fetchAll();
+    }
+
     public function supplierProducts(int $supplierId): array
     {
         $stmt = $this->pdo->prepare("SELECT p.id, p.name, p.sku, p.ref_company,
