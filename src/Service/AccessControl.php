@@ -19,6 +19,7 @@ class AccessControl
         $managerViewPermissions = [
             'view.dashboard',
             'view.products',
+            'view.best_sellers',
             'view.stock',
             'view.categories',
             'view.suppliers',

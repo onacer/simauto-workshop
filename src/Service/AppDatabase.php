@@ -93,6 +93,34 @@ class AppDatabase
         ];
     }
 
+    /** Orders and invoices, counting an invoiced order only through its invoice. */
+    public function bestSellingProducts(array $filters = [], ?int $limit = null): array
+    {
+        $where = ["o.doc_type IN ('order', 'invoice')", "i.line_type = 'product'", 'i.quantity > 0', "COALESCE(p.product_type, 'stockable') = 'stockable'",
+            "NOT (o.doc_type = 'order' AND EXISTS (SELECT 1 FROM operations child WHERE child.parent_id = o.id AND child.doc_type = 'invoice'))"];
+        $params = [];
+        if (($filters['from'] ?? '') !== '') {
+            $where[] = 'o.created_at >= :from';
+            $params['from'] = $filters['from'];
+        }
+        if (($filters['to'] ?? '') !== '') {
+            $where[] = 'o.created_at < :until';
+            $params['until'] = (new \DateTimeImmutable($filters['to']))->modify('+1 day')->format('Y-m-d');
+        }
+        $stmt = $this->pdo->prepare("SELECT i.product_id, p.id AS current_product_id,
+            COALESCE(NULLIF(p.name, ''), MIN(i.label)) AS name,
+            COALESCE(NULLIF(p.ref_company, ''), p.sku, '') AS reference,
+            SUM(i.quantity) AS quantity, COUNT(DISTINCT o.id) AS document_count
+            FROM operation_items i JOIN operations o ON o.id = i.operation_id
+            LEFT JOIN products p ON p.id = i.product_id
+            WHERE " . implode(' AND ', $where) . "
+            GROUP BY CASE WHEN i.product_id IS NULL THEN 'label:' || lower(trim(i.label)) ELSE 'id:' || i.product_id END
+            ORDER BY quantity DESC, document_count DESC, name COLLATE NOCASE, i.product_id"
+            . ($limit !== null ? ' LIMIT ' . max(1, $limit) : ''));
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public function categories(bool $activeOnly = true): array
     {
         $sql = 'SELECT * FROM categories';

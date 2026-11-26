@@ -60,7 +60,25 @@ class DashboardController extends AbstractController
             return $user;
         }
 
-        return $this->render('app/index.html.twig', $db->dashboardData() + ['user' => $user]);
+        return $this->render('app/index.html.twig', $db->dashboardData() + [
+            'user' => $user,
+            'top_seller' => $db->bestSellingProducts([], 1)[0] ?? null,
+        ]);
+    }
+
+    #[Route('/products/best-sellers', name: 'app_best_sellers', methods: ['GET'])]
+    public function bestSellers(Request $request, AppDatabase $db, AccessControl $access): Response
+    {
+        $user = $this->requireUser($request, $db);
+        if ($user instanceof RedirectResponse) return $user;
+        if (!$access->can('view.best_sellers', $user)) throw new AccessDeniedHttpException();
+        $filters = ['from' => (string) $request->query->get('from', ''), 'to' => (string) $request->query->get('to', '')];
+        $invalidDates = !$this->validDateRange($filters['from'], $filters['to']);
+        if ($invalidDates) $filters = ['from' => '', 'to' => ''];
+        return $this->render('app/best_sellers.html.twig', [
+            'user' => $user, 'filters' => $filters, 'invalid_dates' => $invalidDates,
+            'rows' => $db->bestSellingProducts($filters),
+        ]);
     }
 
     #[Route('/products', name: 'app_products')]

@@ -1,5 +1,11 @@
 # SIM Auto Workshop - Documentation Projet
 
+## Produits les plus vendus (26 novembre 2026)
+
+Sixième carte KPI du dashboard, visible par admin et manager via `view.best_sellers`, liée à `GET /products/best-sellers`. La carte affiche le produit premier en quantité sur tout l’historique ; la vue liste quantités, nombre de ventes distinctes, références et liens vers les fiches produit, sans prix d’achat ni marge. Classement par quantité décroissante, puis nombre de ventes, nom et identifiant pour départager les égalités.
+
+Périmètre : **BC + factures**, devis et services exclus. Un BC ayant une facture enfant n’est compté que via sa facture ; aucune double comptabilisation devis → BC → facture. Les produits inactifs sont inclus, avec repli sur le libellé historique si le catalogue manque. Filtres `from`/`to` inclusifs sur la date du document retenu ; sans dates, tout l’historique. Dates invalides/inversées ignorées avec avertissement. Le choix du document est effectué avant la période pour ne pas faire réapparaître un BC dont la facture est hors période. Consultation en lecture seule, sans migration, stock ou documents modifiés. Tests dédiés : `tests/BestSellersTest.php`.
+
 ## Coûts fournisseurs et produits sans service (24 novembre 2026)
 
 - `/stock` : la sélection d’un produit affiche le **dernier coût connu par fournisseur**, trié du moins cher au plus cher, avec fournisseur et date. Ces prix sont historiques ; le fournisseur le moins cher n’est jamais sélectionné automatiquement. Le bouton « Choisir ce fournisseur et ce coût » renseigne le formulaire, avec possibilité de modifier le coût réel.
@@ -37,7 +43,7 @@ Diagnostic production en lecture seule, sans migration ni seed : `php scripts/di
 - `/operations/history` sans filtre et `/billing` listent uniquement BC et factures. L’admin peut demander `doc_type=quote` ou `doc_type=all` explicitement dans l’historique. Le manager ne dispose pas de ces choix et les paramètres forcés sont ramenés à BC + factures côté serveur. Aucun devis existant n’est supprimé ; ses fiches et documents restent accessibles.
 - Les tests existants portant sur l’ancien droit d’édition manager et l’ancien défaut de liste sont mis à jour pour la nouvelle règle ; les autres scénarios restent conservés.
 
-Derniere mise a jour: 24 novembre 2026. Comparaison des coûts fournisseurs, référence au dernier achat enregistré et services facultatifs.
+Derniere mise a jour: 26 novembre 2026. KPI des meilleures ventes sur BC et factures, comparaison des coûts fournisseurs et services facultatifs.
 
 ## Objectif
 

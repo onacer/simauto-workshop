@@ -1,0 +1,26 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ 'best_sellers.title'|trans }} - SIM Auto{% endblock %}
+{% block body %}
+{% include 'app/_topbar.html.twig' with {user: user} %}
+<main class="main-board">
+    <section class="page-head"><h1>{{ 'best_sellers.title'|trans }}</h1><a class="btn btn-dark" href="{{ path('app_dashboard') }}">{{ 'ui.back'|trans }}</a></section>
+    <p>{{ 'best_sellers.rule'|trans }}</p>
+    {% if invalid_dates %}<div class="alert alert-warning" role="alert">{{ 'operations.history.invalid_dates'|trans }}</div>{% endif %}
+    <section class="panel">
+        <form method="get" class="form-grid">
+            <label>{{ 'reports.date_from'|trans }}<input type="date" name="from" value="{{ filters.from }}"></label>
+            <label>{{ 'reports.date_to'|trans }}<input type="date" name="to" value="{{ filters.to }}"></label>
+            <button class="btn btn-primary" type="submit">{{ 'ui.filter'|trans }}</button>
+            <a href="{{ path('app_best_sellers') }}">{{ 'operations.history.reset'|trans }}</a>
+        </form>
+    </section>
+    <section class="panel table-scroll">
+        <table>
+            <thead><tr><th>#</th><th>{{ 'products.product'|trans }}</th><th>{{ 'products.ref_company'|trans }}</th><th>{{ 'best_sellers.quantity'|trans }}</th><th>{{ 'best_sellers.documents'|trans }}</th></tr></thead>
+            <tbody>{% for row in rows %}
+                <tr><td>{{ loop.index }}</td><td>{% if row.current_product_id %}<a href="{{ path('app_product_show', {id: row.current_product_id}) }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td><td><bdi>{{ row.reference }}</bdi></td><td><bdi>{{ row.quantity }}</bdi></td><td>{{ row.document_count }}</td></tr>
+            {% else %}<tr><td colspan="5">{{ 'best_sellers.empty'|trans }}</td></tr>{% endfor %}</tbody>
+        </table>
+    </section>
+</main>
+{% endblock %}

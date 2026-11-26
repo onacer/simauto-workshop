@@ -45,6 +45,13 @@
             <strong>{{ 'dashboard.critical_stock'|trans }} <em class="dashboard-badge {{ critical_count > 0 ? 'dashboard-badge-danger' : 'dashboard-badge-ok' }}">{{ critical_count }}</em></strong>
             <small>{{ critical_count > 0 ? 'dashboard.stock_alert_title'|trans({'%count%': critical_count}) : 'dashboard.stock_healthy'|trans }}</small>
         </button>
+        {% if can('view.best_sellers', user) %}
+        <a class="home-card tone-yellow" href="{{ path('app_best_sellers') }}">
+            <span>06</span>
+            <strong>{{ 'best_sellers.title'|trans }}</strong>
+            <small>{% if top_seller|default(null) %}{{ top_seller.name }} · {{ 'best_sellers.units'|trans({'%count%': top_seller.quantity}) }}{% else %}{{ 'best_sellers.empty'|trans }}{% endif %}</small>
+        </a>
+        {% endif %}
     </section>
 
     <section class="critical-stock-panel" id="critical-stock-panel" data-critical-stock-panel hidden>
