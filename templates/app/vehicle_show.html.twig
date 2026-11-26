@@ -44,7 +44,7 @@
                     <strong>{{ operation.created_at|date('d/m/Y') }}</strong>
                     <span><a href="{{ path('app_operation_show', {id: operation.id}) }}">{{ operation.document_no|default(operation.invoice_no) }}</a></span>
                     <span>{{ operation.client_real_name ?: operation.client_name }}</span>
-                    <span>{{ operation.total|number_format(2, ',', ' ') }} DH</span>
+                    <span>{{ operation.total|money }}</span>
                 </div>
             {% else %}
                 <p class="empty-state">{{ 'vehicles.no_operations'|trans }}</p>

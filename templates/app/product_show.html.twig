@@ -24,8 +24,8 @@
         {label: 'products.category'|trans, value: product.category_name ?: product.category},
         {label: 'products.stock'|trans, value: product.stock_qty},
         {label: 'products.min_qty'|trans, value: product.min_qty},
-        {label: 'products.purchase_price'|trans, value: product.purchase_price ~ ' DH'},
-        {label: 'products.sale_price'|trans, value: product.sale_price ~ ' DH'},
+        {label: 'products.purchase_price'|trans, value: product.purchase_price|money},
+        {label: 'products.sale_price'|trans, value: product.sale_price|money},
         {label: 'ui.status'|trans, value: product.active ? 'state.active'|trans : 'ui.disabled'|trans},
         {label: 'ui.created_at'|trans, value: product.created_at}
     ]} %}
