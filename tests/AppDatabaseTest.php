@@ -1724,12 +1724,15 @@ SQL);
         self::assertSame(316.67, (float) $details['subtotal_ht']);
         self::assertSame(73.68, $details['margin_rate']);
         self::assertSame($details['margin'], $db->operation($invoiceId)['total_margin']);
-        $summary = $db->getFinancialSummary(date('Y-m-d'), date('Y-m-d'));
+        // Use a fixed fixture date: PHP's timezone may differ from SQLite's UTC clock.
+        $date = '2026-11-01';
+        $pdo->prepare('UPDATE operations SET created_at = :date WHERE id = :id')->execute(['date' => $date . ' 12:00:00', 'id' => $invoiceId]);
+        $summary = $db->getFinancialSummary($date, $date);
         self::assertSame($details['margin'], $summary['total_margin']);
         self::assertSame(73.68, $summary['margin_rate']);
         $history = $db->searchOperations(['doc_type' => 'invoice']);
         self::assertSame($details['margin'], $history['rows'][0]['total_margin']);
-        self::assertSame($details['margin'], $db->getFinancialOperations(date('Y-m-d'), date('Y-m-d'))[0]['margin']);
+        self::assertSame($details['margin'], $db->getFinancialOperations($date, $date)[0]['margin']);
 
     }
 
@@ -1740,7 +1743,8 @@ SQL);
         $quoteId = $this->operationWithService($db, 'CHQ', 'CHQ-42');
         $orderId = $db->confirmQuote($quoteId, 1);
         $invoiceId = $db->invoiceDocument($orderId, 1);
-        $date = date('Y-m-d');
+        $date = '2026-11-01';
+        $pdo->prepare('UPDATE operations SET created_at = :date WHERE id = :id')->execute(['date' => $date . ' 23:59:59', 'id' => $invoiceId]);
 
         $summary = $db->getFinancialSummary($date, $date);
         $operations = $db->getFinancialOperations($date, $date);
