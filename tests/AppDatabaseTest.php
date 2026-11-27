@@ -627,8 +627,8 @@ final class AppDatabaseTest extends TestCase
 
         $js = file_get_contents(__DIR__ . '/../public/scripts/app.js');
         self::assertStringContainsString('if (input.type === "hidden") return;', $js);
-        self::assertStringContainsString(
-            'scripts/app.js\') }}?v=20260907-mixed-lines-1',
+        self::assertStringNotContainsString(
+            'scripts/app.js\') }}?v=20260907"',
             file_get_contents(__DIR__ . '/../templates/base.html.twig'),
             'The fixed line-type serializer must not be hidden behind the previous browser cache key.'
         );

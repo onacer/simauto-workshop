@@ -184,6 +184,7 @@ document.addEventListener("DOMContentLoaded", () => {
             select.insertAdjacentElement("afterend", combo);
 
             let activeIndex = -1;
+            let searchQuery = "";
 
             const visibleOptions = () => Array.from(select.options).filter((option) => !option.hidden && !option.disabled);
             const selectedText = () => select.selectedOptions[0]?.textContent?.trim() || "";
@@ -195,12 +196,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 input.setAttribute("aria-expanded", "false");
                 activeIndex = -1;
             };
-            const open = () => {
+            const open = (query = "") => {
+                searchQuery = query;
                 combo.classList.add("is-open");
                 input.setAttribute("aria-expanded", "true");
-                render(input.value);
+                render(searchQuery);
             };
             const choose = (option) => {
+                if (!visibleOptions().includes(option)) return;
                 select.value = option.value;
                 select.dispatchEvent(new Event("change", { bubbles: true }));
                 syncInput();
@@ -231,13 +234,26 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             };
 
-            input.addEventListener("focus", open);
-            input.addEventListener("input", () => {
-                activeIndex = -1;
+            input.addEventListener("focus", () => {
+                input.select();
                 open();
             });
+            input.addEventListener("input", () => {
+                const query = input.value;
+                // A typed client name is a search, not a confirmed client ID.
+                if ("operationClient" in select.dataset && select.value) {
+                    select.value = "";
+                    select.dispatchEvent(new Event("change", { bubbles: true }));
+                    input.value = query;
+                }
+                activeIndex = -1;
+                open(query);
+            });
+            input.addEventListener("blur", () => {
+                syncInput();
+                close();
+            });
             input.addEventListener("keydown", (event) => {
-                const items = Array.from(list.querySelectorAll(".combobox-option"));
                 if (event.key === "Escape") {
                     event.preventDefault();
                     syncInput();
@@ -247,13 +263,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                     event.preventDefault();
                     if (!combo.classList.contains("is-open")) open();
+                    const items = Array.from(list.querySelectorAll(".combobox-option"));
                     const direction = event.key === "ArrowDown" ? 1 : -1;
                     activeIndex = items.length ? (activeIndex + direction + items.length) % items.length : -1;
-                    render(input.value);
+                    render(searchQuery);
                     return;
                 }
                 if (event.key === "Enter" && combo.classList.contains("is-open")) {
                     event.preventDefault();
+                    const items = Array.from(list.querySelectorAll(".combobox-option"));
                     const option = visibleOptions().find((candidate) => candidate.value === items[activeIndex]?.dataset.value);
                     if (option) choose(option);
                 }
@@ -262,7 +280,9 @@ document.addEventListener("DOMContentLoaded", () => {
             select.addEventListener("change", syncInput);
             select.addEventListener("combobox:refresh", () => {
                 syncInput();
-                render(input.value);
+                activeIndex = -1;
+                searchQuery = "";
+                render();
             });
             document.addEventListener("click", (event) => {
                 if (!combo.contains(event.target)) close();
@@ -275,17 +295,19 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll("[data-vehicle-select]").forEach((vehicleSelect) => {
             const form = vehicleSelect.closest("form") || document;
             const clientSelect = form.querySelector("[name='client_id']");
+            const options = Array.from(vehicleSelect.options);
             const sync = () => {
                 const clientId = clientSelect?.value || "";
-                Array.from(vehicleSelect.options).forEach((option) => {
-                    const matches = !option.dataset.clientId || !clientId || option.dataset.clientId === clientId;
-                    option.hidden = !matches;
-                    option.disabled = !matches;
-                });
-                if (vehicleSelect.selectedOptions[0]?.hidden) vehicleSelect.value = "";
+                const previousId = vehicleSelect.value;
+                const linked = options.filter((option) => option.value !== "" && clientId !== "" && option.dataset.clientId === clientId);
+                // Remove foreign vehicles from both the native and searchable lists.
+                vehicleSelect.replaceChildren(...options.filter((option) => option.value === ""), ...linked);
+                vehicleSelect.value = linked.some((option) => option.value === previousId)
+                    ? previousId : (linked.length === 1 ? linked[0].value : "");
                 vehicleSelect.dispatchEvent(new Event("combobox:refresh"));
             };
             clientSelect?.addEventListener("change", sync);
+            window.addEventListener("pageshow", sync);
             sync();
         });
 

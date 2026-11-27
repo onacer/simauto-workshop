@@ -1,5 +1,11 @@
 # SIM Auto Workshop - Documentation Projet
 
+## Véhicules des opérations (27 novembre 2026)
+
+Le choix d'un client dans `/operations` limite les véhicules à ceux dont `vehicles.client_id` correspond exactement au client choisi. Une marque ou un modèle commun ne crée aucun lien. Sans client confirmé, aucun véhicule n'est proposé ; changer ou rechercher un autre client retire la sélection précédente. Un véhicule unique est sélectionné automatiquement, plusieurs véhicules restent au choix. La liste affiche immatriculation, marque et modèle. L'ouverture du champ montre tous les choix autorisés, même après une sélection ; la restauration de l'historique navigateur resynchronise les champs.
+
+La création d'un devis, le BC direct et l'édition d'un devis vérifient aussi le propriétaire côté serveur, avant toute création de service, document ou mouvement. Une association incorrecte est refusée avec un message traduit. Les services restent facultatifs : vente d'huile seule, services seuls et opérations mixtes sont couverts par les tests. Les documents existants ne sont pas modifiés. Tests : `node tests/operation-vehicles.cjs` et `tests/SupplierCostsTest.php`.
+
 ## Produits les plus vendus (26 novembre 2026)
 
 Sixième carte KPI du dashboard, visible par admin et manager via `view.best_sellers`, liée à `GET /products/best-sellers`. La carte affiche le produit premier en quantité sur tout l’historique ; la vue liste quantités, nombre de ventes distinctes, références et liens vers les fiches produit, sans prix d’achat ni marge. Classement par quantité décroissante, puis nombre de ventes, nom et identifiant pour départager les égalités.

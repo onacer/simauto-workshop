@@ -871,6 +871,18 @@ SQL);
         }
     }
 
+    /** Validate ownership before line building can create a service in the catalogue. */
+    private function requireOperationClientAndVehicle(int $clientId, int $vehicleId): array
+    {
+        $client = $this->client($clientId);
+        $vehicle = $this->vehicle($vehicleId);
+        if (!$client || !$vehicle || (int) $vehicle['client_id'] !== $clientId) {
+            throw new InvalidArgumentException('operations.vehicle_client_mismatch');
+        }
+
+        return [$client, $vehicle];
+    }
+
     public function createOperation(array $data, int $userId, bool $insideTransaction = false): int
     {
         $clientId = (int) ($data['client_id'] ?? 0);
@@ -879,6 +891,7 @@ SQL);
             throw new InvalidArgumentException('العميل والسيارة إجباريان');
         }
 
+        [$client, $vehicle] = $this->requireOperationClientAndVehicle($clientId, $vehicleId);
         $lines = $this->buildOperationLines($data);
         $vatRate = (float) ($data['vat_rate'] ?? 20);
         $vatRate = $vatRate >= 0 ? $vatRate : 20;
@@ -903,9 +916,6 @@ SQL);
             $quoteNo = $this->nextDocumentNumber('quote');
             $invoiceNo = $quoteNo;
             $receiptNo = $this->nextReceiptNumber();
-
-            $client = $this->client($clientId);
-            $vehicle = $this->vehicle($vehicleId);
 
             $stmt = $this->pdo->prepare(
                 'INSERT INTO operations
@@ -1003,6 +1013,7 @@ SQL);
             throw new InvalidArgumentException('العميل والسيارة إجباريان');
         }
 
+        [$client, $vehicle] = $this->requireOperationClientAndVehicle($clientId, $vehicleId);
         $lines = $this->buildOperationLines($data);
         $vatRate = (float) ($data['vat_rate'] ?? 20);
         $vatRate = $vatRate >= 0 ? $vatRate : 20;
@@ -1010,9 +1021,6 @@ SQL);
         $totals = $this->splitIncludedTax($totalTtc, $vatRate);
         $paymentMethod = $this->normalizePaymentMethod((string) ($data['payment_method'] ?? 'ESP'));
         $checkNumber = $paymentMethod === 'CHQ' ? trim((string) ($data['check_number'] ?? '')) : '';
-        $client = $this->client($clientId);
-        $vehicle = $this->vehicle($vehicleId);
-
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(

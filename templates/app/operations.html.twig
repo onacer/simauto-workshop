@@ -26,7 +26,7 @@
             <input type="hidden" name="doc_type" value="{{ can('create.quote', user) ? 'quote' : 'order' }}">
             <div class="form-grid">
                 <label>{{ 'ui.client'|trans }}
-                    <select name="client_id" required data-combobox>
+                    <select name="client_id" required data-combobox data-operation-client>
                         <option value="">{{ 'operations.choose_client'|trans }}</option>
                         {% for client in clients %}
                             <option value="{{ client.id }}" {{ is_edit and operation.client_id == client.id ? 'selected' : '' }} data-search="{{ (client.name ~ ' ' ~ client.phone ~ ' ' ~ client.email)|lower }}">{{ client.name }}{% if client.phone %} - {{ client.phone }}{% endif %}</option>
@@ -37,7 +37,7 @@
                     <select name="vehicle_id" required data-combobox data-vehicle-select>
                         <option value="">{{ 'operations.choose_vehicle'|trans }}</option>
                         {% for vehicle in vehicles %}
-                            <option value="{{ vehicle.id }}" {{ is_edit and operation.vehicle_id == vehicle.id ? 'selected' : '' }} data-client-id="{{ vehicle.client_id }}" data-search="{{ (vehicle.plate ~ ' ' ~ vehicle.brand_name ~ ' ' ~ vehicle.model_name ~ ' ' ~ vehicle.client_name)|lower }}">{{ vehicle.client_name }} - {{ vehicle.plate }} - {{ vehicle.brand_name }} {{ vehicle.model_name }}</option>
+                            <option value="{{ vehicle.id }}" {{ is_edit and operation.vehicle_id == vehicle.id ? 'selected' : '' }} data-client-id="{{ vehicle.client_id }}" data-search="{{ (vehicle.plate ~ ' ' ~ vehicle.brand_name ~ ' ' ~ vehicle.model_name)|lower }}">{{ vehicle.plate }} - {{ vehicle.brand_name }} {{ vehicle.model_name }}</option>
                         {% endfor %}
                     </select>
                 </label>

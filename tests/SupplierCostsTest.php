@@ -288,6 +288,58 @@ final class SupplierCostsTest extends TestCase
         self::assertSame(10, (int) $this->db->product($this->product)['stock_qty']);
     }
 
+    public function testOperationRejectsAnotherClientsVehicleEvenWithTheSameModel(): void
+    {
+        $this->db->saveClient(['name' => 'Another oil buyer']);
+        $otherClient = (int) $this->db->pdo()->lastInsertId();
+        $vehicle = $this->db->vehicle($this->vehicle);
+        $this->db->saveVehicle(['client_id' => $otherClient, 'plate' => 'OTHER-ACCENT', 'brand_id' => $vehicle['brand_id'], 'model_id' => $vehicle['model_id']]);
+        $otherVehicle = (int) $this->db->vehicleByPlate('OTHER-ACCENT')['id'];
+        $this->db->addStock($this->product, 10, '', 1, $this->a, 100);
+        $payload = $this->productPayload();
+        $payload['vehicle_id'] = $otherVehicle;
+        // Invalid ownership must be checked before a free-text service enters the catalogue.
+        $payload['line_label'][1] = 'Must not be created';
+        $payload['line_unit_price'][1] = 50;
+        foreach ([1, 2] as $user) {
+            $before = $this->snapshot();
+            [$controller, $request] = $this->controller('/operations/new', $user, 'POST', $payload);
+            $response = $controller->newOperation($request, $this->db, new AccessControl());
+            self::assertSame('/operations', $response->getTargetUrl());
+            self::assertSame(['operations.vehicle_client_mismatch'], $request->getSession()->getFlashBag()->get('error'));
+            self::assertSame($before, $this->snapshot());
+        }
+        foreach (['client_id', 'vehicle_id'] as $field) {
+            $invalid = $this->productPayload();
+            $invalid[$field] = 999999;
+            $before = $this->snapshot();
+            try {
+                $this->db->createOperation($invalid, 1);
+                self::fail('A missing client or vehicle must be refused.');
+            } catch (\InvalidArgumentException $e) {
+                self::assertSame('operations.vehicle_client_mismatch', $e->getMessage());
+                self::assertSame($before, $this->snapshot());
+            }
+        }
+    }
+
+    public function testQuoteEditRejectsForeignVehicleWithoutChangingSavedOperation(): void
+    {
+        $this->db->saveClient(['name' => 'Other owner']);
+        $otherClient = (int) $this->db->pdo()->lastInsertId();
+        $quote = $this->db->createOperation($this->productPayload(), 1);
+        $before = $this->snapshot();
+        $payload = $this->productPayload();
+        $payload['client_id'] = $otherClient;
+        $payload['line_label'][1] = 'Must not be created on edit';
+        $payload['line_unit_price'][1] = 50;
+        [$controller, $request] = $this->controller('/operations/' . $quote . '/edit', 1, 'POST', $payload);
+        $response = $controller->operationEdit($quote, $request, $this->db, new AccessControl());
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('Le véhicule choisi ne correspond pas au client sélectionné.', $response->getContent());
+        self::assertSame($before, $this->snapshot());
+    }
+
     private function productPayload(): array
     {
         return ['client_id' => $this->client, 'vehicle_id' => $this->vehicle,
